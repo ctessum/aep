@@ -8,26 +8,27 @@ import (
 	"strings"
 	"fmt"
 	"sort"
+	"errors"
 )
 
 // SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
-func SCCdesc(filename string) (map[string]string, os.Error) {
+func SCCdesc(filename string) (map[string]string, error) {
 	sccDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(filename)
 	buf := bufio.NewReader(fid)
 	defer fid.Close()
 	if err != nil {
-		return sccDesc, os.NewError("SCCdesc: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+		return sccDesc, errors.New("SCCdesc: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 	}
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.String() == "EOF" {
+			if err.Error() == "EOF" {
 				err = nil
 				break
 			} else {
-				return sccDesc, os.NewError(filename + "\n" + record + "\n" + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return sccDesc, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -42,14 +43,14 @@ func SCCdesc(filename string) (map[string]string, os.Error) {
 	return sccDesc, err
 }
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *RunData) SpecRef(filename string) (map[string]map[string]string, os.Error) {
+func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error) {
 	specRef := make(map[string]map[string]string)
 	var record string
 	fid, err := os.Open(filename)
 	buf := bufio.NewReader(fid)
 	defer fid.Close()
 	if err != nil {
-		return specRef, os.NewError("SpecRef: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+		return specRef, errors.New("SpecRef: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 	}
 	//	// For point sources, don't use beginning of file
 	//	readSection := false
@@ -59,11 +60,11 @@ func (c *RunData) SpecRef(filename string) (map[string]map[string]string, os.Err
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.String() == "EOF" {
+			if err.Error() == "EOF" {
 				err = nil
 				break
 			} else {
-				return specRef, os.NewError(filename + "\n" + record + "\n" + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specRef, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -111,23 +112,23 @@ type cnvHolder struct {
 }
 
 // SpecConv reads the SMOKE gscnv file, which gives ratios (usually VOC to TOG) for chemical speciation profiles.
-func SpecConv(filename string) (map[string]map[string]cnvHolder, os.Error) {
+func SpecConv(filename string) (map[string]map[string]cnvHolder, error) {
 	specConv := make(map[string]map[string]cnvHolder)
 	var record string
 	fid, err := os.Open(filename)
 	buf := bufio.NewReader(fid)
 	defer fid.Close()
 	if err != nil {
-		return specConv, os.NewError("SpecConv: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+		return specConv, errors.New("SpecConv: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 	}
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.String() == "EOF" {
+			if err.Error() == "EOF" {
 				err = nil
 				break
 			} else {
-				return specConv, os.NewError(filename + "\n" + record + "\n" + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specConv, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -143,9 +144,9 @@ func SpecConv(filename string) (map[string]map[string]cnvHolder, os.Error) {
 
 			var x cnvHolder
 			x.newpol = newpol
-			x.factor, err = strconv.Atof64(factor)
+			x.factor, err = strconv.ParseFloat(factor,64)
 			if err != nil {
-				return specConv, os.NewError("SpecConv: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specConv, errors.New("SpecConv: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 			_, ok := specConv[code]
 			if !ok {
@@ -167,23 +168,23 @@ type proHolder struct {
 }
 
 // SpecPro reads the SMOKE gspro file, which gives the speciation fractions for each chemical speciation profile.
-func SpecPro(filename string) (map[string]map[string]map[string]proHolder, os.Error) {
+func SpecPro(filename string) (map[string]map[string]map[string]proHolder, error) {
 	specPro := make(map[string]map[string]map[string]proHolder)
 	var record string
 	fid, err := os.Open(filename)
 	buf := bufio.NewReader(fid)
 	defer fid.Close()
 	if err != nil {
-		return specPro, os.NewError("SpecPro: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+		return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 	}
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.String() == "EOF" {
+			if err.Error() == "EOF" {
 				err = nil
 				break
 			} else {
-				return specPro, os.NewError(filename + "\n" + record + "\n" + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specPro, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -200,17 +201,17 @@ func SpecPro(filename string) (map[string]map[string]map[string]proHolder, os.Er
 			massfrac := strings.Trim(splitLine[5], "\"\n")
 
 			var x proHolder
-			x.molfrac, err = strconv.Atof64(molfrac)
+			x.molfrac, err = strconv.ParseFloat(molfrac,64)
 			if err != nil {
-				return specPro, os.NewError("SpecPro: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
-			x.moldiv, err = strconv.Atof64(moldiv)
+			x.moldiv, err = strconv.ParseFloat(moldiv,64)
 			if err != nil {
-				return specPro, os.NewError("SpecPro: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
-			x.massfrac, err = strconv.Atof64(massfrac)
+			x.massfrac, err = strconv.ParseFloat(massfrac,64)
 			if err != nil {
-				return specPro, os.NewError("SpecPro: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 
 			if _, ok := specPro[code]; !ok {
@@ -247,23 +248,23 @@ func SpecPro(filename string) (map[string]map[string]map[string]proHolder, os.Er
 	return specPro, err
 }
 // specSynonyms reads a file of species names that should be replaced when matching records with speciation profiles. The file should be in the format `oldname;newname' (semicolon deliminited).
-func specSynonyms(filename string) (map[string]string, os.Error) {
+func specSynonyms(filename string) (map[string]string, error) {
 	specSyns := make(map[string]string)
 	var record string
 	fid, err := os.Open(filename)
 	buf := bufio.NewReader(fid)
 	defer fid.Close()
 	if err != nil {
-		return specSyns, os.NewError("SpecSyns: " + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+		return specSyns, errors.New("SpecSyns: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 	}
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.String() == "EOF" {
+			if err.Error() == "EOF" {
 				err = nil
 				break
 			} else {
-				return specSyns, os.NewError(filename + "\n" + record + "\n" + err.String() + "\nFile= " + filename + "\nRecord= " + record)
+				return specSyns, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -290,7 +291,7 @@ type specHolder struct {
 	units  string
 }
 
-func (c *RunData) SpecFractions(refFile, convFile, proFile, synFile, specType string) os.Error {
+func (c *RunData) SpecFractions(refFile, convFile, proFile, synFile, specType string) error {
 	c.specFrac = make(map[string]map[string]map[string]specHolder)
 
 	sRef, err := c.SpecRef(refFile)
@@ -358,7 +359,7 @@ func (c *RunData) SpecFractions(refFile, convFile, proFile, synFile, specType st
 						x.factor = cnvfactor * fracdata.massfrac
 						x.units = "g/year"
 					} else {
-						return os.NewError("In SpecFractions, speciation type " + specType + " is unknown. Please choose `mol' or `mass'")
+						return errors.New("In SpecFractions, speciation type " + specType + " is unknown. Please choose `mol' or `mass'")
 					}
 					c.specFrac[SCC][pol][newpol] = x
 				}
@@ -454,7 +455,9 @@ func (c *RunData) Speciate(MesgChan chan string, InvSpecChan chan ParsedRecord, 
 }
 
 func (c *RunData) speciationReport(r *reportData,  totalDropped map[string]float64, period string) {
-	err := os.MkdirAll(c.sectorLogs, uint32(0776))
+	var perm os.FileMode
+	perm = 0776
+	err := os.MkdirAll(c.sectorLogs, perm)
 	if err != nil {
 		panic(err)
 	}
