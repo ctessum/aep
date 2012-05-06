@@ -155,6 +155,7 @@ func main() {
 	// Read from configuration file and prepare sectors for processing
 	var sectorFlag *string = flag.String("sectors", "none", "List of sectors to process, in quotes, separated by spaces")
 	var configFile *string = flag.String("config", "none", "Path to configuration file")
+	fmt.Println("success")
 	flag.Parse()
 	if *sectorFlag == "none" || *configFile == "none" {
 		fmt.Println("Please set `-sectors' and `-config' flags and run again: ie: GoSmoke -config=config_file -sectors=\"sector list\"")
@@ -164,6 +165,8 @@ func main() {
 
 	// create list of sectors
 	sectors := strings.Split(*sectorFlag, " ")
+
+	err := ReadConfigFile(*configFile)
 
 	// parse configuration file
 	c, err := conf.ReadConfigFile(*configFile)
