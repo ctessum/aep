@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bufio"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-	"bufio"
+	"sort"
 	"strconv"
 	"strings"
-	"fmt"
-	"sort"
-	"errors"
 )
 
 // SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
@@ -42,6 +42,7 @@ func SCCdesc(filename string) (map[string]string, error) {
 	}
 	return sccDesc, err
 }
+
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
 func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error) {
 	specRef := make(map[string]map[string]string)
@@ -144,7 +145,7 @@ func SpecConv(filename string) (map[string]map[string]cnvHolder, error) {
 
 			var x cnvHolder
 			x.newpol = newpol
-			x.factor, err = strconv.ParseFloat(factor,64)
+			x.factor, err = strconv.ParseFloat(factor, 64)
 			if err != nil {
 				return specConv, errors.New("SpecConv: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
@@ -201,15 +202,15 @@ func SpecPro(filename string) (map[string]map[string]map[string]proHolder, error
 			massfrac := strings.Trim(splitLine[5], "\"\n")
 
 			var x proHolder
-			x.molfrac, err = strconv.ParseFloat(molfrac,64)
+			x.molfrac, err = strconv.ParseFloat(molfrac, 64)
 			if err != nil {
 				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
-			x.moldiv, err = strconv.ParseFloat(moldiv,64)
+			x.moldiv, err = strconv.ParseFloat(moldiv, 64)
 			if err != nil {
 				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
-			x.massfrac, err = strconv.ParseFloat(massfrac,64)
+			x.massfrac, err = strconv.ParseFloat(massfrac, 64)
 			if err != nil {
 				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
 			}
@@ -247,6 +248,7 @@ func SpecPro(filename string) (map[string]map[string]map[string]proHolder, error
 	}
 	return specPro, err
 }
+
 // specSynonyms reads a file of species names that should be replaced when matching records with speciation profiles. The file should be in the format `oldname;newname' (semicolon deliminited).
 func specSynonyms(filename string) (map[string]string, error) {
 	specSyns := make(map[string]string)
@@ -430,7 +432,7 @@ func (c *RunData) Speciate(MesgChan chan string, InvSpecChan chan ParsedRecord, 
 					record.SpecAnnEmis[newpol] = x
 					r.totals[newpol] += record.SpecAnnEmis[newpol].val
 				}
-			} else if strings.Index(c.PolsToDrop, pol) != -1 {
+			} else if sort.SearchStrings(c.PolsToDrop, pol) != -1 {
 				totalDropped[pol] += AnnEmis * c.inputConv
 			} else if polfracs, ok := c.specFrac["0000000000"][pol]; ok {
 				for newpol, frac := range polfracs {
@@ -454,7 +456,7 @@ func (c *RunData) Speciate(MesgChan chan string, InvSpecChan chan ParsedRecord, 
 	MesgChan <- "Finished speciating " + period + " " + c.sector
 }
 
-func (c *RunData) speciationReport(r *reportData,  totalDropped map[string]float64, period string) {
+func (c *RunData) speciationReport(r *reportData, totalDropped map[string]float64, period string) {
 	var perm os.FileMode
 	perm = 0776
 	err := os.MkdirAll(c.sectorLogs, perm)

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os"
-	"strings"
-	"fmt"
 	"bufio"
-	"strconv"
+	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 // type FileInfo holds information about each inventory file
@@ -48,7 +48,7 @@ func (c *RunData) inventoryReport(inventoryInfo map[string]FileInfo, period stri
 	polNames := strings.Split(polNamesTemp, " ")
 	sort.Strings(polNames)
 
-	repStr += "Inventory totals by file: "+c.inputUnits+"\n"
+	repStr += "Inventory totals by file: " + c.inputUnits + "\n"
 	repStr += fmt.Sprintf("Sector: %s\n", c.sector)
 	repStr += fmt.Sprintf("Time period: %s\n", period)
 	repStr += "file,format,file type,year,country,"
@@ -169,25 +169,25 @@ func parseRecordPointORL(record string, fInfo FileInfo) ParsedRecord {
 	fields.STACKID = splitString[3]
 	fields.SEGMENT = splitString[4]
 	fields.PLANT = splitString[5]
-	fields.SCC = strings.Trim(splitString[6],"\"")
+	fields.SCC = strings.Trim(splitString[6], "\"")
 	fields.SRCTYPE = splitString[8]
-	fields.STKHGT, err = strconv.ParseFloat(strings.Trim(splitString[9], "\""),64)
+	fields.STKHGT, err = strconv.ParseFloat(strings.Trim(splitString[9], "\""), 64)
 	if err != nil {
 		fields.STKHGT = 0.
 	}
-	fields.STKDIAM, err = strconv.ParseFloat(strings.Trim(splitString[10], "\""),64)
+	fields.STKDIAM, err = strconv.ParseFloat(strings.Trim(splitString[10], "\""), 64)
 	if err != nil {
 		fields.STKDIAM = 0.
 	}
-	fields.STKTEMP, err = strconv.ParseFloat(strings.Trim(splitString[11], "\""),64)
+	fields.STKTEMP, err = strconv.ParseFloat(strings.Trim(splitString[11], "\""), 64)
 	if err != nil {
 		fields.STKTEMP = 0.
 	}
-	fields.STKFLOW, err = strconv.ParseFloat(strings.Trim(splitString[12], "\""),64)
+	fields.STKFLOW, err = strconv.ParseFloat(strings.Trim(splitString[12], "\""), 64)
 	if err != nil {
 		fields.STKFLOW = 0.
 	}
-	fields.STKVEL, err = strconv.ParseFloat(strings.Trim(splitString[13], "\""),64)
+	fields.STKVEL, err = strconv.ParseFloat(strings.Trim(splitString[13], "\""), 64)
 	if err != nil {
 		fields.STKVEL = 0.
 	}
@@ -198,11 +198,11 @@ func parseRecordPointORL(record string, fInfo FileInfo) ParsedRecord {
 	fields.MACT = splitString[15]
 	fields.NAICS = splitString[16]
 	fields.CTYPE = splitString[17]
-	fields.XLOC, err = strconv.ParseFloat(strings.Trim(splitString[18], "\""),64)
+	fields.XLOC, err = strconv.ParseFloat(strings.Trim(splitString[18], "\""), 64)
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.YLOC, err = strconv.ParseFloat(strings.Trim(splitString[19], "\""),64)
+	fields.YLOC, err = strconv.ParseFloat(strings.Trim(splitString[19], "\""), 64)
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
@@ -211,19 +211,19 @@ func parseRecordPointORL(record string, fInfo FileInfo) ParsedRecord {
 		fields.UTMZ = 0.
 	}
 	pol := strings.Trim(splitString[21], "\" ")
-	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[23], "\""),64)
+	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[23], "\""), 64)
 	if err != nil {
 		fields.AVD_EMIS[pol] = 0.
 	}
-	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[22], "\""),64)
+	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[22], "\""), 64)
 	if err != nil {
 		fields.ANN_EMIS[pol] = fields.AVD_EMIS[pol] * 365.
 	}
-	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[24], "\""),64)
+	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[24], "\""), 64)
 	if err != nil {
 		fields.CEFF[pol] = 0.
 	}
-	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[25], "\""),64)
+	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[25], "\""), 64)
 	if err != nil {
 		fields.REFF[pol] = 100.
 	}
@@ -242,7 +242,7 @@ func parseRecordAreaORL(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.SCC = strings.Trim(splitString[1],"\"")
+	fields.SCC = strings.Trim(splitString[1], "\"")
 	fields.SIC, err = strconv.Atoi(strings.Trim(splitString[2], "\""))
 	if err != nil {
 		fields.SIC = -9
@@ -251,23 +251,23 @@ func parseRecordAreaORL(record string, fInfo FileInfo) ParsedRecord {
 	fields.SRCTYPE = splitString[4]
 	fields.NAICS = splitString[5]
 	pol := strings.Trim(splitString[6], "\" ")
-	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[8], "\""),64)
+	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[8], "\""), 64)
 	if err != nil {
 		fields.AVD_EMIS[pol] = 0.
 	}
-	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[7], "\""),64)
+	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[7], "\""), 64)
 	if err != nil {
 		fields.ANN_EMIS[pol] = fields.AVD_EMIS[pol] * 365.
 	}
-	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[9], "\""),64)
+	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[9], "\""), 64)
 	if err != nil {
 		fields.CEFF[pol] = 0.
 	}
-	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[10], "\""),64)
+	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[10], "\""), 64)
 	if err != nil {
 		fields.REFF[pol] = 100.
 	}
-	fields.RPEN[pol], err = strconv.ParseFloat(strings.Trim(splitString[11], "\""),64)
+	fields.RPEN[pol], err = strconv.ParseFloat(strings.Trim(splitString[11], "\""), 64)
 	if err != nil {
 		fields.RPEN[pol] = 100.
 	}
@@ -283,25 +283,25 @@ func parseRecordNonroadORL(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.SCC = strings.Trim(splitString[1],"\"")
+	fields.SCC = strings.Trim(splitString[1], "\"")
 	pol := strings.Trim(splitString[2], "\" ")
-	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""),64)
+	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""), 64)
 	if err != nil {
 		fields.AVD_EMIS[pol] = 0.
 	}
-	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[3], "\""),64)
+	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
 	if err != nil {
 		fields.ANN_EMIS[pol] = fields.AVD_EMIS[pol] * 365.
 	}
-	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[5], "\""),64)
+	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[5], "\""), 64)
 	if err != nil {
 		fields.CEFF[pol] = 0.
 	}
-	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[6], "\""),64)
+	fields.REFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[6], "\""), 64)
 	if err != nil {
 		fields.REFF[pol] = 100.
 	}
-	fields.RPEN[pol], err = strconv.ParseFloat(strings.Trim(splitString[7], "\""),64)
+	fields.RPEN[pol], err = strconv.ParseFloat(strings.Trim(splitString[7], "\""), 64)
 	if err != nil {
 		fields.RPEN[pol] = 100.
 	}
@@ -319,13 +319,13 @@ func parseRecordMobileORL(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.SCC = strings.Trim(splitString[1],"\"")
+	fields.SCC = strings.Trim(splitString[1], "\"")
 	pol := strings.Trim(splitString[2], "\" ")
-	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""),64)
+	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""), 64)
 	if err != nil {
 		fields.AVD_EMIS[pol] = 0.
 	}
-	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[3], "\""),64)
+	fields.ANN_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
 	if err != nil {
 		fields.ANN_EMIS[pol] = fields.AVD_EMIS[pol] * 365.
 	}
@@ -364,24 +364,24 @@ func parseRecordPointIDA(record string, fInfo FileInfo) ParsedRecord {
 	fields.ORIS_BOILER_ID = record[53:59]
 	fields.SEGMENT = record[59:61]
 	fields.PLANT = record[61:101]
-	fields.SCC = strings.Trim(record[101:111],"\"")
-	fields.STKHGT, err = strconv.ParseFloat(strings.Trim(record[119:123], " "),64)
+	fields.SCC = strings.Trim(record[101:111], "\"")
+	fields.STKHGT, err = strconv.ParseFloat(strings.Trim(record[119:123], " "), 64)
 	if err != nil {
 		fields.STKHGT = 0.
 	}
-	fields.STKDIAM, err = strconv.ParseFloat(strings.Trim(record[123:129], " "),64)
+	fields.STKDIAM, err = strconv.ParseFloat(strings.Trim(record[123:129], " "), 64)
 	if err != nil {
 		fields.STKDIAM = 0.
 	}
-	fields.STKTEMP, err = strconv.ParseFloat(strings.Trim(record[129:133], " "),64)
+	fields.STKTEMP, err = strconv.ParseFloat(strings.Trim(record[129:133], " "), 64)
 	if err != nil {
 		fields.STKTEMP = 0.
 	}
-	fields.STKFLOW, err = strconv.ParseFloat(strings.Trim(record[133:143], " "),64)
+	fields.STKFLOW, err = strconv.ParseFloat(strings.Trim(record[133:143], " "), 64)
 	if err != nil {
 		fields.STKFLOW = 0.
 	}
-	fields.STKVEL, err = strconv.ParseFloat(strings.Trim(record[143:152], " "),64)
+	fields.STKVEL, err = strconv.ParseFloat(strings.Trim(record[143:152], " "), 64)
 	if err != nil {
 		fields.STKVEL = 0.
 	}
@@ -389,29 +389,29 @@ func parseRecordPointIDA(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		fields.SIC = -9
 	}
-	fields.YLOC, err = strconv.ParseFloat(strings.Trim(record[230:239], " "),64)
+	fields.YLOC, err = strconv.ParseFloat(strings.Trim(record[230:239], " "), 64)
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.XLOC, err = strconv.ParseFloat(strings.Trim(record[239:248], " "),64)
+	fields.XLOC, err = strconv.ParseFloat(strings.Trim(record[239:248], " "), 64)
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 249 + 52*i
-		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13:start+13+13], " "),64)
+		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13:start+13+13], " "), 64)
 		if err != nil {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
-		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+13], " "),64)
+		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+13], " "), 64)
 		if err != nil {
 			fields.ANN_EMIS[strings.Trim(pol, " ")] = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
-		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13:start+13+13+7], " "),64)
+		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13:start+13+13+7], " "), 64)
 		if err != nil {
 			fields.CEFF[strings.Trim(pol, " ")] = 0.
 		}
-		fields.REFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13+7:start+13+13+7+7], " "),64)
+		fields.REFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13+7:start+13+13+7+7], " "), 64)
 		if err != nil {
 			fields.REFF[strings.Trim(pol, " ")] = 100.
 		}
@@ -427,26 +427,26 @@ func parseRecordAreaIDA(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.SCC = strings.Trim(record[5:15],"\"")
+	fields.SCC = strings.Trim(record[5:15], "\"")
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 15 + 47*i
-		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "),64)
+		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "), 64)
 		if err != nil {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
-		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "),64)
+		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
 		if err != nil {
 			fields.ANN_EMIS[strings.Trim(pol, " ")] = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
-		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11:start+10+10+11+7], " "),64)
+		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11:start+10+10+11+7], " "), 64)
 		if err != nil {
 			fields.CEFF[strings.Trim(pol, " ")] = 0.
 		}
-		fields.REFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11+7:start+10+10+11+7+3], " "),64)
+		fields.REFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11+7:start+10+10+11+7+3], " "), 64)
 		if err != nil {
 			fields.REFF[strings.Trim(pol, " ")] = 100.
 		}
-		fields.RPEN[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11+7+3:start+10+10+11+7+3+6], " "),64)
+		fields.RPEN[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11+7+3:start+10+10+11+7+3+6], " "), 64)
 		if err != nil {
 			fields.RPEN[strings.Trim(pol, " ")] = 100.
 		}
@@ -461,15 +461,15 @@ func parseRecordMobileIDA(record string, fInfo FileInfo) ParsedRecord {
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	fields.SCC = strings.Trim(record[15:25],"\"")
+	fields.SCC = strings.Trim(record[15:25], "\"")
 
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 25 + 20*i
-		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "),64)
+		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "), 64)
 		if err != nil {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
-		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "),64)
+		fields.ANN_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
 		if err != nil {
 			fields.ANN_EMIS[strings.Trim(pol, " ")] = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
