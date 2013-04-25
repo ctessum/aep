@@ -2,62 +2,29 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"errors"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-// SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
-func SCCdesc(filename string) (map[string]string, error) {
-	sccDesc := make(map[string]string)
-	var record string
-	fid, err := os.Open(filename)
-	buf := bufio.NewReader(fid)
-	defer fid.Close()
-	if err != nil {
-		return sccDesc, errors.New("SCCdesc: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-	}
-	for {
-		record, err = buf.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
-				break
-			} else {
-				return sccDesc, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-		}
-		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
-		}
-		if record[0] != '#' {
-			splitLine := strings.Split(record, ";")
-			sccDesc[strings.Trim(splitLine[0], "\"")] = strings.Trim(splitLine[1], "\"")
-		}
-	}
-	return sccDesc, err
-}
-
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error) {
-	specRef := make(map[string]map[string]string)
+func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
+	specRef = make(map[string]map[string]string)
 	var record string
-	fid, err := os.Open(filename)
-	buf := bufio.NewReader(fid)
-	defer fid.Close()
+	fid, err := os.Open(c.SpecRefFile)
 	if err != nil {
-		return specRef, errors.New("SpecRef: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+		msg := "SpecRef: " + err.Error() + "\nFile= " +
+			c.SpecRefFile + "\nRecord= " + record
+		err = errors.New(msg)
+		return
+	} else {
+		defer fid.Close()
 	}
-	//	// For point sources, don't use beginning of file
-	//	readSection := false
-	//	if c.sectorType != "point" {
-	//		readSection = true
-	//	}
+	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
@@ -65,7 +32,10 @@ func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error)
 				err = nil
 				break
 			} else {
-				return specRef, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+				msg := record + "\n" + err.Error() + "\nFile= " +
+					c.SpecRefFile + "\nRecord= " + record
+				err = errors.New(msg)
+				return
 			}
 		}
 		// Get rid of comments at end of line.
@@ -73,17 +43,6 @@ func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error)
 			record = record[0:i]
 		}
 
-		//		// For non-point sources, don't use end of file
-		//		if strings.Index(record, "/POINT DEFN/") != -1 {
-		//			if c.sectorType != "point" {
-		//				readSection = false
-		//				break
-		//			} else {
-		//				readSection = true
-		//				continue
-		//			}
-		//		}
-		//		if record[0] != '#' && readSection == true {
 		if record[0] != '#' && record[0] != '/' {
 			// for point sources, only match to SCC code.
 			splitLine := strings.Split(record, ";")
@@ -104,24 +63,24 @@ func (c *RunData) SpecRef(filename string) (map[string]map[string]string, error)
 			}
 		}
 	}
-	return specRef, err
+	return
 }
 
-type cnvHolder struct {
-	newpol string
-	factor float64
-}
-
-// SpecConv reads the SMOKE gscnv file, which gives ratios (usually VOC to TOG) for chemical speciation profiles.
-func SpecConv(filename string) (map[string]map[string]cnvHolder, error) {
-	specConv := make(map[string]map[string]cnvHolder)
+// SpecRefCombo reads the SMOKE gspro_combo file, which maps location
+// codes to chemical speciation profiles for mobile sources.
+func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[string]float64, err error) {
+	specRef = make(map[string]map[string]map[string]map[string]float64)
 	var record string
-	fid, err := os.Open(filename)
-	buf := bufio.NewReader(fid)
-	defer fid.Close()
+	fid, err := os.Open(c.SpecRefComboFile)
 	if err != nil {
-		return specConv, errors.New("SpecConv: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+		msg := "SpecRefCombo: " + err.Error() + "\nFile= " +
+			c.SpecRefComboFile + "\nRecord= " + record
+		err = errors.New(msg)
+		return
+	} else {
+		defer fid.Close()
 	}
+	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
@@ -129,162 +88,76 @@ func SpecConv(filename string) (map[string]map[string]cnvHolder, error) {
 				err = nil
 				break
 			} else {
-				return specConv, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+				msg := record + "\n" + err.Error() + "\nFile= " +
+					c.SpecRefComboFile + "\nRecord= " + record
+				err = errors.New(msg)
+				return
 			}
 		}
 		// Get rid of comments at end of line.
 		if i := strings.Index(record, "!"); i != -1 {
 			record = record[0:i]
 		}
-		if record[0] != '#' {
-			splitLine := strings.Split(record, ";")
-			code := strings.Trim(splitLine[2], "\"")
-			pol := strings.Trim(splitLine[0], "\"")
-			newpol := strings.Trim(splitLine[1], "\"")
-			factor := strings.Trim(splitLine[3], "\"\n")
 
-			var x cnvHolder
-			x.newpol = newpol
-			x.factor, err = strconv.ParseFloat(factor, 64)
-			if err != nil {
-				return specConv, errors.New("SpecConv: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-			_, ok := specConv[code]
+		if record[0] != '#' && record[0] != '/' {
+			// for point sources, only match to SCC code.
+			splitLine := strings.Split(record, ";")
+			pol := strings.Trim(splitLine[0], "\" ")
+			FIPS := strings.Trim(splitLine[1], "\" ")[1:]
+
+			periods := map[string]string{"0": "all", "1": "jan", "2": "feb",
+				"3": "mar", "4": "apr", "5": "may", "6": "jun", "7": "jul",
+				"8": "aug", "9": "sep", "10": "oct", "11": "nov", "12": "dec"}
+			period, ok := periods[splitLine[2]]
 			if !ok {
-				y := make(map[string]cnvHolder)
-				y[pol] = x
-				specConv[code] = y
-			} else {
-				specConv[code][pol] = x
+				err = fmt.Errorf("Missing or mislabeled period in %v.",
+					c.SpecRefComboFile)
+				panic(err)
+			}
+			if _, ok := specRef[pol]; !ok {
+				specRef[pol] = make(map[string]map[string]map[string]float64)
+			}
+			if _, ok := specRef[pol][FIPS]; !ok {
+				specRef[pol][FIPS] = make(map[string]map[string]float64)
+			}
+			if _, ok := specRef[pol][FIPS][period]; !ok {
+				specRef[pol][FIPS][period] = make(map[string]float64)
+			}
+			for i := 4; i < len(splitLine); i += 2 {
+				code := strings.Trim(splitLine[i], "\n\" ")
+				frac, err := strconv.ParseFloat(strings.Trim(splitLine[i+1], "\n\" "), 64)
+				if err != nil {
+					panic(err)
+				}
+				specRef[pol][FIPS][period][code] = frac
 			}
 		}
 	}
-	return specConv, err
+	return
 }
 
-type proHolder struct {
-	molfrac  float64
-	moldiv   float64
-	massfrac float64
+type SpecProf struct {
+	db         *sql.DB
+	sRef       map[string]map[string]string                        // map[SCC][pol]code
+	sRefCombo  map[string]map[string]map[string]map[string]float64 // map[pol][FIPS][period][code]frac
+	sPro       map[string]map[string]*specHolder                   //map[code][NewPol]fracs
+	droppedPro map[string]map[string]*specHolder                   //map[code][NewPol]fracs
 }
 
-// SpecPro reads the SMOKE gspro file, which gives the speciation fractions for each chemical speciation profile.
-func SpecPro(filename string) (map[string]map[string]map[string]proHolder, error) {
-	specPro := make(map[string]map[string]map[string]proHolder)
-	var record string
-	fid, err := os.Open(filename)
-	buf := bufio.NewReader(fid)
-	defer fid.Close()
+func (c *RunData) NewSpecProf() (sp *SpecProf, err error) {
+	sp = new(SpecProf)
+	sp.db, err = sql.Open("sqlite3", c.SpecProFile)
+
+	sp.sRef, err = c.SpecRef()
 	if err != nil {
-		return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+		return
 	}
-	for {
-		record, err = buf.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
-				break
-			} else {
-				return specPro, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-		}
-		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
-		}
-		if record[0] != '#' {
-			splitLine := strings.Split(record, ";")
-			code := strings.Trim(splitLine[0], "\"")
-			oldpol := strings.Trim(splitLine[1], "\"")
-			newpol := strings.Trim(splitLine[2], "\"")
-			molfrac := strings.Trim(splitLine[3], "\"")
-			moldiv := strings.Trim(splitLine[4], "\"")
-			massfrac := strings.Trim(splitLine[5], "\"\n")
-
-			var x proHolder
-			x.molfrac, err = strconv.ParseFloat(molfrac, 64)
-			if err != nil {
-				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-			x.moldiv, err = strconv.ParseFloat(moldiv, 64)
-			if err != nil {
-				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-			x.massfrac, err = strconv.ParseFloat(massfrac, 64)
-			if err != nil {
-				return specPro, errors.New("SpecPro: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-
-			if _, ok := specPro[code]; !ok {
-				z := make(map[string]proHolder)
-				z[oldpol] = x
-				y := make(map[string]map[string]proHolder)
-				y[newpol] = z
-				specPro[code] = y
-			} else if _, ok := specPro[code][oldpol]; !ok {
-				y := make(map[string]proHolder)
-				y[newpol] = x
-				specPro[code][oldpol] = y
-			} else {
-				specPro[code][oldpol][newpol] = x
-			}
-		}
-	}
-	// Normalize speciation fractions in case they don't sum to one.
-	for code, oldpols := range specPro {
-		for oldpol, newpols := range oldpols {
-			molTotal := 0.
-			massTotal := 0.
-			for _, data := range newpols {
-				molTotal += data.molfrac
-				massTotal += data.massfrac
-			}
-			for newpol, data := range newpols {
-				data.molfrac /= molTotal
-				data.massfrac /= massTotal
-				specPro[code][oldpol][newpol] = data
-			}
-		}
-	}
-	return specPro, err
-}
-
-// specSynonyms reads a file of species names that should be replaced when matching records with speciation profiles. The file should be in the format `oldname;newname' (semicolon deliminited).
-func specSynonyms(filename string) (map[string]string, error) {
-	specSyns := make(map[string]string)
-	var record string
-	fid, err := os.Open(filename)
-	buf := bufio.NewReader(fid)
-	defer fid.Close()
+	sp.sRefCombo, err = c.SpecRefCombo()
 	if err != nil {
-		return specSyns, errors.New("SpecSyns: " + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
+		return
 	}
-	for {
-		record, err = buf.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
-				break
-			} else {
-				return specSyns, errors.New(filename + "\n" + record + "\n" + err.Error() + "\nFile= " + filename + "\nRecord= " + record)
-			}
-		}
-		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
-		}
-		if record[0] != '#' {
-			splitLine := strings.Split(record, ";")
-			specSyns[strings.Trim(splitLine[0], "\"")] = strings.Trim(splitLine[1], "\"")
-		}
-	}
-	return specSyns, err
-}
-func polTrans(pol string, specSynonym map[string]string) (polout string) {
-	polout, ok := specSynonym[pol]
-	if !ok {
-		polout = pol
-	}
+	sp.sPro = make(map[string]map[string]*specHolder)
+	sp.droppedPro = make(map[string]map[string]*specHolder)
 	return
 }
 
@@ -293,87 +166,174 @@ type specHolder struct {
 	units  string
 }
 
-func (c *RunData) SpecFractions(refFile, convFile, proFile, synFile, specType string) error {
-	c.specFrac = make(map[string]map[string]map[string]specHolder)
-
-	sRef, err := c.SpecRef(refFile)
-	if err != nil {
-		return err
-	}
-	sConv, err := SpecConv(convFile)
-	if err != nil {
-		return err
-	}
-	sPro, err := SpecPro(proFile)
-	if err != nil {
-		return err
-	}
-	sSyn, err := specSynonyms(synFile)
-	if err != nil {
-		return err
-	}
-
-	var x specHolder
-	for SCC, polRef := range sRef {
-		for pol, code := range polRef {
-			var cnvfactor float64
-			var cnvPol string
-
-			// set up map tables
-			if _, ok := c.specFrac[SCC]; !ok {
-				z := make(map[string]specHolder)
-				y := make(map[string]map[string]specHolder)
-				y[pol] = z
-				c.specFrac[SCC] = y
-			} else if _, ok := c.specFrac[SCC][pol]; !ok {
-				y := make(map[string]specHolder)
-				c.specFrac[SCC][pol] = y
-			}
-
-			// test if speciation code is in specConv data, assign pollutant conversion to 1.0 if not.
-			cnvData, ok1 := sConv[code]
-			_, ok2 := sConv[code][pol]
-			if !(ok1 && ok2) {
-				cnvfactor = 1.0
-				cnvPol = pol
-			} else {
-				cnvfactor = cnvData[polTrans(pol, sSyn)].factor
-				cnvPol = cnvData[polTrans(pol, sSyn)].newpol
-			}
-			procode, ok1 := sPro[code]
-			poldata, ok2 := procode[polTrans(cnvPol, sSyn)]
-			if !(ok1 && ok2) {
-				x.factor = 1.0
-				x.units = "g/year"
-				c.specFrac[SCC][pol][cnvPol] = x
-			} else {
-				for newpol, fracdata := range poldata {
-					if specType == "mol" {
-						x.factor = cnvfactor * fracdata.molfrac / fracdata.moldiv
-						// if speciation profile divider (moldiv) = 1, assume that it is a mass to mass
-						// speciation. Otherwise, assume a mass to mol speciation.
-						if fracdata.moldiv == 1. {
-							x.units = "g/year"
-						} else {
-							x.units = "mol/year"
-						}
-					} else if specType == "mass" {
-						x.factor = cnvfactor * fracdata.massfrac
-						x.units = "g/year"
-					} else {
-						return errors.New("In SpecFractions, speciation type " + specType + " is unknown. Please choose `mol' or `mass'")
-					}
-					c.specFrac[SCC][pol][newpol] = x
-				}
-			}
-		}
-	}
-	return err
+// A default speciation profile for when we don't have any other
+// information.
+func (sp *SpecProf) DefaultProfile(pol string) (profile map[string]*specHolder) {
+	// We don't know the molecular weight, so don't 
+	// perform any conversion
+	profile = make(map[string]*specHolder)
+	profile[pol] = new(specHolder)
+	profile[pol].factor = 1.
+	profile[pol].units = "gram/gram"
+	return
 }
 
-type specValUnits struct {
-	val   float64
-	units string
+func (sp *SpecProf) GetProfileSingleSpecies(pol string, c *RunData) (
+	profile map[string]*specHolder) {
+	var tempMW sql.NullFloat64
+	var MW float64
+	var group sql.NullString
+	var tempgroupfactor sql.NullFloat64
+	var groupfactor float64
+	err := sp.db.QueryRow("select spec_mw,"+c.SpeciesGroupName+"_group,"+
+		c.SpeciesGroupName+"_factor from "+
+		"species_properties where NAME=?", pol).Scan(
+		&tempMW, &group, &tempgroupfactor)
+	if err != nil {
+		panic(err)
+	}
+	if tempMW.Valid {
+		MW = tempMW.Float64
+	} else {
+		err = fmt.Errorf("Species %v does not have a molecular weight"+
+			" in SPECIATE database.", pol)
+		panic(err)
+	}
+	if tempgroupfactor.Valid {
+		groupfactor = tempgroupfactor.Float64
+	} else {
+		groupfactor = 1.0
+	}
+	x := new(specHolder)
+	switch c.SpecType {
+	case "mol":
+		x.factor = 1. / MW
+		x.units = "mol/gram"
+	case "mass":
+		x.factor = 1.
+		x.units = "gram/gram"
+	default:
+		err = fmt.Errorf("Invalid specType %v. Options are \"mass\" "+
+			"and \"mol\"", c.SpecType)
+	}
+	profile = make(map[string]*specHolder)
+	if group.Valid { // If pollutant is part of a species group, add to the group
+		profile[group.String] = x
+		profile[group.String].factor += x.factor * groupfactor
+	} else {
+		profile[pol] = x
+	}
+	return
+}
+
+func (sp *SpecProf) GetProfileGas(number string,
+	doubleCountPols []string, c *RunData) (
+	profile map[string]*specHolder,
+	droppedProfile map[string]*specHolder) {
+
+	profile = make(map[string]*specHolder)
+	droppedProfile = make(map[string]*specHolder)
+	var err error
+	var total float64
+	var tempConvFac sql.NullFloat64
+	var convFac float64
+	err = sp.db.QueryRow("select TOTAL,VOCtoTOG from GAS_PROFILE where"+
+		" P_NUMBER=?", number).Scan(&total, &tempConvFac)
+	if err != nil {
+		panic(err)
+	}
+	if tempConvFac.Valid {
+		convFac = tempConvFac.Float64
+	} else {
+		convFac = 0.
+	}
+
+	rows, err := sp.db.Query("select species_id,weight_per from " +
+		"gas_species where p_number=\"" + fmt.Sprint(number) + "\"")
+	if err != nil {
+		panic(err)
+	}
+	totalWeight := 0.
+	for rows.Next() {
+		var specID int
+		var weightPercent float64
+		err = rows.Scan(&specID, &weightPercent)
+		if err != nil {
+			panic(err)
+		}
+		totalWeight += weightPercent
+		var specName string
+		var tempMW sql.NullFloat64
+		var MW float64
+		var group sql.NullString
+		var tempgroupfactor sql.NullFloat64
+		var groupfactor float64
+		err = sp.db.QueryRow("select name,spec_mw,"+c.SpeciesGroupName+"_group,"+
+			c.SpeciesGroupName+"_factor from "+
+			"species_properties where ID=?", specID).Scan(
+			&specName, &tempMW, &group, &tempgroupfactor)
+		if err != nil {
+			panic(err)
+		}
+		if tempMW.Valid {
+			MW = tempMW.Float64
+		} else if weightPercent < 1. {
+			MW = 100. // If database doesn't have a molecular weight, but the species
+			// less than 1% of total mass, give it a default MW of 100
+		} else {
+			err = fmt.Errorf("Species %v (ID %v) does not have a molecular weight"+
+				" in SPECIATE database (mass fraction = %v).", specName, specID,
+				weightPercent)
+			panic(err)
+		}
+		if tempgroupfactor.Valid {
+			groupfactor = tempgroupfactor.Float64
+		} else {
+			groupfactor = 1.0
+		}
+
+		x := new(specHolder)
+		switch c.SpecType {
+		case "mol":
+			x.factor = convFac * weightPercent /
+				100. / MW
+			x.units = "mol/gram"
+		case "mass":
+			x.factor = convFac * weightPercent /
+				100.
+			x.units = "gram/gram"
+		default:
+			err = fmt.Errorf("Invalid specType %v. Options are \"mass\" "+
+				"and \"mol\"", c.SpecType)
+		}
+		if group.Valid && IsStringInArray(doubleCountPols, specName) {
+			// If pollutant is part of a species group, and it isn't
+			// double counting an explicit emissions record,
+			// add to the group
+			if _, ok := sp.sPro[number][group.String]; !ok {
+				profile[group.String] = new(specHolder)
+			} else if x.units != sp.sPro[number][group.String].units {
+				err = fmt.Errorf("Units %v and %v don't match", x.units,
+					profile[group.String].units)
+			}
+			fmt.Println(x.factor, groupfactor)
+			profile[group.String].factor += x.factor * groupfactor
+		} else if !group.Valid {
+			// Add ungrouped pollutants to the outputs
+			profile[specName] = x
+		} else {
+			// Add double counted pollutants to the droppedProfile
+			droppedProfile[specName] = x
+		}
+	}
+	rows.Close()
+
+	if AbsBias(totalWeight, total) > 0.001 {
+		err = fmt.Errorf("For Gas speciation profile %v, sum of species weights"+
+			" (%v) does not match profile total (%v)", totalWeight, total)
+		panic(err)
+	}
+	return
 }
 
 type reportData struct {
@@ -381,137 +341,125 @@ type reportData struct {
 	units  map[string]string
 }
 
-// check to make sure units in this record are the same as the 
-// other units for this pollutant in the other records that have
-// been summed.
-func (r *reportData) checkUnits(x specValUnits, newpol string) {
-	if r.units[newpol] != "" {
-		if r.units[newpol] != x.units {
-			panic("Units for pol " + newpol + " are not consistent between records.")
+// Match SCC in record to speciation profile. If none matches exactly, find a
+// more general SCC that matches.
+func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData) (
+	specFactors, droppedSpecFactors map[string]*specHolder) {
+	var ok bool
+	var err error
+	var ref map[string]string
+	SCC := record.SCC
+	if c.MatchFullSCC {
+		var matchedSCC string
+		matchedSCC, err = MatchCode2(SCC, sp.sRef)
+		if err != nil {
+			err = fmt.Errorf("In Speciate, SCC code " + SCC +
+				" is not in specRef file and there is no default.")
+			panic(err)
+		} else {
+			ref = sp.sRef[matchedSCC]
 		}
 	} else {
-		r.units[newpol] = x.units
+		ref, ok = sp.sRef[SCC]
+		if !ok {
+			err = fmt.Errorf("In Speciate, SCC code " + SCC +
+				" is not in specRef file. Setting matchFullSCC to " +
+				"to 'false' will allow a default value to be used.")
+			panic(err)
+		}
 	}
+
+	if c.PolsToKeep[pol].SpecNames != nil {
+		// For explicit species, convert the value to moles 
+		// if required and add the emissions to a species group 
+		// if one exists
+		specFactors = sp.GetProfileSingleSpecies(
+			c.PolsToKeep[pol].SpecNames[0], c)
+	} else {
+		switch c.PolsToKeep[pol].SpecType {
+		case "VOC":
+			code, ok := ref[pol]
+			if ok {
+				specFactors, ok = sp.sPro[code]
+				if !ok || record.DoubleCountPols != nil {
+					specFactors, droppedSpecFactors = sp.GetProfileGas(
+						code, record.DoubleCountPols, c)
+					if record.DoubleCountPols == nil {
+						sp.sPro[code] = specFactors
+					}
+				}
+			} else {
+				specFactors = sp.DefaultProfile(pol)
+			}
+		case "PM2.5":
+			panic("PM2.5 speciation not yet implemented")
+		case "NOx":
+			panic("NOx speciation not yet implemented")
+		case "SOx":
+			panic("SOx speciation not yet implemented")
+		default:
+			panic("In PolsToKeep, either `SpecNames' or `SpecType" +
+				" needs to be specified. `SpecType' can only be VOC, " +
+				"PM2.5, NOx, or SOx")
+		}
+	}
+	return
 }
 
-func (c *RunData) Speciate(MesgChan chan string, InvSpecChan chan ParsedRecord, period string) {
-	defer func() {
-		if err := recover(); err != nil {
-			// Handle error
-			c.ErrorReport(err)
-			MesgChan <- c.sector + " failed!"
-		}
-	}()
+// Check if there is a speciation record for this 
+// SCC/pollutant combination.If not, check if the pollutant
+// is in the list of pollutants to drop. If it is not in the
+// drop list, transfer it to the speciated record without any
+// speciating. Otherwise, add it to the totals of dropped 
+// pollutants. If the record is a speciatable record, multiply the 
+// annual emissions by the speciation factors. Multiply all
+// speciated emissions by a conversion factor from the input
+// units to g/year.
+func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
+	OutputChan chan *ParsedRecord, period string) {
+	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
+	c.Log("Speciating "+period+" "+c.Sector+"...", 0)
+
+	sp, err := c.NewSpecProf()
+	if err != nil {
+		panic(err)
+	}
+
 	r := new(reportData)
 	r.totals = make(map[string]float64)
 	r.units = make(map[string]string)
 	totalDropped := make(map[string]float64)
-	var x specValUnits
-	for record := range InvSpecChan {
-		sccFracs, ok := c.specFrac[record.SCC]
-		if !ok {
-			panic("In Speciate, SCC code " + record.SCC + " is not in specRef file.")
-		}
+	polFracs := make(map[string]*specHolder)
+	droppedPolFracs := make(map[string]*specHolder)
+	for record := range InputChan {
+		newAnnEmis := make(map[string]*specValUnits)
 		for pol, AnnEmis := range record.ANN_EMIS {
-			// check if there is a speciation record for this 
-			// SCC/pollutant combination. If there is no record,
-			// check if there is a record for the SCC "0000000000"
-			// which is a unversal record. If not, check if the pollutant
-			// is in the list of pollutants to drop. If it is not in the
-			// drop list, transfer it to the speciated record without any
-			// speciating. Otherwise, add it to the totals of dropped 
-			// pollutants. If the is a speciation record, multiply the 
-			// annual emissions by the speciation factors. Multiply all
-			// speciated emissions by a conversion factor from the input
-			// units to g/year.
-			if polFracs, ok := sccFracs[pol]; ok {
-				for newpol, frac := range polFracs {
-					x.val = AnnEmis * frac.factor * c.inputConv
-					x.units = frac.units
-					r.checkUnits(x, newpol)
-					record.SpecAnnEmis[newpol] = x
-					r.totals[newpol] += record.SpecAnnEmis[newpol].val
+			polFracs, droppedPolFracs = sp.getSccFracs(
+				record, pol, c)
+			for newpol, factor := range polFracs {
+				if _, ok := newAnnEmis[newpol]; ok {
+					err = fmt.Errorf("Possible double counting of"+
+						" pollutant %v SCC %v", newpol, record.SCC)
+					panic(err)
 				}
-			} else if sort.SearchStrings(c.PolsToDrop, pol) != -1 {
-				totalDropped[pol] += AnnEmis * c.inputConv
-			} else if polfracs, ok := c.specFrac["0000000000"][pol]; ok {
-				for newpol, frac := range polfracs {
-					x.val = AnnEmis * frac.factor * c.inputConv
-					x.units = frac.units
-					r.checkUnits(x, newpol)
-					record.SpecAnnEmis[newpol] = x
-					r.totals[newpol] += record.SpecAnnEmis[newpol].val
-				}
-			} else {
-				newpol := pol
-				x.val = AnnEmis * c.inputConv
-				x.units = "g/year"
-				r.checkUnits(x, newpol)
-				record.SpecAnnEmis[newpol] = x
-				r.totals[newpol] += record.SpecAnnEmis[newpol].val
+				newAnnEmis[newpol] = new(specValUnits)
+				newAnnEmis[newpol].val = AnnEmis.val *
+					c.InputConv * factor.factor
+				newAnnEmis[newpol].units = strings.Replace(
+					factor.units, "/gram", "/year", -1)
+				r.totals[newpol] += newAnnEmis[newpol].val
+			}
+			for droppedpol, factor := range droppedPolFracs {
+				totalDropped[droppedpol] += AnnEmis.val *
+					c.InputConv * factor.factor
 			}
 		}
+		record.ANN_EMIS = newAnnEmis
+		OutputChan <- record
 	}
-	c.speciationReport(r, totalDropped, period)
-	MesgChan <- "Finished speciating " + period + " " + c.sector
-}
-
-func (c *RunData) speciationReport(r *reportData, totalDropped map[string]float64, period string) {
-	var perm os.FileMode
-	perm = 0776
-	err := os.MkdirAll(c.sectorLogs, perm)
-	if err != nil {
-		panic(err)
+	c.SpeciationReport(r, totalDropped, period)
+	MesgChan <- "Finished speciating " + period + " " + c.Sector
+	if OutputChan != TotalReportChan {
+		close(OutputChan)
 	}
-	repStr := ""
-	if c.SpecRep != nil {
-		repStr += "\n\n"
-	} else {
-		c.SpecRep, err = os.Create(filepath.Join(c.sectorLogs, c.sector+"_speciation.csv"))
-		if err != nil {
-			panic(err)
-		}
-	}
-	var polNamesTemp string
-	for pol, _ := range r.totals {
-		if strings.Index(polNamesTemp, pol) == -1 {
-			polNamesTemp += " " + pol
-		}
-	}
-	var droppedPolNamesTemp string
-	for pol, _ := range totalDropped {
-		if strings.Index(droppedPolNamesTemp, pol) == -1 {
-			droppedPolNamesTemp += " " + pol
-		}
-	}
-	polNames := strings.Split(polNamesTemp, " ")
-	sort.Strings(polNames)
-	droppedPolNames := strings.Split(droppedPolNamesTemp, " ")
-	sort.Strings(droppedPolNames)
-
-	repStr += "Speciated totals\n"
-	repStr += fmt.Sprintf("Sector: %s\n", c.sector)
-	repStr += fmt.Sprintf("Time period: %s\n", period)
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s,", pol)
-	}
-	repStr += "\n"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s,", r.units[pol])
-	}
-	repStr += "\n"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%e,", r.totals[pol])
-	}
-	repStr += "\n\nTotals of dropped pollutants (g/year)\n"
-	for _, pol := range droppedPolNames {
-		repStr += fmt.Sprintf("%s,", pol)
-	}
-	repStr += "\n"
-	for _, pol := range droppedPolNames {
-		repStr += fmt.Sprintf("%e,", totalDropped[pol])
-	}
-	repStr += "\n"
-	fmt.Fprint(c.SpecRep, repStr)
-	return
 }

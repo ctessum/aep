@@ -1,0 +1,172 @@
+{
+    "Dirs": {
+        "Home": "${GOPATH}/src/aep/test",
+        "Input": "Minneapolis2005",
+        "Ancilliary": "[Home]/ancilliary",
+        "Logs": "[Home]/logs"
+    },
+    "DefaultSettings": {
+		"StartDate": "2005/01/01",
+		"EndDate": "2005/12/31",
+		"Tstep":"1h",
+        "OutputType": "CAMx",
+        "SpecType": "mol",
+        "InputUnits": "tons/year",
+        "MatchFullSCC": true,
+        "WpsNamelist": "/home/marshall/tessumcm/emis_inventory/GoSmoke/namelist.wps",
+        "EarthRadius": 6370000,
+        "LineMap": "CoastAndPolitical",
+        "SpatialDataLoc": "Lambert7",
+        "SpatialDataMapset": "surrogates",
+		"SpeciesGroupName":"AROMATICS_ONLY",
+		"RegenerateSpatialData": true,
+		"SimulationName":"aqmep_2005_nei",
+        "DebugLevel": 2,
+        "Ncpus": 8,
+        "Speciate": true,
+        "Spatialize": false,
+        "PolsToKeep": {
+			"VOC":{"SpecType":"VOC"},
+			"EVP__VOC":{"SpecType":"VOC"},
+			"EXH_VOC":{"SpecType":"VOC"},
+			"RFL__VOC":{"SpecType":"VOC"},
+			"71432":{"SpecNames":["Benzene"]},
+			"EVP__71432":{"SpecNames":["Benzene"]},
+			"EXH__71432":{"SpecNames":["Benzene"]},
+			"RFL__71432":{"SpecNames":["Benzene"]},
+			"100414":{"SpecNames":["Ethylbenzene"]},
+			"EVP__100414":{"SpecNames":["Ethylbenzene"]},
+			"EXH__100414":{"SpecNames":["Ethylbenzene"]},
+			"RFL__100414":{"SpecNames":["Ethylbenzene"]},
+			"108883":{"SpecNames":["Toluene"]},
+			"EVP__108883":{"SpecNames":["Toluene"]},
+			"EXH__108883":{"SpecNames":["Toluene"]},
+			"RFL__108883":{"SpecNames":["Toluene"]},
+			"95476":{"SpecNames":["O-xylene","Isomers of xylene"]},
+			"EVP__95476":{"SpecNames":["O-xylene","Isomers of xylene"]},
+			"EXH__95476":{"SpecNames":["O-xylene","Isomers of xylene"]},
+			"RFL__95476":{"SpecNames":["O-xylene","Isomers of xylene"]},
+			"108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
+			"EVP__108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
+			"EXH__108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
+			"RFL__108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
+			"106423":{"SpecNames":["P-xylene","Isomers of xylene"]},
+			"EVP__106423":{"SpecNames":["P-xylene","Isomers of xylene"]},
+			"EXH__106423":{"SpecNames":["P-xylene","Isomers of xylene"]},
+			"RFL__106423":{"SpecNames":["P-xylene","Isomers of xylene"]}
+        },
+        "SpecSynonyms": "[ancilliary]/SpeciationSynonyms.txt",
+        "SpecRefFile": "[ancilliary]/gsref_cmaq_cb05_soa_2005cr_05b_16jun2010.txt",
+        "SpecRefComboFile": "[ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+        "SpecProFile": "[ancilliary]/SPECIATE 4.3 9-28-2011-FINAL.sqlite",
+		"SccDesc": "[ancilliary]/sccdesc_pf31_06apr2010_v10.txt",
+		"SicDesc": "[ancilliary]/sic_desc_04oct2006_v0.txt",
+		"NaicsDesc": "[ancilliary]/naicsdesc_02jan2008_v0.txt",
+		"GridRefFile":"[ancilliary]/amgref_us_can_allmex3_28sep2010_v13.txt",
+		"TemporalRefFile":"[ancilliary]/amptref_v3_3_revised_10jan2011_v11.txt",
+		"SrgSpecFile":"[ancilliary]/surrogate_specification_2002.csv"
+    },
+    "Sectors": {
+        "ptnonipm": {
+            "CaseName": "2005cs_05b",
+            "SectorType": "point",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "InvFileNames": [
+                "ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
+                "ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt"
+            ]
+        },
+        "ag": {
+            "CaseName": "2005ah_tox_05b",
+            "SectorType": "area",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_ag_cmaq_cb05_tx_2005ah_tox_05b_05b.txt",
+            "InvFileNames": [
+                "arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
+            ]
+        },
+        "ptipm": {
+            "CaseName": "2005as_05b",
+            "SectorType": "point",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
+            "InvFileNames": [
+                "ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
+                "ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
+            ]
+        },
+        "afdust": {
+            "CaseName": "2005cr_05b",
+            "SectorType": "area",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
+            "InvFileNames": [
+                "arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
+            ]
+        },
+        "nonroad": {
+            "CaseName": "2005cr_05b",
+            "SectorType": "area",
+            "InventoryFreq": "monthly",
+            "SpecRef": "[ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefCombo": "[ancilliary]/gspro_combo_2022aeo2_nonroadrfl_stationary_31aug2010_v2.txt",
+            "InvFileNames": [
+                "arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
+                "arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
+            ]
+        },
+        "on_moves_runpm": {
+            "CaseName": "2005cr_05b",
+            "SectorType": "mobile",
+            "InventoryFreq": "monthly",
+            "SpecRef": "[ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefCombo": "[ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "InvFileNames": [
+                "mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+            ]
+        },
+        "on_moves_startpm": {
+            "CaseName": "2005cr_05b",
+            "SectorType": "mobile",
+            "InventoryFreq": "monthly",
+            "SpecRef": "[ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefCombo": "[ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "InvFileNames": [
+                "mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+            ]
+        },
+        "on_noadj": {
+            "CaseName": "2005cr_05b",
+            "SectorType": "mobile",
+            "InventoryFreq": "monthly",
+            "SpecRef": "[ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefCombo": "[ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "InvFileNames": [
+                "mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
+                "mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+            ]
+        },
+        "alm_no_c3": {
+            "CaseName": "2005cs_05b",
+            "SectorType": "area",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "InvFileNames": [
+                "arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
+                "arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
+            ]
+        },
+        "nonpt": {
+            "CaseName": "2005cs_05b",
+            "SectorType": "area",
+            "InventoryFreq": "annual",
+            "SpecRef": "[ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "InvFileNames": [
+                "arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
+                "arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",
+                "arinv_pfc_2002_caphap_27dec2007_v0_orl.txt"
+            ]
+        }
+    }
+}
