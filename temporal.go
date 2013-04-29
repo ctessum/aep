@@ -106,13 +106,13 @@ func (c *RunData) AreaTemporalAggregator(MesgChan chan string,
 		for pol, vals := range record.ANN_EMIS {
 			if _, ok := data[temporalCodes][pol]; !ok {
 				data[temporalCodes][pol] =
-					make([]*matrix.SparseMatrix, len(regions))
-				for i, region := range regions {
+					make([]*matrix.SparseMatrix, len(grids))
+				for i, grid := range grids {
 					data[temporalCodes][pol][i] =
-						matrix.ZerosSparse(region.NY, region.NX)
+						matrix.ZerosSparse(grid.Ny, grid.Nx)
 				}
 			}
-			for i, _ := range regions {
+			for i, _ := range grids {
 				err = data[temporalCodes][pol][i].AddSparse(vals.gridded[i])
 				if err != nil {
 					panic(err)

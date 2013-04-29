@@ -1,8 +1,7 @@
 package main
 
 import (
-	"bitbucket.org/ctessum/gonetcdf"
-	"bitbucket.org/ctessum/grassutils"
+	"bitbucket.org/ctessum/aep/gis"
 	"bufio"
 	"encoding/csv"
 	"fmt"
@@ -11,28 +10,26 @@ import (
 	"log"
 	"math"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 )
 
 var (
-	surrogateChan      = make(chan string)
-	srgs               = make(map[string]map[string][]*matrix.SparseMatrix)
-	srgSpec            = make(map[string]*srgSpecHolder)
-	srgCodes           = make(map[string]string)
-	pendingSurrogates  = make(map[string]string)
-	finishedSurrogates = make(map[string]string)
-	regions            = make([]*grassutils.Region, 0)
-	gridRef            = make(map[string]map[string]string)
-	savedSurrogates    = make([]string, 0)
+	srgSpec             = make(map[string]*srgSpecHolder)
+	srgCodes            = make(map[string]string)
+	pendingSurrogates   = make(map[string]string)
+	grids               = make([]*gis.GridDef, 0)
+	gridRef             = make(map[string]map[string]map[string]string)
+	SrgsMissingCoverage = make(map[string]map[string][]string) // map[grid][srgNum]{FIPS}
 )
 
 func (c *RunData) SpatialSetup(e *ErrCat) {
-	c.Log("Setting up GRASS spatial environment...", 0)
-	grassutils.DebugLevel = c.DebugLevel
-	err := grassutils.CheckGrassEnv()
+	c.Log("Setting up spatial environment...", 0)
+	gis.DebugLevel = c.DebugLevel
+	pg, err := gis.Connect(c.PostGISuser, c.PostGISdatabase,
+		c.PostGISpassword)
+	defer pg.Disconnect()
 	if err != nil {
 		e.Add(err)
 		return
@@ -47,71 +44,26 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 			" that is currently supported (your projection is " +
 			x.map_proj + ").")
 	}
-	err = grassutils.NewLocation(c.SimulationName, proj, x.truelat1, x.truelat2, x.ref_lat,
-		x.ref_lon, c.EarthRadius)
+	err = pg.NewProjection(c.SRID, proj, x.truelat1,
+		x.truelat2, x.ref_lat, x.ref_lon, c.EarthRadius)
 	if err != nil {
 		e.Add(err)
 		return
 	}
 	if c.RegenerateSpatialData {
-		err = grassutils.DeleteAll()
-		if err != nil {
-			e.Add(err)
-			return
-		}
+		pg.DropSchema(c.SimulationName)
 	}
-	//	if !grassutils.IsMap(c.LineMap, "vect") {
-	//		err = grassutils.Vproj(c.LineMap, c.SpatialDataLoc, c.SpatialDataMapset)
-	//		if err != nil {
-	//			e.Add(err)
-	//			return
-	//		}
-	//	}
-	x.S = make([]float64, x.max_dom)
-	x.W = make([]float64, x.max_dom)
-	x.S[0] = 0 - (x.ref_y-0.5)*x.dy0
-	x.W[0] = 0 - (x.ref_x-0.5)*x.dx0
-	x.dx = make([]float64, x.max_dom)
-	x.dy = make([]float64, x.max_dom)
-	x.dx[0] = x.dx0
-	x.dy[0] = x.dy0
-	x.nx = make([]int, x.max_dom)
-	x.ny = make([]int, x.max_dom)
-	x.nx[0] = x.e_we[0] - 1
-	x.ny[0] = x.e_sn[0] - 1
-	x.mapsetName = make([]string, x.max_dom)
-	for i := 1; i < x.max_dom; i++ {
-		x.S[i] = x.S[x.parent_id[i]-1] + float64(x.j_parent_start[i]-1)*x.dy0
-		x.W[i] = x.W[x.parent_id[i]-1] + float64(x.i_parent_start[i]-1)*x.dx0
-		x.dx[i] = x.dx[x.parent_id[i]-1] / x.parent_grid_ratio[i]
-		x.dy[i] = x.dy[x.parent_id[i]-1] / x.parent_grid_ratio[i]
-		x.nx[i] = x.e_we[i] - 1
-		x.ny[i] = x.e_sn[i] - 1
-	}
+	pg.CreateSchema(c.SimulationName)
+
 	for i := 0; i < x.max_dom; i++ {
-		x.mapsetName[i] = fmt.Sprintf("d%02v", i+1)
-		region, err := grassutils.NewRegion(x.S[i], x.W[i],
-			x.dx[i], x.dy[i], x.nx[i], x.ny[i])
-		if !grassutils.IsMap(x.mapsetName[i], "vect") {
-			region.CreateGrid(x.mapsetName[i])
-			if err != nil {
-				e.Add(err)
-				return
-			}
+		grid := gis.NewGrid(x.domainName[i], x.nx[i], x.ny[i],
+			x.dx[i], x.dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
+
+		if !pg.TableExists(c.SimulationName, grid.Name) {
+			err = pg.CreateGrid(grid)
+			e.Add(err)
 		}
-		regions = append(regions, region)
-	}
-	// Load surrogates from netCDF file, or create file to save surrogates to.
-	for i, region := range regions {
-		surrogateSaveLoc := path.Join(grassutils.GrassDB, c.SimulationName,
-			"surrogates_"+x.mapsetName[i]+".nc")
-		if c.RegenerateSpatialData {
-			c.Log("Creating new surrogate file "+surrogateSaveLoc, 0)
-			CreateSavedSurrogates(surrogateSaveLoc, region)
-		} else {
-			c.Log("Loading surrogate file "+surrogateSaveLoc, 0)
-			LoadSavedSurrogates(surrogateSaveLoc, region, i)
-		}
+		grids = append(grids, grid)
 	}
 	return
 }
@@ -120,46 +72,60 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
 	var err error
-	reportChan := make(chan *ParsedRecord)
-	finishedChan := make(chan int)
-	go c.SpatialReport(reportChan, finishedChan, period)
 
 	c.Log("Spatializing "+period+" "+c.Sector+"...", 0)
+
+	TotalGrid := make(map[*gis.GridDef]map[string]*matrix.SparseMatrix) // map[grid][pol]data
+	DroppedTotals := make(map[string]map[string]float64)
+
+	pg, err := gis.Connect(c.PostGISuser, c.PostGISdatabase,
+		c.PostGISpassword)
+	defer pg.Disconnect()
 
 	switch c.SectorType {
 	case "point":
 		for record := range InputChan {
 			// Convert Lat/Lon to projection
-			record.PointYcoord, record.PointXcoord, err =
-				grassutils.LatLonToProj(
-					record.YLOC, record.XLOC)
+			record.PointXcoord, record.PointYcoord, err =
+				pg.ProjectPoint(record.YLOC, record.XLOC, c.SRID)
 			if err != nil {
 				panic(err)
 			}
 
-			for _, data := range record.ANN_EMIS {
-				data.gridded = make([]*matrix.SparseMatrix, len(regions))
-				for i, region := range regions {
-					data.gridded[i] = matrix.ZerosSparse(region.NY,
-						region.NX)
-					row := int((record.PointYcoord - region.South) /
-						region.DY)
-					col := int((record.PointXcoord - region.West) /
-						region.DX)
-					if row > 0 && row < region.NY &&
-						col > 0 && col < region.NX {
+			for pol, data := range record.ANN_EMIS {
+				data.gridded = make([]*matrix.SparseMatrix, len(grids))
+				for i, grid := range grids {
+					if _, ok := TotalGrid[grid]; !ok {
+						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
+						DroppedTotals[grid.Name] = make(map[string]float64)
+					}
+					if _, ok := TotalGrid[grid][pol]; !ok {
+						TotalGrid[grid][pol] =
+							matrix.ZerosSparse(grid.Ny, grid.Nx)
+					}
+
+					data.gridded[i] = matrix.ZerosSparse(grid.Ny,
+						grid.Nx)
+					row := int((record.PointYcoord - grid.Y0) /
+						grid.Dy)
+					col := int((record.PointXcoord - grid.X0) /
+						grid.Dx)
+					if row > 0 && row < grid.Ny &&
+						col > 0 && col < grid.Nx {
 						data.gridded[i].Set(row, col, data.val)
+						TotalGrid[grid][pol].Add(data.gridded[i])
+					} else {
+						DroppedTotals[grid.Name][pol] += MatrixSum(data.gridded[i])
 					}
 				}
 			}
 			OutputChan <- record
-			reportChan <- record
 		}
 	case "area":
 		for record := range InputChan {
 			var matchedSCC string
 			if !c.MatchFullSCC {
-				matchedSCC, err = MatchCode2(record.SCC, gridRef)
+				matchedSCC, err = MatchCode2(record.SCC, gridRef[record.Country])
 				if err != nil {
 					panic(err)
 				}
@@ -167,196 +133,174 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 				matchedSCC = record.SCC
 			}
 			matchedFIPS, err := MatchCode3(record.FIPS,
-				gridRef[matchedSCC])
+				gridRef[record.Country][matchedSCC])
 			if err != nil {
 				panic(err)
 			}
-			srgNum := gridRef[matchedSCC][matchedFIPS]
-			if _, ok := finishedSurrogates[srgNum]; !ok {
-				surrogateChan <- srgNum
-				WaitSrgToFinish(srgNum)
-			}
-			for _, val := range record.ANN_EMIS {
+			srgNum := gridRef[record.Country][matchedSCC][matchedFIPS]
+
+			for pol, val := range record.ANN_EMIS {
 				val.gridded = make([]*matrix.SparseMatrix,
-					len(regions))
-				for i, mat := range srgs[srgNum][record.FIPS] {
-					val.gridded[i] = mat.Copy()
-					val.gridded[i].Scale(val.val)
+					len(grids))
+				for i, grid := range grids {
+					if _, ok := TotalGrid[grid]; !ok {
+						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
+						DroppedTotals[grid.Name] = make(map[string]float64)
+					}
+					if _, ok := TotalGrid[grid][pol]; !ok {
+						TotalGrid[grid][pol] = matrix.ZerosSparse(grid.Ny, grid.Nx)
+					}
+
+					val.gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid, pg)
+					if MatrixSum(val.gridded[i]) != 0. {
+						val.gridded[i].Scale(val.val)
+						TotalGrid[grid][pol].Add(val.gridded[i])
+					} else {
+						DroppedTotals[grid.Name][pol] += val.val
+					}
 				}
 			}
 			OutputChan <- record
-			reportChan <- record
 		}
 	default:
 		err = fmt.Errorf("Unknown sectorType %v", c.SectorType)
 	}
-	close(reportChan)
 	if OutputChan != TotalReportChan {
 		close(OutputChan)
 	}
-	<-finishedChan
+	c.SpatialReport(TotalGrid, DroppedTotals, period, pg)
 	MesgChan <- "Finished spatializing " + period + " " + c.Sector
 	return
 }
 
-// Generate spatial surrogates
-func (c *RunData) surrogateGenerator() {
-	var err error
-	for srgNum := range surrogateChan {
+func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
+	pg *gis.PostGis) (srg *matrix.SparseMatrix) {
+
+	tableName := grid.Name + "_" + srgNum
+	if !pg.TableExists(c.SimulationName, tableName) {
 		// Make sure this surrogate isn't being generated by another instance
 		// of this function.
-		if _, ok := pendingSurrogates[srgNum]; !ok {
+		if _, ok := pendingSurrogates[srgNum]; ok {
+			WaitSrgToFinish(srgNum)
+		} else {
 			pendingSurrogates[srgNum] = ""
-			c.Log(srgSpec[srgNum], 2)
-			inputMap := srgSpec[srgNum].DATASHAPEFILE
-			inputColumn := srgSpec[srgNum].DATAATTRIBUTE
-			surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
-			WeightColumns := srgSpec[srgNum].WeightColumns
-			FilterFunction := srgSpec[srgNum].FilterFunction
-			MergeFunction := srgSpec[srgNum].MergeFunction
-			secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
-			tertiarySrg := srgSpec[srgNum].TERTIARYSURROGATE
-			quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
-			if MergeFunction == nil {
-				c.gensrg(srgNum, inputMap, inputColumn, surrogateMap,
-					WeightColumns, FilterFunction)
-				// Try backup surrogates if the surrogate 
-				// exists but is equal to zero.
-				for inputID, _ := range srgs[srgNum] {
-					for i, srg := range srgs[srgNum][inputID] {
-						if MatrixSum(srg) == 0 {
-							newSrgNum := srgCodes[secondarySrg]
-							success := SubstituteBackupSurrogate(srgNum,
-								newSrgNum, inputID, i)
-							if !success {
-								newSrgNum = srgCodes[tertiarySrg]
-								success = SubstituteBackupSurrogate(srgNum,
-									newSrgNum, inputID, i)
-							}
-							if !success {
-								newSrgNum = srgCodes[quarternarySrg]
-								success = SubstituteBackupSurrogate(srgNum,
-									newSrgNum, inputID, i)
-							} else {
-								err = fmt.Errorf("No spatial coverage "+
-									"for surrogate %v, input shape %v",
-									srgNum, inputID)
-								panic(err)
-							}
-						}
-					}
-				}
-			} else { // surrogate merging: create a surrogate from other surrogates
-				for j, mrgval := range MergeFunction {
-					if j == 0 {
-						srgs[srgNum] = make(map[string][]*matrix.SparseMatrix)
-					}
-					newSrgNum := srgCodes[mrgval.name]
-					weight := mrgval.val
-					// Create weight surrogate if it doesn't exist
-					if _, ok := finishedSurrogates[newSrgNum]; !ok {
-						surrogateChan <- newSrgNum
-						WaitSrgToFinish(newSrgNum)
-					}
-					for inputID, _ := range srgs[newSrgNum] {
-						if j == 0 {
-							srgs[srgNum][inputID] = make(
-								[]*matrix.SparseMatrix, len(regions))
-						}
-						for i, region := range regions {
-							srgs[srgNum][inputID][i] =
-								matrix.ZerosSparse(int(region.NY), int(region.NX))
-							tempMat := srgs[srgNum][inputID][i].Copy()
-							tempMat.Scale(weight)
-							srgs[srgNum][inputID][i].
-								AddSparse(tempMat)
+			c.generateSurrogate(srgNum, grid, pg)
+			delete(pendingSurrogates, srgNum)
+		}
+	}
+	srg = c.retrieveSurrogate(srgNum, FIPS, grid, pg)
+	return
+}
 
-							srgSum := MatrixSum(srgs[srgNum][inputID][i])
-							if srgSum > 1.001 || srgSum < 0.999 || math.IsNaN(srgSum) {
-								err = fmt.Errorf("Sum for surrogate != 1.0: %v", srgSum)
-								panic(err)
-							}
-						}
-					}
+func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
+	pg *gis.PostGis) (srg *matrix.SparseMatrix) {
+
+	if _, ok := SrgsMissingCoverage[grid.Name][srgNum]; ok {
+		if IsStringInArray(SrgsMissingCoverage[grid.Name][srgNum], FIPS) {
+			srg = matrix.ZerosSparse(grid.Ny, grid.Nx)
+			return
+		}
+	}
+
+	var err error
+	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
+	tertiarySrg := srgSpec[srgNum].TERTIARYSURROGATE
+	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
+	MergeFunction := srgSpec[srgNum].MergeFunction
+	if MergeFunction == nil {
+
+		srg, err = pg.RetrieveGriddingSurrogate(srgNum, FIPS,
+			c.SimulationName, grid)
+		if err != nil {
+			panic(err)
+		}
+
+		// Try backup surrogates if the surrogate sums to zero.
+		backupNames := []string{secondarySrg, tertiarySrg, quarternarySrg}
+		for _, backupName := range backupNames {
+			if MatrixSum(srg) == 0 {
+				if backupName != "" {
+					newSrgNum := srgCodes[backupName]
+					srg = c.getSurrogate(newSrgNum, FIPS, grid, pg)
 				}
 			}
-			delete(pendingSurrogates, srgNum)
-			finishedSurrogates[srgNum] = ""
+		}
+		if MatrixSum(srg) == 0 {
+			if _, ok := SrgsMissingCoverage[grid.Name]; !ok {
+				SrgsMissingCoverage[grid.Name] = make(map[string][]string)
+			}
+			if _, ok := SrgsMissingCoverage[grid.Name][srgNum]; !ok {
+				SrgsMissingCoverage[grid.Name][srgNum] = make([]string, 0)
+			}
+			SrgsMissingCoverage[grid.Name][srgNum] =
+				append(SrgsMissingCoverage[grid.Name][srgNum], FIPS)
+		}
+	} else {
+		srg = matrix.ZerosSparse(grid.Ny, grid.Nx)
+		for _, mrgval := range MergeFunction {
+			newSrgNum := srgCodes[mrgval.name]
+			weight := mrgval.val
+			tempSrg := c.retrieveSurrogate(newSrgNum, FIPS, grid, pg)
+			tempSrg.Scale(weight)
+			srg.AddSparse(tempSrg)
+
+		}
+	}
+	srgSum := MatrixSum(srg)
+	if srgSum > 1.000001 || math.IsNaN(srgSum) {
+		err = fmt.Errorf("Sum for surrogate !<= 1.0: %v", srgSum)
+		panic(err)
+	}
+	return
+}
+
+// Generate spatial surrogates
+func (c *RunData) generateSurrogate(srgNum string, grid *gis.GridDef,
+	pg *gis.PostGis) {
+	var err error
+	c.Log(srgSpec[srgNum], 2)
+	inputMap := srgSpec[srgNum].DATASHAPEFILE
+	inputColumn := srgSpec[srgNum].DATAATTRIBUTE
+	surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
+	WeightColumns := srgSpec[srgNum].WeightColumns
+	FilterFunction := srgSpec[srgNum].FilterFunction
+	MergeFunction := srgSpec[srgNum].MergeFunction
+	if MergeFunction == nil {
+		err = pg.CreateGriddingSurrogate(srgNum, inputMap,
+			inputColumn, surrogateMap, WeightColumns, FilterFunction,
+			grid, c.ShapefileSchema)
+		if err != nil {
+			panic(err)
+		}
+	} else { // surrogate merging: create a surrogate from other surrogates
+		// Here, we just create weight surrogate tables if they don't exist.
+		// The actual merging happens elsewhere.
+		for _, mrgval := range MergeFunction {
+			newSrgNum := srgCodes[mrgval.name]
+			tableName := grid.Name + "_" + newSrgNum
+			if !pg.TableExists(c.SimulationName, tableName) {
+				// Make sure this surrogate isn't being generated by another instance
+				// of this function.
+				if _, ok := pendingSurrogates[srgNum]; ok {
+					WaitSrgToFinish(srgNum)
+				} else {
+					pendingSurrogates[srgNum] = ""
+					c.generateSurrogate(srgNum, grid, pg)
+					delete(pendingSurrogates, srgNum)
+				}
+			}
 		}
 	}
 }
 
 func WaitSrgToFinish(srgNum string) {
 	for {
-		if _, ok := finishedSurrogates[srgNum]; !ok {
+		if _, ok := pendingSurrogates[srgNum]; ok {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			break
 		}
 	}
-}
-
-func SubstituteBackupSurrogate(srgNum, newSrgNum, inputID string, i int) (
-	success bool) {
-	if _, ok := finishedSurrogates[newSrgNum]; !ok {
-		surrogateChan <- newSrgNum
-		WaitSrgToFinish(newSrgNum)
-	}
-	if MatrixSum(srgs[newSrgNum][inputID][i]) != 0 {
-		srgs[srgNum][inputID][i] = srgs[newSrgNum][inputID][i]
-		success = true
-	} else {
-		success = false
-	}
-	return
-}
-
-func (c *RunData) gensrg(srgNum, inputMap, inputColumn,
-	surrogateMap string, WeightColumns []string,
-	FilterFunction *grassutils.SurrogateFilter) {
-
-	var err error
-	if _, ok := srgs[srgNum]; !ok {
-		srgs[srgNum] = make(map[string][]*matrix.SparseMatrix)
-	}
-
-	if !grassutils.IsMap(inputMap, "vect") {
-		err = grassutils.Vproj(inputMap, c.SpatialDataLoc,
-			c.SpatialDataMapset)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if !grassutils.IsMap(surrogateMap, "vect") {
-		err = grassutils.Vproj(surrogateMap, c.SpatialDataLoc,
-			c.SpatialDataMapset)
-		if err != nil {
-			panic(err)
-		}
-	}
-	for i, region := range regions {
-		tempSrgs, err := grassutils.Surrogate(
-			inputMap, inputColumn, surrogateMap,
-			WeightColumns, FilterFunction,
-			c.wpsData.mapsetName[i], region)
-		if err != nil {
-			panic(err)
-		}
-		for inputRow, srg := range tempSrgs {
-			if i == 0 {
-				srgs[srgNum][inputRow] = make([]*matrix.SparseMatrix,
-					len(regions))
-			}
-			srgs[srgNum][inputRow][i] = srg
-			//err = Sparse2Nc(savedSurrogates[i], srgNum+
-			//	"__"+inputRow,
-			//	srgs[srgNum][inputRow][i], region)
-			//if err != nil {
-			//	panic(err)
-			//}
-		}
-	}
-	return
 }
 
 type srgSpecHolder struct {
@@ -374,8 +318,8 @@ type srgSpecHolder struct {
 	TERTIARYSURROGATE    string
 	QUARTERNARYSURROGATE string
 	DETAILS              string
-	WeightColumns        []string
-	FilterFunction       *grassutils.SurrogateFilter
+	WeightColumns        string
+	FilterFunction       *gis.SurrogateFilter
 	MergeFunction        []*SrgMerge
 }
 
@@ -412,7 +356,7 @@ func (c *RunData) SurrogateSpecification() (err error) {
 		}
 		srg := new(srgSpecHolder)
 		srg.REGION = record[0]
-		srg.SURROGATE = record[1]
+		srg.SURROGATE = strings.TrimSpace(record[1])
 		srg.SURROGATECODE = record[2]
 		srg.DATASHAPEFILE = record[3]
 		srg.DATAATTRIBUTE = record[4]
@@ -421,25 +365,27 @@ func (c *RunData) SurrogateSpecification() (err error) {
 		srg.WEIGHTFUNCTION = record[7]
 		srg.FILTERFUNCTION = record[8]
 		srg.MERGEFUNCTION = record[9]
-		srg.SECONDARYSURROGATE = record[10]
-		srg.TERTIARYSURROGATE = record[11]
-		srg.QUARTERNARYSURROGATE = record[12]
+		if len(record[10]) != 0 {
+			srg.SECONDARYSURROGATE = srg.REGION + record[10]
+		}
+		if len(record[11]) != 0 {
+			srg.TERTIARYSURROGATE = srg.REGION + record[11]
+		}
+		if len(record[12]) != 0 {
+			srg.QUARTERNARYSURROGATE = srg.REGION + record[12]
+		}
 		srg.DETAILS = record[13]
 
 		// Parse weight function
-		srg.WeightColumns = make([]string, 0)
 		if srg.WEIGHTATTRIBUTE != "NONE" && srg.WEIGHTATTRIBUTE != "" {
-			srg.WeightColumns = append(srg.WeightColumns, srg.WEIGHTATTRIBUTE)
+			srg.WeightColumns = srg.WEIGHTATTRIBUTE
 		} else if srg.WEIGHTFUNCTION != "NONE" && srg.WEIGHTFUNCTION != "" {
-			srg.WeightColumns = strings.Split(srg.WEIGHTFUNCTION, "+")
-		}
-		for i := 0; i < len(srg.WeightColumns); i++ {
-			srg.WeightColumns[i] = strings.TrimSpace(srg.WeightColumns[i])
+			srg.WeightColumns = srg.WEIGHTFUNCTION
 		}
 
 		// Parse filter function
 		if srg.FILTERFUNCTION != "NONE" && srg.FILTERFUNCTION != "" {
-			srg.FilterFunction = grassutils.NewSurrogateFilter()
+			srg.FilterFunction = gis.NewSurrogateFilter()
 			s := make([]string, 0)
 			if strings.Index(srg.FILTERFUNCTION, "!=") != -1 {
 				srg.FilterFunction.EqualNotEqual = "NotEqual"
@@ -451,7 +397,8 @@ func (c *RunData) SurrogateSpecification() (err error) {
 			srg.FilterFunction.Column = s[0]
 			splitstr := strings.Split(s[1], ",")
 			for _, val := range splitstr {
-				srg.FilterFunction.Values[strings.TrimSpace(val)] = 0
+				srg.FilterFunction.Values = append(srg.FilterFunction.Values,
+					strings.TrimSpace(val))
 			}
 		}
 
@@ -471,8 +418,8 @@ func (c *RunData) SurrogateSpecification() (err error) {
 			}
 		}
 
-		srgSpec[srg.SURROGATECODE] = srg
-		srgCodes[srg.SURROGATE] = srg.SURROGATECODE
+		srgSpec[srg.REGION+srg.SURROGATECODE] = srg
+		srgCodes[srg.REGION+srg.SURROGATE] = srg.REGION + srg.SURROGATECODE
 	}
 	return
 }
@@ -512,64 +459,38 @@ func (c *RunData) GridRef() (err error) {
 			if len(SCC) == 8 {
 				SCC = "00" + SCC
 			}
+			var country string
+			switch splitLine[0][0:1] {
+			case "0":
+				country = "USA"
+			case "1":
+				country = "CA" // Canada
+			case "2":
+				country = "MEXICO"
+			case "3":
+				country = "CUBA"
+			case "4":
+				country = "BAHAMAS"
+			case "5":
+				country = "HAITI"
+			case "6":
+				country = "DOMINICANREPUBLIC"
+			default:
+				err = fmt.Errorf("Unknown country code %v in GridRefFile.",
+					splitLine[0][0:1])
+				panic(err)
+			}
 			FIPS := splitLine[0][1:]
 			srg := strings.Trim(splitLine[2], "\"\n")
 
-			if _, ok := gridRef[SCC]; !ok {
-				gridRef[SCC] = make(map[string]string)
+			if _, ok := gridRef[country]; !ok {
+				gridRef[country] = make(map[string]map[string]string)
 			}
-			gridRef[SCC][FIPS] = srg
+			if _, ok := gridRef[country][SCC]; !ok {
+				gridRef[country][SCC] = make(map[string]string)
+			}
+			gridRef[country][SCC][FIPS] = country + srg
 		}
 	}
 	return
-}
-
-func CreateSavedSurrogates(surrogateSaveLoc string, region *grassutils.Region) {
-	nc, err := gonetcdf.Create(surrogateSaveLoc, "64bitoffset")
-	if err != nil {
-		panic(err)
-	}
-	err = nc.DefDim("nx", region.NX)
-	if err != nil {
-		panic(err)
-	}
-	err = nc.DefDim("ny", region.NY)
-	if err != nil {
-		panic(err)
-	}
-	err = nc.EndDef()
-	if err != nil {
-		panic(err)
-	}
-	err = nc.Close()
-	if err != nil {
-		panic(err)
-	}
-	savedSurrogates = append(savedSurrogates, surrogateSaveLoc)
-}
-
-func LoadSavedSurrogates(surrogateSaveLoc string, region *grassutils.Region, i int) {
-	nc, err := gonetcdf.Open(surrogateSaveLoc, "write")
-	if err != nil {
-		CreateSavedSurrogates(surrogateSaveLoc, region)
-		return
-	}
-	for varname, _ := range nc.VarNames {
-		splitvar := strings.Split(varname, "__")
-		srgNum := splitvar[0]
-		FIPS := splitvar[1]
-		if _, ok := srgs[srgNum]; !ok {
-			srgs[srgNum] = make(map[string][]*matrix.SparseMatrix)
-		}
-		if _, ok := srgs[srgNum][FIPS]; !ok {
-			srgs[srgNum][FIPS] = make([]*matrix.SparseMatrix, len(regions))
-		}
-		srgs[srgNum][FIPS][i], err = Nc2sparse(nc, varname, region)
-		finishedSurrogates[srgNum] = ""
-	}
-	err = nc.Close()
-	if err != nil {
-		panic(err)
-	}
-	savedSurrogates = append(savedSurrogates, surrogateSaveLoc)
 }

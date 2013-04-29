@@ -77,6 +77,7 @@ type ParsedRecord struct {
 	PointYcoord        float64                  // Projected coordinate for point sources
 	InventoryFreq      string                   // inventory frequency from configuration file
 	DoubleCountPols    []string                 // Pols that should not be included in the speciation of this record to avoid double counting
+	Country            string
 }
 
 type specValUnits struct {
@@ -654,6 +655,12 @@ func (fInfo *FileInfo) ParseLine(config *RunData) (fields *ParsedRecord, EOF boo
 		fields.SCC = "00" + fields.SCC + "00000"
 	} else if len(fields.SCC) == 2 {
 		fields.SCC = "00" + fields.SCC + "000000"
+	}
+
+	// set which country this record is for
+	fields.Country = fInfo.country
+	if fields.Country == "US" {
+		fields.Country = "USA"
 	}
 	return
 }

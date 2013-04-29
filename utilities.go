@@ -2,7 +2,7 @@ package main
 
 import (
 	"bitbucket.org/ctessum/gonetcdf"
-	"bitbucket.org/ctessum/grassutils"
+	"bitbucket.org/ctessum/aep/gis"
 	"math"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
@@ -26,7 +26,7 @@ func MatrixSum(mat *matrix.SparseMatrix) (sum float64) {
 func MatchCode2(code string, matchmap map[string]map[string]string) (
 	matchedCode string, err error) {
 	l := len(code)
-	for i := l - 1; i >= 0; i-- {
+	for i := l - 1; i >= -1; i-- {
 		matchedCode = code[0:i+1] + strings.Repeat("0", l-i-1)
 		_, ok := matchmap[matchedCode]
 		if ok {
@@ -39,7 +39,7 @@ func MatchCode2(code string, matchmap map[string]map[string]string) (
 func MatchCode3(code string, matchmap map[string]string) (
 	matchedCode string, err error) {
 	l := len(code)
-	for i := l - 1; i >= 0; i-- {
+	for i := l - 1; i >= -1; i-- {
 		matchedCode = code[0:i+1] + strings.Repeat("0", l-i-1)
 		_, ok := matchmap[matchedCode]
 		if ok {
@@ -52,7 +52,7 @@ func MatchCode3(code string, matchmap map[string]string) (
 func MatchCode4(code string, matchmap map[string]map[string][3]string) (
 	matchedCode string, err error) {
 	l := len(code)
-	for i := l - 1; i >= 0; i-- {
+	for i := l - 1; i >= -1; i-- {
 		matchedCode = code[0:i+1] + strings.Repeat("0", l-i-1)
 		_, ok := matchmap[matchedCode]
 		if ok {
@@ -65,7 +65,7 @@ func MatchCode4(code string, matchmap map[string]map[string][3]string) (
 func MatchCode5(code string, matchmap map[string][3]string) (
 	matchedCode string, err error) {
 	l := len(code)
-	for i := l - 1; i >= 0; i-- {
+	for i := l - 1; i >= -1; i-- {
 		matchedCode = code[0:i+1] + strings.Repeat("0", l-i-1)
 		_, ok := matchmap[matchedCode]
 		if ok {
@@ -76,33 +76,33 @@ func MatchCode5(code string, matchmap map[string][3]string) (
 	return
 }
 
-func Nc2sparse(nc *gonetcdf.NCfile, varname string, region *grassutils.Region) (
+func Nc2sparse(nc *gonetcdf.NCfile, varname string, grid *gis.GridDef) (
 	mat *matrix.SparseMatrix, err error) {
 
-	mat = matrix.ZerosSparse(region.NY, region.NX)
+	mat = matrix.ZerosSparse(grid.Ny, grid.Nx)
 	vardims, err := nc.VarSize(varname)
 	if err != nil {
 		return
 	}
-	if region.NY != vardims[0] || region.NX != vardims[1] {
-		err = fmt.Errorf("netCDF surrogate dimensions (%v x %v) do not match region dimensions (%v x %v)",
-			region.NY, region.NX, vardims[0], vardims[1])
+	if grid.Ny != vardims[0] || grid.Nx != vardims[1] {
+		err = fmt.Errorf("netCDF surrogate dimensions (%v x %v) do not match domain dimensions (%v x %v)",
+			grid.Ny, grid.Nx, vardims[0], vardims[1])
 		return
 	}
 	vals, err := nc.GetVarDouble(varname)
 	if err != nil {
 		return
 	}
-	for j := 0; j < region.NY; j++ {
-		for i := 0; i < region.NX; i++ {
-			mat.Set(j, i, vals[region.NX*j+i])
+	for j := 0; j < grid.Ny; j++ {
+		for i := 0; i < grid.Nx; i++ {
+			mat.Set(j, i, vals[grid.Nx*j+i])
 		}
 	}
 	return
 }
 
 func Sparse2Nc(fname string, varname string, mat *matrix.SparseMatrix,
-	region *grassutils.Region) (err error) {
+	grid *gis.GridDef) (err error) {
 	nc, err := gonetcdf.Open(fname, "write")
 	if err != nil {
 		panic(err)
@@ -123,16 +123,16 @@ func Sparse2Nc(fname string, varname string, mat *matrix.SparseMatrix,
 	if err != nil {
 		panic(err)
 	}
-	if region.NY != vardims[0] || region.NX != vardims[1] {
-		err = fmt.Errorf("netCDF surrogate dimensions (%v x %v) do not match region dimensions (%v x %v)",
-			region.NY, region.NX, vardims[0], vardims[1])
+	if grid.Ny != vardims[0] || grid.Nx != vardims[1] {
+		err = fmt.Errorf("netCDF surrogate dimensions (%v x %v) do not match domain dimensions (%v x %v)",
+			grid.Ny, grid.Nx, vardims[0], vardims[1])
 		panic(err)
 	}
 
-	temp := make([]float64, region.NY*region.NX)
-	for j := 0; j < region.NY; j++ {
-		for i := 0; i < region.NX; i++ {
-			temp[region.NX*j+i] = mat.Get(j, i)
+	temp := make([]float64, grid.Ny*grid.Nx)
+	for j := 0; j < grid.Ny; j++ {
+		for i := 0; i < grid.Nx; i++ {
+			temp[grid.Nx*j+i] = mat.Get(j, i)
 		}
 	}
 	err = nc.PutVarDouble(varname, temp)

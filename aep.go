@@ -50,7 +50,6 @@ func main() {
 		e.Add(err)
 		err = ConfigAll.DefaultSettings.GridRef()
 		e.Add(err)
-		go ConfigAll.DefaultSettings.surrogateGenerator()
 	}
 
 	e.Report() // Print errors, if any
@@ -68,7 +67,6 @@ func main() {
 		message := <-runChan
 		log.Println(message)
 	}
-	close(surrogateChan)
 	close(TotalReportChan)
 	message := <-runChan
 	log.Println(message)

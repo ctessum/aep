@@ -45,10 +45,10 @@ func ReadConfigFile(filepath *string, e *ErrCat) (config *configInput) {
 	err = json.Unmarshal(bytes, config)
 	if err != nil {
 		fmt.Printf(
-		"There has been an error parsing the configuration file.\n"+
-		"Please ensure that the file is in valid JSON format\n"+
-		"(you can check for errors at http://jsonlint.com/)\n"+
-		"and try again!\n\n%v\n\n",err.Error())
+			"There has been an error parsing the configuration file.\n"+
+				"Please ensure that the file is in valid JSON format\n"+
+				"(you can check for errors at http://jsonlint.com/)\n"+
+				"and try again!\n\n%v\n\n", err.Error())
 		os.Exit(1)
 	}
 
@@ -66,7 +66,7 @@ type configInput struct {
 }
 
 type DirInfo struct {
-	Home    string // Home directory
+	Home       string // Home directory
 	Input      string // Directory of input files
 	Ancilliary string // Home directory of log files
 	Logs       string // Directory for ancilliary information
@@ -96,7 +96,7 @@ type RunData struct {
 	SpecType              string
 	SpeciesGroupName      string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
 	specFrac              map[string]map[string]map[string]specHolder
-	PolsToKeep			  map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
+	PolsToKeep            map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
 	GridRefFile           string
 	SrgSpecFile           string
 	TemporalRefFile       string
@@ -109,8 +109,13 @@ type RunData struct {
 	InputConv             float64
 	InvFileNames          []string
 	EarthRadius           float64 // in meters
+	PostGISuser string // should have been chosen when setting up PostGIS
+	PostGISdatabase string // should have been previously created as a PostgreSQL database with the PostGIS additions
+	PostGISpassword string // should have been chosen when setting up PostGIS
+	ShapefileSchema       string  // PostGIS schema where surrogate shapefiles are stored
 	WpsNamelist           string
 	wpsData               *WPSnamelistData // Path to WPS namelist file
+	SRID                  int              // PostGIS projection ID number (should be a number not currently being used by PostGIS
 	LineMap               string           // Name of map containing lines to be overlayed on output maps. Should be in the "PERMANENT" mapset of the "SpatialDataLoc" location
 	SpatialDataLoc        string           // Location of the spatial data. Should be in GRASS format, and findable in the current GRASS environment.
 	SpatialDataMapset     string           // GRASS mapset name where spatial data is located
@@ -125,13 +130,14 @@ type RunData struct {
 }
 
 type PolHolder struct {
-	SpecType string // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
+	SpecType  string   // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
 	SpecNames []string // Names of pollutants in the SPECIATE database which are equivalent to this pollutant. For records containing this pollutant, the pollutants included in "SpecNames" will be left out of any speciation that occurs to avoid double counting.
 }
 
 func (p *configInput) setup(e *ErrCat) {
 	c := *p
 	c.DefaultSettings.catPaths(c.Dirs, e)
+	c.DefaultSettings.ParseWPSnamelist(e)
 	for sector, _ := range c.Sectors {
 		c.Sectors[sector].Sector = sector
 		c.Sectors[sector].FillWithDefaults(c.DefaultSettings, e)
@@ -152,6 +158,13 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.OutputType = d.OutputType
 	c.EarthRadius = d.EarthRadius
 	c.WpsNamelist = d.WpsNamelist
+	c.SRID = d.SRID
+	c.wpsData = d.wpsData
+	c.SimulationName = d.SimulationName
+	c.PostGISuser = d.PostGISuser
+	c.PostGISdatabase = d.PostGISdatabase
+	c.PostGISpassword = d.PostGISpassword
+	c.ShapefileSchema = d.ShapefileSchema
 	if c.SccDesc == "" {
 		c.SccDesc = d.SccDesc
 	}
@@ -207,7 +220,6 @@ func (p *RunData) setup(e *ErrCat) {
 	e.Add(err)
 	c.tStep, err = time.ParseDuration(c.Tstep)
 	e.Add(err)
-	c.wpsData = c.ParseWPSnamelist(e)
 	if c.InventoryFreq != "annual" && c.InventoryFreq != "monthly" {
 		e.Add(fmt.Errorf("In sector " + c.Sector + ", " + c.InventoryFreq +
 			" is not a valid value for variable inventoryFreq. Please choose " +
@@ -251,7 +263,7 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 	d.Logs = strings.Replace(strings.Replace(strings.Replace(
 		d.Logs, "[Home]", d.Home, -1),
 		"[input]", d.Input, -1),
-		"[ancilliary]", d.Ancilliary, -1)
+		"[Ancilliary]", d.Ancilliary, -1)
 	d.Logs = os.ExpandEnv(d.Logs)
 	err := os.MkdirAll(d.Logs, os.ModePerm)
 	if err != nil {
@@ -261,17 +273,17 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 	paths := []*string{&d.Home, &d.Input, &d.Ancilliary,
 		&c.SpecRefFile, &c.SpecRefComboFile, &c.SpecProFile,
 		&c.SccDesc, &c.SicDesc, &c.NaicsDesc,
-		&c.GridRefFile, &c.TemporalRefFile, &c.SrgSpecFile}
+		&c.GridRefFile, &c.TemporalRefFile, &c.SrgSpecFile, &c.WpsNamelist}
 	varnames := []string{"Home", "Input", "Ancilliary",
 		"SpecRefFile", "SpecRefComboFile", "SpecProFile",
 		"SccDesc", "SicDesc", "NaicsDesc",
-		"GridRefFile", "TemporalRefFile", "SrgSpecFile"}
+		"GridRefFile", "TemporalRefFile", "SrgSpecFile", "WpsNamelist"}
 
 	for i, path := range paths {
 		*path = strings.Replace(*path, "[Home]", d.Home, -1)
 		*path = strings.Replace(*path, "[Home]", d.Home, -1)
 		*path = strings.Replace(*path, "[input]", d.Input, -1)
-		*path = strings.Replace(*path, "[ancilliary]", d.Ancilliary, -1)
+		*path = strings.Replace(*path, "[Ancilliary]", d.Ancilliary, -1)
 		*path = os.ExpandEnv(*path)
 		e.statOS(*path, varnames[i])
 	}
@@ -326,20 +338,22 @@ type WPSnamelistData struct {
 	dy                []float64
 	nx                []int
 	ny                []int
-	mapsetName        []string
+	domainName        []string
 }
 
 // Parse a WPS namelist into a WPSnamelistData struct
-func (c *RunData) ParseWPSnamelist(e *ErrCat) (
-	out *WPSnamelistData) {
+func (p *RunData) ParseWPSnamelist(e *ErrCat) {
+	c := *p
 	c.Log("Parsing WPS namelist...", 2)
-	out = new(WPSnamelistData)
+	c.wpsData = new(WPSnamelistData)
 	e.statOS(c.WpsNamelist, "WpsNamelist")
 	file, err := os.Open(c.WpsNamelist)
 	if err != nil {
 		e.Add(err)
 		return
 	}
+	includesRefx := false
+	includesRefy := false
 	f := bufio.NewReader(file)
 	for {
 		line, err := f.ReadString('\n')
@@ -357,43 +371,78 @@ func (c *RunData) ParseWPSnamelist(e *ErrCat) (
 			c.Log([]string{name, val}, 3)
 			switch name {
 			case "max_dom":
-				out.max_dom = namelistInt(val)
+				c.wpsData.max_dom = namelistInt(val)
 			case "map_proj":
-				out.map_proj = strings.Trim(val, " '")
+				c.wpsData.map_proj = strings.Trim(val, " '")
 			case "ref_lat":
-				out.ref_lat = namelistFloat(val)
+				c.wpsData.ref_lat = namelistFloat(val)
 			case "ref_lon":
-				out.ref_lon = namelistFloat(val)
+				c.wpsData.ref_lon = namelistFloat(val)
 			case "truelat1":
-				out.truelat1 = namelistFloat(val)
+				c.wpsData.truelat1 = namelistFloat(val)
 			case "truelat2":
-				out.truelat2 = namelistFloat(val)
+				c.wpsData.truelat2 = namelistFloat(val)
 			case "stand_lon":
-				out.stand_lon = namelistFloat(val)
+				c.wpsData.stand_lon = namelistFloat(val)
 			case "ref_x":
-				out.ref_x = namelistFloat(val)
+				c.wpsData.ref_x = namelistFloat(val)
+				includesRefx = true
 			case "ref_y":
-				out.ref_y = namelistFloat(val)
+				c.wpsData.ref_y = namelistFloat(val)
+				includesRefy = true
 			case "parent_id":
-				out.parent_id = namelistIntList(val)
+				c.wpsData.parent_id = namelistIntList(val)
 			case "parent_grid_ratio":
-				out.parent_grid_ratio = namelistFloatList(val)
+				c.wpsData.parent_grid_ratio = namelistFloatList(val)
 			case "i_parent_start":
-				out.i_parent_start = namelistIntList(val)
+				c.wpsData.i_parent_start = namelistIntList(val)
 			case "j_parent_start":
-				out.j_parent_start = namelistIntList(val)
+				c.wpsData.j_parent_start = namelistIntList(val)
 			case "e_we":
-				out.e_we = namelistIntList(val)
+				c.wpsData.e_we = namelistIntList(val)
 			case "e_sn":
-				out.e_sn = namelistIntList(val)
+				c.wpsData.e_sn = namelistIntList(val)
 			case "dx":
-				out.dx0 = namelistFloat(val)
+				c.wpsData.dx0 = namelistFloat(val)
 			case "dy":
-				out.dy0 = namelistFloat(val)
+				c.wpsData.dy0 = namelistFloat(val)
 			}
 		}
 	}
-	return
+	if !includesRefx {
+		c.wpsData.ref_x = float64(c.wpsData.e_we[0]) / 2.
+	}
+	if !includesRefy {
+		c.wpsData.ref_y = float64(c.wpsData.e_sn[0]) / 2.
+	}
+	c.wpsData.S = make([]float64, c.wpsData.max_dom)
+	c.wpsData.W = make([]float64, c.wpsData.max_dom)
+	c.wpsData.S[0] = 0 - (c.wpsData.ref_y-0.5)*c.wpsData.dy0
+	c.wpsData.W[0] = 0 - (c.wpsData.ref_x-0.5)*c.wpsData.dx0
+	c.wpsData.dx = make([]float64, c.wpsData.max_dom)
+	c.wpsData.dy = make([]float64, c.wpsData.max_dom)
+	c.wpsData.dx[0] = c.wpsData.dx0
+	c.wpsData.dy[0] = c.wpsData.dy0
+	c.wpsData.nx = make([]int, c.wpsData.max_dom)
+	c.wpsData.ny = make([]int, c.wpsData.max_dom)
+	c.wpsData.nx[0] = c.wpsData.e_we[0] - 1
+	c.wpsData.ny[0] = c.wpsData.e_sn[0] - 1
+	c.wpsData.domainName = make([]string, c.wpsData.max_dom)
+	for i := 0; i < c.wpsData.max_dom; i++ {
+		c.wpsData.domainName[i] = fmt.Sprintf("d%02v", i+1)
+		c.wpsData.S[i] = c.wpsData.S[c.wpsData.parent_id[i]-1] +
+			float64(c.wpsData.j_parent_start[i]-1)*c.wpsData.dy0
+		c.wpsData.W[i] = c.wpsData.W[c.wpsData.parent_id[i]-1] +
+			float64(c.wpsData.i_parent_start[i]-1)*c.wpsData.dx0
+		c.wpsData.dx[i] = c.wpsData.dx[c.wpsData.parent_id[i]-1] /
+			c.wpsData.parent_grid_ratio[i]
+		c.wpsData.dy[i] = c.wpsData.dy[c.wpsData.parent_id[i]-1] /
+			c.wpsData.parent_grid_ratio[i]
+		c.wpsData.nx[i] = c.wpsData.e_we[i] - 1
+		c.wpsData.ny[i] = c.wpsData.e_sn[i] - 1
+	}
+
+	*p = c
 }
 
 func namelistInt(str string) (out int) {

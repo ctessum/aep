@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
-	"runtime/debug"
 	"errors"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
+	"bitbucket.org/ctessum/aep/gis"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 )
@@ -259,37 +260,10 @@ func (c *RunData) SpeciationReport(r *reportData, totalDropped map[string]float6
 
 // Repair a report of the spatialization step, including totals inside and 
 // outside of each domain, and maps of emissions for each species and domain.
-func (c *RunData) SpatialReport(reportChan chan *ParsedRecord, finishedChan chan int,
-	period string) {
-	ndomains := len(c.wpsData.S)
-	mapData := make([]map[string]*matrix.SparseMatrix, ndomains)
-	mapTotals := make([]map[string]float64, ndomains)
-	outsideMapTotals := make([]map[string]float64, ndomains)
-	for i, _ := range c.wpsData.S {
-		mapData[i] = make(map[string]*matrix.SparseMatrix)
-		mapTotals[i] = make(map[string]float64)
-		outsideMapTotals[i] = make(map[string]float64)
-	}
+func (c *RunData) SpatialReport(
+	TotalGrid map[*gis.GridDef]map[string]*matrix.SparseMatrix,
+	DroppedTotals map[string]map[string]float64, period string, pg *gis.PostGis) {
 
-	for record := range reportChan {
-		for pol, data := range record.ANN_EMIS {
-			for i, region := range regions {
-				if _, ok := mapData[i][pol]; !ok {
-					mapData[i][pol] = matrix.ZerosSparse(region.NY,
-						region.NX)
-					mapTotals[i][pol] = 0.
-					outsideMapTotals[i][pol] = 0.
-				}
-				err := mapData[i][pol].AddSparse(data.gridded[i])
-				if err != nil {
-					panic(err)
-				}
-				matsum := MatrixSum(data.gridded[i])
-				mapTotals[i][pol] += matsum
-				outsideMapTotals[i][pol] += data.val - matsum
-			}
-		}
-	}
 	// Create csv report
 	repStr := ""
 	var err error
@@ -302,28 +276,20 @@ func (c *RunData) SpatialReport(reportChan chan *ParsedRecord, finishedChan chan
 			panic(err)
 		}
 	}
-	var polNamesTemp string
-	for i, _ := range mapTotals {
-		for pol, _ := range mapTotals[i] {
-			if strings.Index(polNamesTemp, pol) == -1 {
-				polNamesTemp += " " + pol
+	polNames := make([]string, 0)
+	for _, data := range TotalGrid {
+		for pol, _ := range data {
+			if !IsStringInArray(polNames, pol) {
+				polNames = append(polNames, pol)
 			}
 		}
 	}
-	for i, _ := range outsideMapTotals {
-		for pol, _ := range outsideMapTotals[i] {
-			if strings.Index(polNamesTemp, pol) == -1 {
-				polNamesTemp += " " + pol
-			}
-		}
-	}
-	polNames := strings.Split(polNamesTemp, " ")
 	sort.Strings(polNames)
 
 	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
 	repStr += fmt.Sprintf("Time period: %s\n\n", period)
-	for i, _ := range c.wpsData.S {
-		repStr += fmt.Sprintf("Domain %d\n", i+1)
+	for grid, _ := range TotalGrid {
+		repStr += fmt.Sprintf("Domain %v\n", grid.Name)
 		repStr += ","
 		for _, pol := range polNames {
 			repStr += fmt.Sprintf("%s,", pol)
@@ -331,31 +297,43 @@ func (c *RunData) SpatialReport(reportChan chan *ParsedRecord, finishedChan chan
 		repStr += "\n"
 		repStr += "Total inside domain,"
 		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", mapTotals[i][pol])
+			repStr += fmt.Sprintf("%e,", MatrixSum(TotalGrid[grid][pol]))
 		}
 		repStr += "\n"
 		repStr += "Total outside domain,"
 		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", outsideMapTotals[i][pol])
+			repStr += fmt.Sprintf("%e,", DroppedTotals[grid.Name][pol])
 		}
 		repStr += "\n"
 		repStr += "Percent inside domain,"
 		for _, pol := range polNames {
+			totalInside := MatrixSum(TotalGrid[grid][pol])
 			var val float64
-			if mapTotals[i][pol] == 0. && outsideMapTotals[i][pol] == 0. {
+			if totalInside == 0. && DroppedTotals[grid.Name][pol] == 0. {
 				val = 100.
-			} else if mapTotals[i][pol] == 0. {
+			} else if totalInside == 0. {
 				val = 0.
 			} else {
-				val = mapTotals[i][pol] /
-					(mapTotals[i][pol] + outsideMapTotals[i][pol]) * 100.
+				val = totalInside /
+					(totalInside + DroppedTotals[grid.Name][pol]) * 100.
 			}
 			repStr += fmt.Sprintf("%.1f%%,", val)
 		}
 		repStr += "\n\n"
 	}
 	fmt.Fprint(c.SpatialRep, repStr)
-	finishedChan <- 0
+
+	for grid, d1 := range TotalGrid {
+		tableName := c.Sector+"_"+period+"_"+grid.Name
+		pg.MakeRasterTable(c.SimulationName,tableName)
+		for pol, data := range d1 {
+			pg.AddDataRowToRasterTable(c.SimulationName,tableName,pol,
+				grid,data)
+			filename := filepath.Join(c.sectorLogs,
+				tableName+"_"+pol+".tif")
+			pg.WriteOutRaster(c.SimulationName,tableName,pol,filename)
+		}
+	}
 }
 
 type summaryRecord struct {
