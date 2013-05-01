@@ -68,6 +68,9 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	return
 }
 
+// If this function fails during surrogate creation, the program may
+// hang as other instances of this function wait for the surrogate
+// to be completed.
 func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
@@ -121,7 +124,7 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 			}
 			OutputChan <- record
 		}
-	case "area":
+	case "area", "mobile":
 		for record := range InputChan {
 			var matchedSCC string
 			if !c.MatchFullSCC {
@@ -164,6 +167,7 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 		}
 	default:
 		err = fmt.Errorf("Unknown sectorType %v", c.SectorType)
+		panic(err)
 	}
 	if OutputChan != TotalReportChan {
 		close(OutputChan)
@@ -270,6 +274,7 @@ func (c *RunData) generateSurrogate(srgNum string, grid *gis.GridDef,
 			inputColumn, surrogateMap, WeightColumns, FilterFunction,
 			grid, c.ShapefileSchema)
 		if err != nil {
+			delete(pendingSurrogates, srgNum)
 			panic(err)
 		}
 	} else { // surrogate merging: create a surrogate from other surrogates
@@ -297,6 +302,7 @@ func WaitSrgToFinish(srgNum string) {
 	for {
 		if _, ok := pendingSurrogates[srgNum]; ok {
 			time.Sleep(100 * time.Millisecond)
+			fmt.Println("x")
 		} else {
 			break
 		}
@@ -459,27 +465,7 @@ func (c *RunData) GridRef() (err error) {
 			if len(SCC) == 8 {
 				SCC = "00" + SCC
 			}
-			var country string
-			switch splitLine[0][0:1] {
-			case "0":
-				country = "USA"
-			case "1":
-				country = "CA" // Canada
-			case "2":
-				country = "MEXICO"
-			case "3":
-				country = "CUBA"
-			case "4":
-				country = "BAHAMAS"
-			case "5":
-				country = "HAITI"
-			case "6":
-				country = "DOMINICANREPUBLIC"
-			default:
-				err = fmt.Errorf("Unknown country code %v in GridRefFile.",
-					splitLine[0][0:1])
-				panic(err)
-			}
+			country := GetCountryName(splitLine[0][0:1])
 			FIPS := splitLine[0][1:]
 			srg := strings.Trim(splitLine[2], "\"\n")
 

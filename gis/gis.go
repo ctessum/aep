@@ -3,12 +3,12 @@ package gis
 import (
 	"bytes"
 	"database/sql"
-	"os"
 	"encoding/json"
 	"fmt"
 	_ "github.com/bmizerany/pq"
 	"github.com/skelterjohn/go.matrix"
 	"log"
+	"os"
 	"strings"
 	"text/template"
 )
@@ -216,11 +216,84 @@ func (pg *PostGis) GetSRID(schema, name string) (SRID int) {
 	return
 }
 
+func (pg *PostGis) GetNumPolygons(schema, name string) (polygons int) {
+	cmd := fmt.Sprintf("SELECT Count(geom) from %v.%v "+
+		"WHERE Geometrytype(geom)='POLYGON' "+
+		"OR Geometrytype(geom)='MULTIPOLYGON';",
+		strings.ToLower(schema), strings.ToLower(name))
+	Log(cmd, 3)
+	err := pg.db.QueryRow(cmd).Scan(&polygons)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+func (pg *PostGis) GetNumLines(schema, name string) (lines int) {
+	cmd := fmt.Sprintf("SELECT Count(geom) from %v.%v "+
+		"WHERE Geometrytype(geom)='LINE' "+
+		"OR Geometrytype(geom)='MULTILINE';",
+		strings.ToLower(schema), strings.ToLower(name))
+	Log(cmd, 3)
+	err := pg.db.QueryRow(cmd).Scan(&lines)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+func (pg *PostGis) GetNumPoints(schema, name string) (points int) {
+	cmd := fmt.Sprintf("SELECT Count(geom) from %v.%v "+
+		"WHERE Geometrytype(geom)='LINE' "+
+		"OR Geometrytype(geom)='MULTILINE';",
+		strings.ToLower(schema), strings.ToLower(name))
+	Log(cmd, 3)
+	err := pg.db.QueryRow(cmd).Scan(&points)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+func (pg *PostGis) GetNumShapes(schema, name string) (shapes int) {
+	cmd := fmt.Sprintf("SELECT Count(geom) from %v.%v;",
+		strings.ToLower(schema), strings.ToLower(name))
+	Log(cmd, 3)
+	err := pg.db.QueryRow(cmd).Scan(&shapes)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+
 func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 	ShapeColumn, surrogateTable, WeightColumns string,
 	FilterFunction *SurrogateFilter, grid *GridDef,
 	shapefileSchema string) (
 	err error) {
+
+	if !pg.TableExists(shapefileSchema, surrogateTable) {
+		err = fmt.Errorf("Table %v.%v doesn't exist", shapefileSchema,
+			surrogateTable)
+		return
+	}
+	if !pg.TableExists(grid.Schema, shapeTable) {
+		err = fmt.Errorf("Table %v.%v doesn't exist", shapefileSchema,
+			surrogateTable)
+		return
+	}
+
+	var srgType string
+	if pg.GetNumPolygons(shapefileSchema, surrogateTable) == pg.GetNumShapes(shapefileSchema, surrogateTable) {
+		srgType = "polygon"
+	} else if pg.GetNumLines(shapefileSchema, surrogateTable) == pg.GetNumShapes(shapefileSchema, surrogateTable) {
+		srgType = "line"
+	} else if pg.GetNumPoints(shapefileSchema, surrogateTable) == pg.GetNumShapes(shapefileSchema, surrogateTable) {
+		srgType = "point"
+	} else {
+		err = fmt.Errorf("Surrogate shapefiles need to contain shapes that are "+
+			"all either points, lines, or polygons (the same file cannot contain more "+
+			"than one type of shapes). Shapefile %v does not meet this requirement.",
+			surrogateTable)
+		return
+	}
 
 	FilterString := " AND ("
 	if FilterFunction != nil {
@@ -244,30 +317,41 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		FilterString += ")"
 	}
 
-	useWeightColumns := false
-	if WeightColumns != "" {
-		useWeightColumns = true
-	}
-	if useWeightColumns {
-		panic(WeightColumns)
-	}
+	snapDistance := 20. // increase this to avoid "found non-noded intersection" errors
 
 	type holder struct {
-		ShapeTbl        string
-		ShapeColumn     string
-		ShapeSRID       int
-		SrgTbl          string
-		SrgSRID         int
-		Grid            *GridDef
-		OutName         string
-		FilterString    string
-		ShapefileSchema string
+		ShapeTbl          string
+		ShapeColumn       string
+		ShapeSRID         int
+		SrgTbl            string
+		SrgSRID           int
+		Grid              *GridDef
+		OutName           string
+		FilterString      string
+		ShapefileSchema   string
+		WeightColumns     string
+		PolygonWithWeight bool
+		LineWithWeight    bool
+		PointWithWeight   bool
+		Polygon           bool
+		Line              bool
+		Point             bool
+		UseFilter         bool
+		SnapDistance      float64
 	}
 	shapeSRID := pg.GetSRID(shapefileSchema, shapeTable)
 	srgSRID := pg.GetSRID(shapefileSchema, surrogateTable)
 	OutName := grid.Name + "_" + srgCode
 	data := holder{shapeTable, ShapeColumn, shapeSRID, surrogateTable,
-		srgSRID, grid, OutName, FilterString, shapefileSchema}
+		srgSRID, grid, OutName, FilterString, shapefileSchema, WeightColumns,
+		(srgType == "polygon" && WeightColumns != ""),
+		(srgType == "line" && WeightColumns != ""),
+		(srgType == "point" && WeightColumns != ""),
+		(srgType == "polygon"),
+		(srgType == "line"),
+		(srgType == "point"),
+		(FilterFunction != nil),
+		snapDistance}
 
 	Log("Creating gridding surrogate "+grid.Schema+"."+OutName+"...", 0)
 
@@ -287,13 +371,19 @@ CREATE TEMP TABLE srgSelect ON COMMIT DROP AS
 WITH
 shapebdy AS (select ST_Transform(ST_BuildArea(ST_Boundary(ST_Union(geom))),
 	{{.SrgSRID}}) AS geom FROM shapeSelect)
-SELECT a.gid, ST_Transform(a.geom,{{.Grid.SRID}}) as geom
+SELECT a.gid, ST_Transform(a.geom,{{.Grid.SRID}}) as geom,
+{{if .PolygonWithWeight}} ({{.WeightColumns}})/ST_Area(a.geom) AS weight {{else}}
+{{if .LineWithWeight}} ({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}
+{{if .PointWithWeight}} {{.WeightColumns}} AS weight {{else}}
+	1.0 as weight
+{{end}} {{end}} {{end}}
 	FROM {{.ShapefileSchema}}.{{.SrgTbl}} a, shapebdy b
-WHERE ST_Intersects(a.geom,b.geom) {{.FilterString}};
+WHERE ST_Intersects(a.geom,b.geom) {{if .UseFilter}}{{.FilterString}}{{end}};
 CREATE INDEX srgSelect_gix ON srgSelect USING GIST (geom);
 ANALYZE srgSelect;
   
-CREATE TEMP TABLE new_polys ON COMMIT DROP AS 
+{{if .Polygon}}
+CREATE TEMP TABLE new_shapes ON COMMIT DROP AS 
 WITH
 all_lines AS( 
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
@@ -305,30 +395,51 @@ UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}}),
 noded_lines AS (
-SELECT St_Union(ST_snaptogrid(geom,10E0)) AS geom
+SELECT St_Union(ST_snaptogrid(geom,{{.SnapDistance}})) AS geom
 FROM all_lines) 
 SELECT geom AS geom, ST_PointOnSurface(geom) AS pip
 FROM St_Dump((
 SELECT St_Polygonize(geom) AS geom
 FROM noded_lines));
-CREATE INDEX new_polys_gix ON new_polys USING GIST (geom);
-ANALYZE new_polys;
+{{end}}{{if .Line}}
+CREATE TEMP TABLE new_shapes ON COMMIT DROP AS 
+WITH
+all_lines AS( 
+SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
+FROM shapeSelect
+UNION ALL
+SELECT (ST_Dump(geom)).geom AS geom
+FROM srgSelect
+UNION ALL
+SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
+FROM {{.Grid.Schema}}.{{.Grid.Name}})
+SELECT St_Union(ST_snaptogrid(geom,{{.SnapDistance}})) AS geom
+FROM all_lines;
+{{end}}{{if .Point}}
+CREATE TEMP TABLE new_shapes ON COMMIT DROP;
+SELECT geom as pip INTO new_shapes FROM srgSelect;
+{{end}}
+CREATE INDEX new_shapes_gix ON new_shapes USING GIST (geom);
+ANALYZE new_shapes;
 
 CREATE TABLE {{.Grid.Schema}}.{{.OutName}} AS
 WITH
 polyWithAttributes AS (
-SELECT c.gid AS grid_gid, b.{{.ShapeColumn}}, a.gid AS srg_gid, ST_Area(p.geom) AS area
-FROM new_polys p
+SELECT c.gid AS grid_gid, b.{{.ShapeColumn}}, a.gid AS srg_gid, 
+{{if .Polygon}} a.weight * ST_Area(p.geom) AS weight {{end}}
+{{if .Line}} a.weight * ST_Length(p.geom) AS weight {{end}}
+{{if .Point}} a.weight * Count(p.geom) AS weight {{end}}
+FROM new_shapes p
 RIGHT JOIN srgSelect a ON St_Within(p.pip, a.geom)
 RIGHT JOIN shapeSelect b ON St_Within(p.pip, b.geom)
 LEFT JOIN {{.Grid.Schema}}.{{.Grid.Name}} c ON St_Within(p.pip, c.geom)),
-shapeTotals AS (select {{.ShapeColumn}},sum(area) AS area FROM polyWithAttributes
+shapeTotals AS (select {{.ShapeColumn}},sum(weight) AS weight FROM polyWithAttributes
 GROUP BY {{.ShapeColumn}}),
-gridTotals AS (select {{.ShapeColumn}}, grid_gid, sum(area) 
-	AS area FROM polyWithAttributes
+gridTotals AS (select {{.ShapeColumn}}, grid_gid, sum(weight) 
+	AS weight FROM polyWithAttributes
 GROUP BY grid_gid, {{.ShapeColumn}})
 SELECT c.row,c.col,a.{{.ShapeColumn}} as inputID,
-	a.area/b.area AS shapeFraction, c.geom
+	a.weight/b.weight AS shapeFraction, c.geom
 FROM gridTotals a 
 INNER JOIN shapeTotals b ON a.{{.ShapeColumn}}=b.{{.ShapeColumn}}
 INNER JOIN {{.Grid.Schema}}.{{.Grid.Name}} c ON c.gid=a.grid_gid;
@@ -490,7 +601,7 @@ func (pg *PostGis) WriteOutRaster(schema, tableName, rasterRowName,
 	cmd := fmt.Sprintf("SELECT ST_AsTIFF(rast, 'PACKBITS') "+
 		"FROM %v.%v WHERE name='%v';", schema, tableName, rasterRowName)
 	var data []byte
-	Log(cmd,3)
+	Log(cmd, 3)
 	err := pg.db.QueryRow(cmd).Scan(&data)
 	if err != nil {
 		panic(err)
@@ -499,7 +610,7 @@ func (pg *PostGis) WriteOutRaster(schema, tableName, rasterRowName,
 	if err != nil {
 		panic(err)
 	}
-	_, err = f.Write(data);
+	_, err = f.Write(data)
 	if err != nil {
 		panic(err)
 	}

@@ -13,12 +13,12 @@ import (
 // type FileInfo holds information about each inventory file
 type FileInfo struct {
 	fname         string
-	format        string
-	ftype         string
-	year          string
-	country       string
-	totals        map[string]float64
-	droppedTotals map[string]float64
+	Format        string
+	Ftype         string
+	Year          string
+	Country       string
+	Totals        map[string]float64
+	DroppedTotals map[string]float64
 	polid         string
 	fid           *os.File
 	buf           *bufio.Reader
@@ -26,8 +26,8 @@ type FileInfo struct {
 
 func newFileInfo() (f *FileInfo) {
 	f = new(FileInfo)
-	f.totals = make(map[string]float64)
-	f.droppedTotals = make(map[string]float64)
+	f.Totals = make(map[string]float64)
+	f.DroppedTotals = make(map[string]float64)
 	return
 }
 
@@ -310,7 +310,7 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 	pols := len(strings.Split(fInfo.polid, " "))
 	if len(record) < start+length*pols {
 		err := "In the file:\n" + fInfo.fname + "\n"
-		err += "Format type: " + fInfo.ftype + "\n"
+		err += "Format type: " + fInfo.Ftype + "\n"
 		err += "The following IDA record:\n" + record + "\n"
 		err += "is not the right length for the these pollutants:\n"
 		err += fInfo.polid + "\nRequired length = "
@@ -469,7 +469,8 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 
 	config.Log("Importing inventory for "+period+" "+
 		config.Sector+"...", 0)
-	inventoryInfo := make(map[string]*FileInfo)
+	Report.SectorResults[config.Sector][period].
+		InventoryResults = make(map[string]*FileInfo)
 	for _, file := range config.InvFileNames {
 		if config.InventoryFreq == "monthly" {
 			file = strings.Replace(file, "[month]", period, -1)
@@ -520,10 +521,10 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			// add emissions to totals for report
 			for pol, emis := range record.ANN_EMIS {
 				if _, ok := config.PolsToKeep[pol]; ok {
-					fInfo.totals[pol] += emis.val
+					fInfo.Totals[pol] += emis.val
 				} else {
 					// delete value if we don't want to keep it
-					fInfo.droppedTotals[pol] += emis.val
+					fInfo.DroppedTotals[pol] += emis.val
 					delete(record.ANN_EMIS, pol)
 				}
 			}
@@ -531,10 +532,9 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			OutputChan <- record
 		}
 		fInfo.fid.Close()
-		inventoryInfo[file] = fInfo
+		Report.SectorResults[config.Sector][period].
+			InventoryResults[file] = fInfo
 	}
-	// Write inventory report 
-	config.InventoryReport(inventoryInfo, period)
 	MesgChan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
 	// unless the output is going to the TotalReportChan
@@ -560,12 +560,12 @@ func OpenFile(file string) (fInfo *FileInfo) {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
 	if strings.Index(record, "ORL") >= 0 {
-		fInfo.format = "ORL"
+		fInfo.Format = "ORL"
 		if strings.Index(record, "NONROAD") >= 0 {
-			fInfo.format = "ORLNONROAD"
+			fInfo.Format = "ORLNONROAD"
 		}
 	} else if strings.Index(record, "IDA") >= 0 {
-		fInfo.format = "IDA"
+		fInfo.Format = "IDA"
 	} else {
 		panic("Unknown file type for: " + file)
 	}
@@ -575,13 +575,13 @@ func OpenFile(file string) (fInfo *FileInfo) {
 			panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 		}
 		if len(record) > 5 && record[1:5] == "TYPE" {
-			fInfo.ftype = strings.Replace(strings.Trim(record[5:], "\n "), ",", " ", -1)
+			fInfo.Ftype = strings.Replace(strings.Trim(record[5:], "\n "), ",", " ", -1)
 		}
 		if len(record) > 8 && record[1:8] == "COUNTRY" {
-			fInfo.country = strings.Trim(record[8:], "\n ")
+			fInfo.Country = strings.Trim(record[8:], "\n ")
 		}
 		if len(record) > 5 && record[1:5] == "YEAR" {
-			fInfo.year = strings.Trim(record[5:], "\n ")
+			fInfo.Year = strings.Trim(record[5:], "\n ")
 		}
 		if len(record) > 6 && record[1:6] == "POLID" {
 			fInfo.polid = strings.Trim(record[6:], " \n\r")
@@ -602,8 +602,8 @@ func OpenFile(file string) (fInfo *FileInfo) {
 	}
 
 	// Make sure nonroad files are properly assigned
-	if fInfo.format == "ORL" && strings.Index(fInfo.ftype, "nonroad") >= 0 {
-		fInfo.format = "ORLNONROAD"
+	if fInfo.Format == "ORL" && strings.Index(fInfo.Ftype, "nonroad") >= 0 {
+		fInfo.Format = "ORLNONROAD"
 	}
 	return
 }
@@ -619,7 +619,7 @@ func (fInfo *FileInfo) ParseLine(config *RunData) (fields *ParsedRecord, EOF boo
 		}
 	}
 	fields = new(ParsedRecord)
-	switch fInfo.format + config.SectorType {
+	switch fInfo.Format + config.SectorType {
 	case "ORLpoint":
 		fields = config.parseRecordPointORL(record, fInfo)
 	case "ORLarea":
@@ -635,7 +635,7 @@ func (fInfo *FileInfo) ParseLine(config *RunData) (fields *ParsedRecord, EOF boo
 	case "IDAmobile":
 		fields = config.parseRecordMobileIDA(record, fInfo)
 	default:
-		panic("Unknown format: " + fInfo.format + " " + config.SectorType)
+		panic("Unknown format: " + fInfo.Format + " " + config.SectorType)
 	}
 
 	// Add zeros to 8 digit SCCs so that all SCCs are 10 digits
@@ -658,7 +658,7 @@ func (fInfo *FileInfo) ParseLine(config *RunData) (fields *ParsedRecord, EOF boo
 	}
 
 	// set which country this record is for
-	fields.Country = fInfo.country
+	fields.Country = fInfo.Country
 	if fields.Country == "US" {
 		fields.Country = "USA"
 	}

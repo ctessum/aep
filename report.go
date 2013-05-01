@@ -135,6 +135,15 @@ func (c *RunData) ConfigReport() {
 	return
 }
 
+type ReportHolder struct {
+	Config *RunData
+	SectorResults map[string]map[string]*Results // map[sector][period]Results
+}
+
+type Results struct {
+	InventoryResults map[string]*FileInfo
+}
+
 func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period string) {
 	repStr := ""
 	var err error
@@ -148,7 +157,7 @@ func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period str
 	}
 	var polNamesTemp string
 	for _, info := range inventoryInfo {
-		for pol, _ := range info.totals {
+		for pol, _ := range info.Totals {
 			if strings.Index(polNamesTemp, pol) == -1 {
 				polNamesTemp += " " + pol
 			}
@@ -166,9 +175,9 @@ func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period str
 	}
 	repStr += "\n"
 	for file, info := range inventoryInfo {
-		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.format, info.ftype, info.year, info.country)
+		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.Format, info.Ftype, info.Year, info.Country)
 		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", info.totals[pol])
+			repStr += fmt.Sprintf("%e,", info.Totals[pol])
 		}
 		repStr += "\n"
 	}
@@ -176,7 +185,7 @@ func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period str
 	repStr += "\n\n"
 	polNamesTemp = ""
 	for _, info := range inventoryInfo {
-		for pol, _ := range info.droppedTotals {
+		for pol, _ := range info.DroppedTotals {
 			if strings.Index(polNamesTemp, pol) == -1 {
 				polNamesTemp += " " + pol
 			}
@@ -194,9 +203,9 @@ func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period str
 	}
 	repStr += "\n"
 	for file, info := range inventoryInfo {
-		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.format, info.ftype, info.year, info.country)
+		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.Format, info.Ftype, info.Year, info.Country)
 		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", info.droppedTotals[pol])
+			repStr += fmt.Sprintf("%e,", info.DroppedTotals[pol])
 		}
 		repStr += "\n"
 	}

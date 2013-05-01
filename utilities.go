@@ -1,11 +1,11 @@
 package main
 
 import (
-	"bitbucket.org/ctessum/gonetcdf"
 	"bitbucket.org/ctessum/aep/gis"
-	"math"
+	"bitbucket.org/ctessum/gonetcdf"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
+	"math"
 	"strings"
 )
 
@@ -157,5 +157,50 @@ func IsStringInArray(a []string, s string) bool {
 
 func AbsBias(a, b float64) (o float64) {
 	o = math.Abs(a-b) / b
+	return
+}
+
+func GetCountryCode(country string) (code string) {
+	switch country {
+	case "USA":
+		code = "0"
+	case "CA": // Canada
+		code = "1"
+	case "MEXICO":
+		code = "2"
+	case "CUBA":
+		code = "3"
+	case "BAHAMAS":
+		code = "4"
+	case "HAITI":
+		code = "5"
+	case "DOMINICANREPUBLIC":
+		code = "6"
+	default:
+		err := fmt.Errorf("Unknown country %v.",country)
+		panic(err)
+	}
+	return
+}
+func GetCountryName(code string) (country string) {
+	switch code {
+	case "0":
+		country = "USA"
+	case "1":
+		country = "CA" // Canada
+	case "2":
+		country = "MEXICO"
+	case "3":
+		country = "CUBA"
+	case "4":
+		country = "BAHAMAS"
+	case "5":
+		country = "HAITI"
+	case "6":
+		country = "DOMINICANREPUBLIC"
+	default:
+		err := fmt.Errorf("Unknown country code %v.",code)
+		panic(err)
+	}
 	return
 }

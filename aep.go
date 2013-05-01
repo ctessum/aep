@@ -1,15 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
 
 var (
 	TotalReportChan = make(chan *ParsedRecord)
+	Report          = new(ReportHolder)
 )
 
 func main() {
@@ -36,6 +40,8 @@ func main() {
 
 	// parse configuration file
 	ConfigAll := ReadConfigFile(configFile, e)
+	Report.Config = ConfigAll.DefaultSettings
+	Report.SectorResults = make(map[string]map[string]*Results)
 
 	runChan := make(chan string, 1)
 
@@ -58,6 +64,7 @@ func main() {
 	n := 0
 	for sector, c := range ConfigAll.Sectors {
 		if sectors[0] == "all" || IsStringInArray(sectors, sector) {
+			Report.SectorResults[sector] = make(map[string]*Results)
 			go c.Run(runChan)
 			n++
 		}
@@ -70,6 +77,22 @@ func main() {
 	close(TotalReportChan)
 	message := <-runChan
 	log.Println(message)
+
+	// Write out the report
+	b, err := json.MarshalIndent(Report, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	f, err := os.Create(filepath.Join(
+		ConfigAll.Dirs.Logs, "Report.json"))
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.Write(b)
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
 
 	log.Println("\n",
 		"------------------------------------\n",
@@ -88,11 +111,13 @@ func (c *RunData) CurrentMonth() (month string) {
 
 func (c RunData) Run(runChan chan string) {
 	if c.InventoryFreq == "annual" {
+		Report.SectorResults[c.Sector]["annual"] = new(Results)
 		c.RunPeriod("annual")
 	}
 	for c.currentTime.Before(c.endDate) {
 		month := c.CurrentMonth()
 		if c.InventoryFreq == "monthly" && month != c.inventoryMonth {
+			Report.SectorResults[c.Sector][month] = new(Results)
 			c.RunPeriod(month)
 			c.inventoryMonth = month
 		}

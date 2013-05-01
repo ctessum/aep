@@ -14,6 +14,7 @@ import (
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
 func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 	specRef = make(map[string]map[string]string)
+	// map[SCC][pol]code
 	var record string
 	fid, err := os.Open(c.SpecRefFile)
 	if err != nil {
@@ -53,14 +54,10 @@ func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 			code := strings.Trim(splitLine[1], "\"")
 			pol := strings.Trim(splitLine[2], "\"\n")
 
-			_, ok := specRef[SCC]
-			if !ok {
-				y := make(map[string]string)
-				y[pol] = code
-				specRef[SCC] = y
-			} else {
-				specRef[SCC][pol] = code
+			if _, ok := specRef[SCC]; !ok {
+				specRef[SCC] = make(map[string]string)
 			}
+			specRef[SCC][pol] = code
 		}
 	}
 	return
@@ -70,6 +67,7 @@ func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 // codes to chemical speciation profiles for mobile sources.
 func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[string]float64, err error) {
 	specRef = make(map[string]map[string]map[string]map[string]float64)
+	// map[pol][FIPS][period][code]frac
 	var record string
 	fid, err := os.Open(c.SpecRefComboFile)
 	if err != nil {
@@ -103,9 +101,11 @@ func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[s
 			// for point sources, only match to SCC code.
 			splitLine := strings.Split(record, ";")
 			pol := strings.Trim(splitLine[0], "\" ")
-			FIPS := strings.Trim(splitLine[1], "\" ")[1:]
+			// The FIPS number here is 6 characters instead of the usual 5.
+			// The first character is a country code.
+			FIPS := strings.Trim(splitLine[1], "\" ")
 
-			periods := map[string]string{"0": "all", "1": "jan", "2": "feb",
+			periods := map[string]string{"0": "annual", "1": "jan", "2": "feb",
 				"3": "mar", "4": "apr", "5": "may", "6": "jun", "7": "jul",
 				"8": "aug", "9": "sep", "10": "oct", "11": "nov", "12": "dec"}
 			period, ok := periods[splitLine[2]]
@@ -237,6 +237,7 @@ func (sp *SpecProf) GetProfileGas(number string,
 	var total float64
 	var tempConvFac sql.NullFloat64
 	var convFac float64
+	fmt.Println(number, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 	err = sp.db.QueryRow("select TOTAL,VOCtoTOG from GAS_PROFILE where"+
 		" P_NUMBER=?", number).Scan(&total, &tempConvFac)
 	if err != nil {
@@ -343,7 +344,8 @@ type reportData struct {
 
 // Match SCC in record to speciation profile. If none matches exactly, find a
 // more general SCC that matches.
-func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData) (
+func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
+	period string) (
 	specFactors, droppedSpecFactors map[string]*specHolder) {
 	var ok bool
 	var err error
@@ -380,15 +382,50 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData) (
 		case "VOC":
 			code, ok := ref[pol]
 			if ok {
-				specFactors, ok = sp.sPro[code]
-				if !ok || record.DoubleCountPols != nil {
-					specFactors, droppedSpecFactors = sp.GetProfileGas(
-						code, record.DoubleCountPols, c)
-					if record.DoubleCountPols == nil {
-						sp.sPro[code] = specFactors
+				if code == "COMBO" {
+					countryCode := GetCountryCode(record.Country)
+					codes := sp.sRefCombo[pol][countryCode+record.FIPS][period]
+					specFactors = make(map[string]*specHolder)
+					droppedSpecFactors = make(map[string]*specHolder)
+					for code2, frac := range codes {
+						tempSpecFactors, tempDroppedSpecFactors := sp.GetProfileGas(
+							code2, record.DoubleCountPols, c)
+						for pol, val := range tempSpecFactors {
+							if _, ok := specFactors[pol]; !ok {
+								specFactors[pol] = new(specHolder)
+								specFactors[pol].factor = val.factor * frac
+								specFactors[pol].units = val.units
+							} else {
+								specFactors[pol].factor += val.factor * frac
+								if specFactors[pol].units != val.units {
+									panic("Units error!")
+								}
+							}
+						}
+						for pol, val := range tempDroppedSpecFactors {
+							if _, ok := specFactors[pol]; !ok {
+								droppedSpecFactors[pol] = new(specHolder)
+								droppedSpecFactors[pol].factor = val.factor * frac
+								droppedSpecFactors[pol].units = val.units
+							} else {
+								droppedSpecFactors[pol].factor += val.factor * frac
+								if droppedSpecFactors[pol].units != val.units {
+									panic("Units error!")
+								}
+							}
+						}
+					}
+				} else {
+					specFactors, ok = sp.sPro[code]
+					if !ok || record.DoubleCountPols != nil {
+						specFactors, droppedSpecFactors = sp.GetProfileGas(
+							code, record.DoubleCountPols, c)
+						if record.DoubleCountPols == nil {
+							sp.sPro[code] = specFactors
+						}
 					}
 				}
-			} else {
+			} else { // no speciation profile reference is found
 				specFactors = sp.DefaultProfile(pol)
 			}
 		case "PM2.5":
@@ -435,7 +472,7 @@ func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
 		newAnnEmis := make(map[string]*specValUnits)
 		for pol, AnnEmis := range record.ANN_EMIS {
 			polFracs, droppedPolFracs = sp.getSccFracs(
-				record, pol, c)
+				record, pol, c,period)
 			for newpol, factor := range polFracs {
 				if _, ok := newAnnEmis[newpol]; ok {
 					err = fmt.Errorf("Possible double counting of"+
