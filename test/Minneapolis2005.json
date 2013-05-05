@@ -26,10 +26,10 @@
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 2,
-        "Speciate": false,
-        "Spatialize": true,
+        "Speciate": true,
+        "Spatialize": false,
+		"CreateTotalInventoryReport": false,
         "PolsToKeep": {
-			"NH3":{"SpecType":"NH3"},
 			"VOC":{"SpecType":"VOC"},
 			"EVP__VOC":{"SpecType":"VOC"},
 			"EXH__VOC":{"SpecType":"VOC"},

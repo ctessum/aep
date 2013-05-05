@@ -144,87 +144,18 @@ type Results struct {
 	InventoryResults map[string]*FileInfo
 }
 
-func (c *RunData) InventoryReport(inventoryInfo map[string]*FileInfo, period string) {
-	repStr := ""
-	var err error
-	if c.InvRep != nil {
-		repStr += "\n\n"
-	} else {
-		c.InvRep, err = os.Create(filepath.Join(c.sectorLogs, c.Sector+"_inventory.csv"))
-		if err != nil {
-			panic(err)
-		}
-	}
-	var polNamesTemp string
-	for _, info := range inventoryInfo {
-		for pol, _ := range info.Totals {
-			if strings.Index(polNamesTemp, pol) == -1 {
-				polNamesTemp += " " + pol
-			}
-		}
-	}
-	polNames := strings.Split(polNamesTemp, " ")
-	sort.Strings(polNames)
-
-	repStr += "Inventory totals of kept pollutants by file: " + c.InputUnits + "\n"
-	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
-	repStr += fmt.Sprintf("Time period: %s\n", period)
-	repStr += "file,format,file type,year,country,"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s,", pol)
-	}
-	repStr += "\n"
-	for file, info := range inventoryInfo {
-		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.Format, info.Ftype, info.Year, info.Country)
-		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", info.Totals[pol])
-		}
-		repStr += "\n"
-	}
-
-	repStr += "\n\n"
-	polNamesTemp = ""
-	for _, info := range inventoryInfo {
-		for pol, _ := range info.DroppedTotals {
-			if strings.Index(polNamesTemp, pol) == -1 {
-				polNamesTemp += " " + pol
-			}
-		}
-	}
-	polNames = strings.Split(polNamesTemp, " ")
-	sort.Strings(polNames)
-
-	repStr += "Inventory totals of dropped pollutants by file: " + c.InputUnits + "\n"
-	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
-	repStr += fmt.Sprintf("Time period: %s\n", period)
-	repStr += "file,format,file type,year,country,"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s,", pol)
-	}
-	repStr += "\n"
-	for file, info := range inventoryInfo {
-		repStr += fmt.Sprintf("%s,%s,%s,%s,%s,", file, info.Format, info.Ftype, info.Year, info.Country)
-		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", info.DroppedTotals[pol])
-		}
-		repStr += "\n"
-	}
-
-	fmt.Fprint(c.InvRep, repStr)
-	return
-}
 
 func (c *RunData) SpeciationReport(r *reportData, totalDropped map[string]float64, period string) {
 	repStr := ""
-	var err error
-	if c.SpecRep != nil {
-		repStr += "\n\n"
-	} else {
-		c.SpecRep, err = os.Create(filepath.Join(c.sectorLogs, c.Sector+"_speciation.csv"))
-		if err != nil {
-			panic(err)
-		}
-	}
+//	var err error
+//	if c.SpecRep != nil {
+//		repStr += "\n\n"
+//	} else {
+//		c.SpecRep, err = os.Create(filepath.Join(c.sectorLogs, c.Sector+"_speciation.csv"))
+//		if err != nil {
+//			panic(err)
+//		}
+//	}
 	polNames := make([]string, 0)
 	for pol, _ := range r.totals {
 		if !IsStringInArray(polNames, pol) {
@@ -263,7 +194,7 @@ func (c *RunData) SpeciationReport(r *reportData, totalDropped map[string]float6
 		repStr += fmt.Sprintf("%e|", totalDropped[pol])
 	}
 	repStr += "\n"
-	fmt.Fprint(c.SpecRep, repStr)
+//	fmt.Fprint(c.SpecRep, repStr)
 	return
 }
 
@@ -273,64 +204,64 @@ func (c *RunData) SpatialReport(
 	TotalGrid map[*gis.GridDef]map[string]*matrix.SparseMatrix,
 	DroppedTotals map[string]map[string]float64, period string, pg *gis.PostGis) {
 
-	// Create csv report
-	repStr := ""
-	var err error
-	if c.SpatialRep != nil {
-		repStr += "\n\n"
-	} else {
-		c.SpatialRep, err = os.Create(filepath.Join(c.sectorLogs,
-			c.Sector+"_spatial.csv"))
-		if err != nil {
-			panic(err)
-		}
-	}
-	polNames := make([]string, 0)
-	for _, data := range TotalGrid {
-		for pol, _ := range data {
-			if !IsStringInArray(polNames, pol) {
-				polNames = append(polNames, pol)
-			}
-		}
-	}
-	sort.Strings(polNames)
-
-	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
-	repStr += fmt.Sprintf("Time period: %s\n\n", period)
-	for grid, _ := range TotalGrid {
-		repStr += fmt.Sprintf("Domain %v\n", grid.Name)
-		repStr += ","
-		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%s,", pol)
-		}
-		repStr += "\n"
-		repStr += "Total inside domain,"
-		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", MatrixSum(TotalGrid[grid][pol]))
-		}
-		repStr += "\n"
-		repStr += "Total outside domain,"
-		for _, pol := range polNames {
-			repStr += fmt.Sprintf("%e,", DroppedTotals[grid.Name][pol])
-		}
-		repStr += "\n"
-		repStr += "Percent inside domain,"
-		for _, pol := range polNames {
-			totalInside := MatrixSum(TotalGrid[grid][pol])
-			var val float64
-			if totalInside == 0. && DroppedTotals[grid.Name][pol] == 0. {
-				val = 100.
-			} else if totalInside == 0. {
-				val = 0.
-			} else {
-				val = totalInside /
-					(totalInside + DroppedTotals[grid.Name][pol]) * 100.
-			}
-			repStr += fmt.Sprintf("%.1f%%,", val)
-		}
-		repStr += "\n\n"
-	}
-	fmt.Fprint(c.SpatialRep, repStr)
+//	// Create csv report
+//	repStr := ""
+//	var err error
+//	if c.SpatialRep != nil {
+//		repStr += "\n\n"
+//	} else {
+//		c.SpatialRep, err = os.Create(filepath.Join(c.sectorLogs,
+//			c.Sector+"_spatial.csv"))
+//		if err != nil {
+//			panic(err)
+//		}
+//	}
+//	polNames := make([]string, 0)
+//	for _, data := range TotalGrid {
+//		for pol, _ := range data {
+//			if !IsStringInArray(polNames, pol) {
+//				polNames = append(polNames, pol)
+//			}
+//		}
+//	}
+//	sort.Strings(polNames)
+//
+//	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
+//	repStr += fmt.Sprintf("Time period: %s\n\n", period)
+//	for grid, _ := range TotalGrid {
+//		repStr += fmt.Sprintf("Domain %v\n", grid.Name)
+//		repStr += ","
+//		for _, pol := range polNames {
+//			repStr += fmt.Sprintf("%s,", pol)
+//		}
+//		repStr += "\n"
+//		repStr += "Total inside domain,"
+//		for _, pol := range polNames {
+//			repStr += fmt.Sprintf("%e,", MatrixSum(TotalGrid[grid][pol]))
+//		}
+//		repStr += "\n"
+//		repStr += "Total outside domain,"
+//		for _, pol := range polNames {
+//			repStr += fmt.Sprintf("%e,", DroppedTotals[grid.Name][pol])
+//		}
+//		repStr += "\n"
+//		repStr += "Percent inside domain,"
+//		for _, pol := range polNames {
+//			totalInside := MatrixSum(TotalGrid[grid][pol])
+//			var val float64
+//			if totalInside == 0. && DroppedTotals[grid.Name][pol] == 0. {
+//				val = 100.
+//			} else if totalInside == 0. {
+//				val = 0.
+//			} else {
+//				val = totalInside /
+//					(totalInside + DroppedTotals[grid.Name][pol]) * 100.
+//			}
+//			repStr += fmt.Sprintf("%.1f%%,", val)
+//		}
+//		repStr += "\n\n"
+//	}
+//	fmt.Fprint(c.SpatialRep, repStr)
 
 	for grid, d1 := range TotalGrid {
 		tableName := c.Sector+"_"+period+"_"+grid.Name

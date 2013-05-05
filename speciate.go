@@ -65,9 +65,9 @@ func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 
 // SpecRefCombo reads the SMOKE gspro_combo file, which maps location
 // codes to chemical speciation profiles for mobile sources.
-func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[string]float64, err error) {
-	specRef = make(map[string]map[string]map[string]map[string]float64)
-	// map[pol][FIPS][period][code]frac
+func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]map[string]float64, err error) {
+	specRef = make(map[string]map[string]map[string]float64)
+	// map[pol][FIPS][code]frac
 	var record string
 	fid, err := os.Open(c.SpecRefComboFile)
 	if err != nil {
@@ -78,6 +78,11 @@ func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[s
 	} else {
 		defer fid.Close()
 	}
+
+	periods := map[string]string{"0": "annual", "1": "jan", "2": "feb",
+		"3": "mar", "4": "apr", "5": "may", "6": "jun", "7": "jul",
+		"8": "aug", "9": "sep", "10": "oct", "11": "nov", "12": "dec"}
+
 	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
@@ -105,31 +110,27 @@ func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[s
 			// The first character is a country code.
 			FIPS := strings.Trim(splitLine[1], "\" ")
 
-			periods := map[string]string{"0": "annual", "1": "jan", "2": "feb",
-				"3": "mar", "4": "apr", "5": "may", "6": "jun", "7": "jul",
-				"8": "aug", "9": "sep", "10": "oct", "11": "nov", "12": "dec"}
 			period, ok := periods[splitLine[2]]
 			if !ok {
 				err = fmt.Errorf("Missing or mislabeled period in %v.",
 					c.SpecRefComboFile)
 				panic(err)
 			}
-			if _, ok := specRef[pol]; !ok {
-				specRef[pol] = make(map[string]map[string]map[string]float64)
-			}
-			if _, ok := specRef[pol][FIPS]; !ok {
-				specRef[pol][FIPS] = make(map[string]map[string]float64)
-			}
-			if _, ok := specRef[pol][FIPS][period]; !ok {
-				specRef[pol][FIPS][period] = make(map[string]float64)
-			}
-			for i := 4; i < len(splitLine); i += 2 {
-				code := strings.Trim(splitLine[i], "\n\" ")
-				frac, err := strconv.ParseFloat(strings.Trim(splitLine[i+1], "\n\" "), 64)
-				if err != nil {
-					panic(err)
+			if period == runPeriod {
+				if _, ok := specRef[pol]; !ok {
+					specRef[pol] = make(map[string]map[string]float64)
 				}
-				specRef[pol][FIPS][period][code] = frac
+				if _, ok := specRef[pol][FIPS]; !ok {
+					specRef[pol][FIPS] = make(map[string]float64)
+				}
+				for i := 4; i < len(splitLine); i += 2 {
+					code := strings.Trim(splitLine[i], "\n\" ")
+					frac, err := strconv.ParseFloat(strings.Trim(splitLine[i+1], "\n\" "), 64)
+					if err != nil {
+						panic(err)
+					}
+					specRef[pol][FIPS][code] = frac
+				}
 			}
 		}
 	}
@@ -139,7 +140,7 @@ func (c *RunData) SpecRefCombo() (specRef map[string]map[string]map[string]map[s
 type SpecProf struct {
 	db         *sql.DB
 	sRef       map[string]map[string]string                        // map[SCC][pol]code
-	sRefCombo  map[string]map[string]map[string]map[string]float64 // map[pol][FIPS][period][code]frac
+	sRefCombo  map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
 	sPro       map[string]map[string]*specHolder                   //map[code][NewPol]fracs
 	droppedPro map[string]map[string]*specHolder                   //map[code][NewPol]fracs
 }
@@ -149,10 +150,6 @@ func (c *RunData) NewSpecProf() (sp *SpecProf, err error) {
 	sp.db, err = sql.Open("sqlite3", c.SpecProFile)
 
 	sp.sRef, err = c.SpecRef()
-	if err != nil {
-		return
-	}
-	sp.sRefCombo, err = c.SpecRefCombo()
 	if err != nil {
 		return
 	}
@@ -237,7 +234,6 @@ func (sp *SpecProf) GetProfileGas(number string,
 	var total float64
 	var tempConvFac sql.NullFloat64
 	var convFac float64
-	fmt.Println(number, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 	err = sp.db.QueryRow("select TOTAL,VOCtoTOG from GAS_PROFILE where"+
 		" P_NUMBER=?", number).Scan(&total, &tempConvFac)
 	if err != nil {
@@ -383,8 +379,14 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 			code, ok := ref[pol]
 			if ok {
 				if code == "COMBO" { // for location specific speciation profiles
+					if sp.sRefCombo == nil {
+						sp.sRefCombo, err = c.SpecRefCombo(period)
+						if err != nil {
+							return
+						}
+					}
 					countryCode := GetCountryCode(record.Country)
-					codes := sp.sRefCombo[pol][countryCode+record.FIPS][period]
+					codes := sp.sRefCombo[pol][countryCode+record.FIPS]
 					specFactors = make(map[string]*specHolder)
 					droppedSpecFactors = make(map[string]*specHolder)
 					for code2, frac := range codes {

@@ -123,10 +123,8 @@ type RunData struct {
 	SimulationName        string           // Name for the simulation: user choice
 	currentTime           time.Time
 	// report files
-	InvRep     *os.File // Inventory report file
-	SpecRep    *os.File // Speciation report file
-	SpatialRep *os.File // Spatial report file
 	ErrorFlag  bool     // whether this sector has already encountered an error
+	CreateTotalInventoryReport bool // whether to create a report that summarizes emissions by source code (memory intensive)
 }
 
 type PolHolder struct {

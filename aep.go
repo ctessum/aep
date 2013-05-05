@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	// Imports below this line are for performance profiling: comment them out for production running
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var (
@@ -23,6 +26,12 @@ func main() {
 		"Program (A)ir (E)missions (P)rocessor\n",
 		"   Copyright 2012 Chris Tessum\n",
 		"-------------------------------------\n")
+
+	// HTTP server for performance profiling. Comment these three lines out for production running.
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	//------
 
 	// Read from configuration file and prepare sectors for processing
 	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")
@@ -46,8 +55,12 @@ func main() {
 	runChan := make(chan string, 1)
 
 	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
-	// set up TotalInventoryReport subroutine
-	go ConfigAll.DefaultSettings.TotalInventoryReport(runChan)
+	if ConfigAll.DefaultSettings.CreateTotalInventoryReport {
+		// set up TotalInventoryReport subroutine
+		go ConfigAll.DefaultSettings.TotalInventoryReport(runChan)
+	} else {
+		go DiscardRecords(runChan)
+	}
 
 	// start surrogate generator subroutine
 	if ConfigAll.DefaultSettings.Spatialize {
@@ -172,4 +185,11 @@ func (c RunData) RunPeriod(period string) {
 	}
 
 	return
+}
+
+func DiscardRecords(msgChan chan string) {
+	for _ = range TotalReportChan {
+		continue
+	}
+	msgChan <- "Finished processing all records."
 }
