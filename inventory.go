@@ -179,12 +179,12 @@ func (c RunData) parseRecordPointORL(record string, fInfo *FileInfo) *ParsedReco
 	}
 	pol := strings.Trim(splitString[21], "\" ")
 	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[23], "\""), 64)
-	if err != nil {
+	if err != nil || fields.AVD_EMIS[pol] < 0. {
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
 	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[22], "\""), 64)
-	if err != nil {
+	if err != nil || fields.ANN_EMIS[pol].val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
 	}
@@ -218,12 +218,12 @@ func (c RunData) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedRecor
 	fields.NAICS = strings.Trim(splitString[5], "\"")
 	pol := strings.Trim(splitString[6], "\" ")
 	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[8], "\""), 64)
-	if err != nil {
+	if err != nil || fields.AVD_EMIS[pol] < 0. {
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
 	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[7], "\""), 64)
-	if err != nil {
+	if err != nil || fields.ANN_EMIS[pol].val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
 	}
@@ -254,12 +254,12 @@ func (c RunData) parseRecordNonroadORL(record string, fInfo *FileInfo) *ParsedRe
 	fields.SCC = strings.Trim(splitString[1], "\" ")
 	pol := strings.Trim(splitString[2], "\" ")
 	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""), 64)
-	if err != nil {
+	if err != nil || fields.AVD_EMIS[pol] < 0. {
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
 	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
-	if err != nil {
+	if err != nil || fields.ANN_EMIS[pol].val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
 	}
@@ -292,12 +292,12 @@ func (c RunData) parseRecordMobileORL(record string, fInfo *FileInfo) *ParsedRec
 	fields.SCC = strings.Trim(splitString[1], "\" ")
 	pol := strings.Trim(splitString[2], "\" ")
 	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""), 64)
-	if err != nil {
+	if err != nil || fields.AVD_EMIS[pol] < 0.{
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
 	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
-	if err != nil {
+	if err != nil || fields.ANN_EMIS[pol].val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
 	}
@@ -369,13 +369,13 @@ func (c RunData) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedReco
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 249 + 52*i
 		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13:start+13+13], " "), 64)
-		if err != nil {
+		if err != nil || fields.AVD_EMIS[strings.Trim(pol, " ")] < 0. {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
-		fields.ANN_EMIS[pol] = new(specValUnits)
+		fields.ANN_EMIS[strings.Trim(pol, " ")] = new(specValUnits)
 		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+13], " "), 64)
-		if err != nil {
-			fields.ANN_EMIS[pol] = new(specValUnits)
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0. {
+			fields.ANN_EMIS[strings.Trim(pol, " ")] = new(specValUnits)
 			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
 		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13:start+13+13+7], " "), 64)
@@ -400,14 +400,15 @@ func (c RunData) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedRecor
 	}
 	fields.SCC = strings.Trim(record[5:15], "\" ")
 	for i, pol := range strings.Split(fInfo.polid, " ") {
+		pol = strings.Trim(pol, " ")
 		start := 15 + 47*i
 		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "), 64)
-		if err != nil {
+		if err != nil || fields.AVD_EMIS[strings.Trim(pol, " ")] < 0. {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
-		if err != nil {
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0 {
 			fields.ANN_EMIS[pol] = new(specValUnits)
 			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
@@ -439,12 +440,12 @@ func (c RunData) parseRecordMobileIDA(record string, fInfo *FileInfo) *ParsedRec
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 25 + 20*i
 		fields.AVD_EMIS[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10:start+10+10], " "), 64)
-		if err != nil {
+		if err != nil || fields.AVD_EMIS[strings.Trim(pol, " ")] < 0. {
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
 		fields.ANN_EMIS[pol] = new(specValUnits)
 		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
-		if err != nil {
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0. {
 			fields.ANN_EMIS[pol] = new(specValUnits)
 			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
@@ -471,12 +472,12 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 		config.Sector+"...", 0)
 	Report.SectorResults[config.Sector][period].
 		InventoryResults = make(map[string]*FileInfo)
+	// First, go through files to check for possible double
+	// counting in individual records.
 	for _, file := range config.InvFileNames {
 		if config.InventoryFreq == "monthly" {
 			file = strings.Replace(file, "[month]", period, -1)
 		}
-		// First, go through file to check for possible double
-		// counting in individual records.
 		config.Log("Checking file "+file+" for possible double counting", 1)
 		fInfo := OpenFile(file)
 		for {
@@ -500,12 +501,17 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			}
 		}
 		fInfo.fid.Close()
+	}
 
-		// Now, go through the file a second time, marking records
-		// that need to be adjusted for double counting and then
-		// sending them off for further processing.
+	// Now, go through the files a second time, marking records
+	// that need to be adjusted for double counting and then
+	// sending them off for further processing.
+	for _, file := range config.InvFileNames {
+		if config.InventoryFreq == "monthly" {
+			file = strings.Replace(file, "[month]", period, -1)
+		}
 		config.Log("Processing file "+file, 1)
-		fInfo = OpenFile(file)
+		fInfo := OpenFile(file)
 		for {
 			record, EOF := fInfo.ParseLine(config)
 			if EOF {
@@ -573,6 +579,9 @@ func OpenFile(file string) (fInfo *FileInfo) {
 		record, err = fInfo.buf.ReadString('\n')
 		if err != nil {
 			panic(fInfo.fname + "\n" + record + "\n" + err.Error())
+		}
+		if strings.Index(record, "NONROAD") >= 0 && fInfo.Format == "ORL" {
+			fInfo.Format = "ORLNONROAD"
 		}
 		if len(record) > 5 && record[1:5] == "TYPE" {
 			fInfo.Ftype = strings.Replace(strings.Trim(record[5:], "\n "), ",", " ", -1)

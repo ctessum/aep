@@ -382,14 +382,22 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 		case "VOC":
 			code, ok := ref[pol]
 			if ok {
-				if code == "COMBO" {
+				if code == "COMBO" { // for location specific speciation profiles
 					countryCode := GetCountryCode(record.Country)
 					codes := sp.sRefCombo[pol][countryCode+record.FIPS][period]
 					specFactors = make(map[string]*specHolder)
 					droppedSpecFactors = make(map[string]*specHolder)
 					for code2, frac := range codes {
-						tempSpecFactors, tempDroppedSpecFactors := sp.GetProfileGas(
-							code2, record.DoubleCountPols, c)
+						tempSpecFactors := make(map[string]*specHolder)
+						tempDroppedSpecFactors := make(map[string]*specHolder)
+						tempSpecFactors, ok = sp.sPro[code2]
+						if !ok || record.DoubleCountPols != nil {
+							tempSpecFactors, tempDroppedSpecFactors =
+								sp.GetProfileGas(code2, record.DoubleCountPols, c)
+							if record.DoubleCountPols == nil {
+								sp.sPro[code2] = tempSpecFactors
+							}
+						}
 						for pol, val := range tempSpecFactors {
 							if _, ok := specFactors[pol]; !ok {
 								specFactors[pol] = new(specHolder)
@@ -472,7 +480,7 @@ func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
 		newAnnEmis := make(map[string]*specValUnits)
 		for pol, AnnEmis := range record.ANN_EMIS {
 			polFracs, droppedPolFracs = sp.getSccFracs(
-				record, pol, c,period)
+				record, pol, c, period)
 			for newpol, factor := range polFracs {
 				if _, ok := newAnnEmis[newpol]; ok {
 					err = fmt.Errorf("Possible double counting of"+
