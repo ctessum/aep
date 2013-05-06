@@ -329,7 +329,7 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		PolygonWithWeight bool
 		LineWithWeight    bool
 		PointWithWeight   bool
-		WithWeight bool
+		WithWeight        bool
 		Polygon           bool
 		Line              bool
 		Point             bool
@@ -542,30 +542,15 @@ func (pg *PostGis) AddDataRowToRasterTable(schema, tableName, rasterRowName stri
 	grid *GridDef, data *matrix.SparseMatrix) {
 	var err error
 
-	dataStr1 := ""
-	dataStr2 := ""
-	var val float64
-	for j := 0; j < grid.Ny; j++ {
-		for i := 0; i < grid.Nx; i++ {
-			val = data.Get(j, i)
-			if val != 0 {
-				dataStr1 += "ST_SetValue("
-				dataStr2 += fmt.Sprintf(",%v,%v,%v)", i+1, j+1, val)
-			}
-		}
-	}
-	dataCmd := dataStr1 + "rast" + dataStr2
-
 	type holder struct {
 		Nx, Ny, SRID               int
 		Dx, Dy, X0, Y0             float64
 		TableName, Schema, RowName string
-		DataCmd                    string
 	}
 
 	cmdData := holder{grid.Nx, grid.Ny, grid.SRID,
 		grid.Dx, grid.Dy, grid.X0, grid.Y0,
-		tableName, schema, rasterRowName, dataCmd}
+		tableName, schema, rasterRowName}
 
 	const t = `
 BEGIN;
@@ -577,10 +562,6 @@ VALUES
 UPDATE {{.Schema}}.{{.TableName}}
 SET rast=ST_AddBand(rast,'64BF'::text,0.)  
 WHERE name='{{.RowName}}';
-
-UPDATE {{.Schema}}.{{.TableName}}
-SET rast={{.DataCmd}}
-where name='{{.RowName}}';
 COMMIT;`
 
 	t2 := template.Must(template.New("rasterRow").Parse(t))
@@ -595,7 +576,81 @@ COMMIT;`
 	if err != nil {
 		panic(err)
 	}
+
+	var val float64
+	for j := 0; j < grid.Ny; j++ {
+		for i := 0; i < grid.Nx; i++ {
+			val = data.Get(j, i)
+			if val != 0 {
+				cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%v)"+
+					"where name='%v';", schema, tableName, i+1, j+1, val, rasterRowName)
+				_, err = pg.db.Exec(cmd)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
 }
+
+//func (pg *PostGis) AddDataRowToRasterTable(schema, tableName, rasterRowName string,
+//	grid *GridDef, data *matrix.SparseMatrix) {
+//	var err error
+//
+//	dataStr1 := ""
+//	dataStr2 := ""
+//	var val float64
+//	for j := 0; j < grid.Ny; j++ {
+//		for i := 0; i < grid.Nx; i++ {
+//			val = data.Get(j, i)
+//			if val != 0 {
+//				dataStr1 += "ST_SetValue("
+//				dataStr2 += fmt.Sprintf(",%v,%v,%v)", i+1, j+1, val)
+//			}
+//		}
+//	}
+//	dataCmd := dataStr1 + "rast" + dataStr2
+//
+//	type holder struct {
+//		Nx, Ny, SRID               int
+//		Dx, Dy, X0, Y0             float64
+//		TableName, Schema, RowName string
+//		DataCmd                    string
+//	}
+//
+//	cmdData := holder{grid.Nx, grid.Ny, grid.SRID,
+//		grid.Dx, grid.Dy, grid.X0, grid.Y0,
+//		tableName, schema, rasterRowName, dataCmd}
+//
+//	const t = `
+//BEGIN;
+//INSERT INTO {{.Schema}}.{{.TableName}}(name,rast) 
+//VALUES 
+//('{{.RowName}}',ST_MakeEmptyRaster({{.Nx}}, {{.Ny}}, {{.X0}}, {{.Y0}}, 
+//	{{.Dx}}, {{.Dy}}, 0., 0., {{.SRID}}));
+//
+//UPDATE {{.Schema}}.{{.TableName}}
+//SET rast=ST_AddBand(rast,'64BF'::text,0.)  
+//WHERE name='{{.RowName}}';
+//
+//UPDATE {{.Schema}}.{{.TableName}}
+//SET rast={{.DataCmd}}
+//where name='{{.RowName}}';
+//COMMIT;`
+//
+//	t2 := template.Must(template.New("rasterRow").Parse(t))
+//	var b bytes.Buffer
+//	err = t2.Execute(&b, cmdData)
+//	if err != nil {
+//		panic(err)
+//	}
+//	cmd := b.String()
+//	Log(cmd, 3)
+//	_, err = pg.db.Exec(cmd)
+//	if err != nil {
+//		panic(err)
+//	}
+//}
 
 func (pg *PostGis) WriteOutRaster(schema, tableName, rasterRowName,
 	filename string) {

@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bitbucket.org/ctessum/aep/gis"
 	"bufio"
 	"errors"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
-	"bitbucket.org/ctessum/aep/gis"
 	"log"
 	"os"
 	"path/filepath"
@@ -136,142 +136,34 @@ func (c *RunData) ConfigReport() {
 }
 
 type ReportHolder struct {
-	Config *RunData
+	Config        *RunData
 	SectorResults map[string]map[string]*Results // map[sector][period]Results
 }
 
 type Results struct {
-	InventoryResults map[string]*FileInfo
+	InventoryResults  map[string]*FileInfo
+	SpeciationResults *SpecTotals
+	SpatialResults    *SpatialTotals
 }
 
-
-func (c *RunData) SpeciationReport(r *reportData, totalDropped map[string]float64, period string) {
-	repStr := ""
-//	var err error
-//	if c.SpecRep != nil {
-//		repStr += "\n\n"
-//	} else {
-//		c.SpecRep, err = os.Create(filepath.Join(c.sectorLogs, c.Sector+"_speciation.csv"))
-//		if err != nil {
-//			panic(err)
-//		}
-//	}
-	polNames := make([]string, 0)
-	for pol, _ := range r.totals {
-		if !IsStringInArray(polNames, pol) {
-			polNames = append(polNames, pol)
-		}
-	}
-	droppedPolNames := make([]string, 0)
-	for pol, _ := range totalDropped {
-		if !IsStringInArray(droppedPolNames, pol) {
-			droppedPolNames = append(droppedPolNames, pol)
-		}
-	}
-	sort.Strings(polNames)
-	sort.Strings(droppedPolNames)
-
-	repStr += "Speciated totals\n"
-	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
-	repStr += fmt.Sprintf("Time period: %s\n", period)
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s|", pol)
-	}
-	repStr += "\n"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%s|", r.units[pol])
-	}
-	repStr += "\n"
-	for _, pol := range polNames {
-		repStr += fmt.Sprintf("%e|", r.totals[pol])
-	}
-	repStr += "\n\nTotals of dropped pollutants (g/year)\n"
-	for _, pol := range droppedPolNames {
-		repStr += fmt.Sprintf("%s|", pol)
-	}
-	repStr += "\n"
-	for _, pol := range droppedPolNames {
-		repStr += fmt.Sprintf("%e|", totalDropped[pol])
-	}
-	repStr += "\n"
-//	fmt.Fprint(c.SpecRep, repStr)
-	return
-}
-
-// Repair a report of the spatialization step, including totals inside and 
-// outside of each domain, and maps of emissions for each species and domain.
-func (c *RunData) SpatialReport(
+// Prepare maps of emissions for each species and domain.
+func (c *RunData) ResultMaps(
 	TotalGrid map[*gis.GridDef]map[string]*matrix.SparseMatrix,
-	DroppedTotals map[string]map[string]float64, period string, pg *gis.PostGis) {
-
-//	// Create csv report
-//	repStr := ""
-//	var err error
-//	if c.SpatialRep != nil {
-//		repStr += "\n\n"
-//	} else {
-//		c.SpatialRep, err = os.Create(filepath.Join(c.sectorLogs,
-//			c.Sector+"_spatial.csv"))
-//		if err != nil {
-//			panic(err)
-//		}
-//	}
-//	polNames := make([]string, 0)
-//	for _, data := range TotalGrid {
-//		for pol, _ := range data {
-//			if !IsStringInArray(polNames, pol) {
-//				polNames = append(polNames, pol)
-//			}
-//		}
-//	}
-//	sort.Strings(polNames)
-//
-//	repStr += fmt.Sprintf("Sector: %s\n", c.Sector)
-//	repStr += fmt.Sprintf("Time period: %s\n\n", period)
-//	for grid, _ := range TotalGrid {
-//		repStr += fmt.Sprintf("Domain %v\n", grid.Name)
-//		repStr += ","
-//		for _, pol := range polNames {
-//			repStr += fmt.Sprintf("%s,", pol)
-//		}
-//		repStr += "\n"
-//		repStr += "Total inside domain,"
-//		for _, pol := range polNames {
-//			repStr += fmt.Sprintf("%e,", MatrixSum(TotalGrid[grid][pol]))
-//		}
-//		repStr += "\n"
-//		repStr += "Total outside domain,"
-//		for _, pol := range polNames {
-//			repStr += fmt.Sprintf("%e,", DroppedTotals[grid.Name][pol])
-//		}
-//		repStr += "\n"
-//		repStr += "Percent inside domain,"
-//		for _, pol := range polNames {
-//			totalInside := MatrixSum(TotalGrid[grid][pol])
-//			var val float64
-//			if totalInside == 0. && DroppedTotals[grid.Name][pol] == 0. {
-//				val = 100.
-//			} else if totalInside == 0. {
-//				val = 0.
-//			} else {
-//				val = totalInside /
-//					(totalInside + DroppedTotals[grid.Name][pol]) * 100.
-//			}
-//			repStr += fmt.Sprintf("%.1f%%,", val)
-//		}
-//		repStr += "\n\n"
-//	}
-//	fmt.Fprint(c.SpatialRep, repStr)
+	period string, pg *gis.PostGis) {
 
 	for grid, d1 := range TotalGrid {
-		tableName := c.Sector+"_"+period+"_"+grid.Name
-		pg.MakeRasterTable(c.SimulationName,tableName)
+		tableName := c.Sector + "_" + period + "_" + grid.Name
+		pg.MakeRasterTable(c.SimulationName, tableName)
 		for pol, data := range d1 {
-			pg.AddDataRowToRasterTable(c.SimulationName,tableName,pol,
-				grid,data)
-			filename := filepath.Join(c.sectorLogs,
-				tableName+"_"+pol+".tif")
-			pg.WriteOutRaster(c.SimulationName,tableName,pol,filename)
+			pg.AddDataRowToRasterTable(c.SimulationName, tableName, pol,
+				grid, data)
+			dir := filepath.Join(c.sectorLogs, pol+"_maps")
+			err := os.MkdirAll(dir, os.ModePerm)
+			if err != nil {
+				panic(err)
+			}
+			filename := filepath.Join(dir,tableName+"_"+pol+".tif")
+			pg.WriteOutRaster(c.SimulationName, tableName, pol, filename)
 		}
 	}
 }
@@ -335,9 +227,9 @@ func (c RunData) TotalInventoryReport(msgChan chan string) {
 		for pol, emis := range record.ANN_EMIS {
 			if record.InventoryFreq == "monthly" {
 				records[record.NAICS][record.SIC][record.SCC][pol] +=
-					emis.val / 12.
+					emis.Val / 12.
 			} else {
-				records[record.NAICS][record.SIC][record.SCC][pol] += emis.val
+				records[record.NAICS][record.SIC][record.SCC][pol] += emis.Val
 			}
 		}
 	}

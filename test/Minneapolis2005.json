@@ -27,7 +27,7 @@
         "DebugLevel": 0,
         "Ncpus": 2,
         "Speciate": true,
-        "Spatialize": false,
+        "Spatialize": true,
 		"CreateTotalInventoryReport": false,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},

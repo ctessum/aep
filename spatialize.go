@@ -68,9 +68,42 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	return
 }
 
-// If this function fails during surrogate creation, the program may
-// hang as other instances of this function wait for the surrogate
-// to be completed.
+type SpatialTotals struct {
+	InsideDomainTotals  map[string]map[string]*specValUnits
+	OutsideDomainTotals map[string]map[string]*specValUnits
+}
+
+func newSpatialTotalHolder() *SpatialTotals {
+	out := new(SpatialTotals)
+	out.InsideDomainTotals = make(map[string]map[string]*specValUnits)
+	out.OutsideDomainTotals = make(map[string]map[string]*specValUnits)
+	return out
+}
+
+func (h *SpatialTotals) Add(pol, grid string, data *specValUnits, i int) {
+	t := *h
+	if _, ok := t.InsideDomainTotals[grid]; !ok {
+		t.InsideDomainTotals[grid] = make(map[string]*specValUnits)
+		t.OutsideDomainTotals[grid] = make(map[string]*specValUnits)
+	}
+	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
+		t.InsideDomainTotals[grid][pol] = new(specValUnits)
+		t.InsideDomainTotals[grid][pol].Units = data.Units
+		t.OutsideDomainTotals[grid][pol] = new(specValUnits)
+		t.OutsideDomainTotals[grid][pol].Units = data.Units
+	} else {
+		if t.InsideDomainTotals[grid][pol].Units != data.Units {
+			err := fmt.Errorf("Units problem: %v! = %v",
+				t.InsideDomainTotals[grid][pol].Units, data.Units)
+			panic(err)
+		}
+	}
+	gridTotal := MatrixSum(data.gridded[i])
+	t.InsideDomainTotals[grid][pol].Val += gridTotal
+	t.OutsideDomainTotals[grid][pol].Val += data.Val - gridTotal
+	*h = t
+}
+
 func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
@@ -78,8 +111,8 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 
 	c.Log("Spatializing "+period+" "+c.Sector+"...", 0)
 
+	totals := newSpatialTotalHolder()
 	TotalGrid := make(map[*gis.GridDef]map[string]*matrix.SparseMatrix) // map[grid][pol]data
-	DroppedTotals := make(map[string]map[string]float64)
 
 	pg, err := gis.Connect(c.PostGISuser, c.PostGISdatabase,
 		c.PostGISpassword)
@@ -100,7 +133,6 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
 						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
-						DroppedTotals[grid.Name] = make(map[string]float64)
 					}
 					if _, ok := TotalGrid[grid][pol]; !ok {
 						TotalGrid[grid][pol] =
@@ -115,11 +147,10 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 						grid.Dx)
 					if row > 0 && row < grid.Ny &&
 						col > 0 && col < grid.Nx {
-						data.gridded[i].Set(row, col, data.val)
+						data.gridded[i].Set(row, col, data.Val)
 						TotalGrid[grid][pol].Add(data.gridded[i])
-					} else {
-						DroppedTotals[grid.Name][pol] += MatrixSum(data.gridded[i])
 					}
+					totals.Add(pol, grid.Name, data, i)
 				}
 			}
 			OutputChan <- record
@@ -148,19 +179,15 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
 						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
-						DroppedTotals[grid.Name] = make(map[string]float64)
 					}
 					if _, ok := TotalGrid[grid][pol]; !ok {
 						TotalGrid[grid][pol] = matrix.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
 					val.gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid, pg)
-					if MatrixSum(val.gridded[i]) != 0. {
-						val.gridded[i].Scale(val.val)
-						TotalGrid[grid][pol].Add(val.gridded[i])
-					} else {
-						DroppedTotals[grid.Name][pol] += val.val
-					}
+					val.gridded[i].Scale(val.Val)
+					TotalGrid[grid][pol].Add(val.gridded[i])
+					totals.Add(pol, grid.Name, val, i)
 				}
 			}
 			OutputChan <- record
@@ -172,7 +199,8 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	if OutputChan != TotalReportChan {
 		close(OutputChan)
 	}
-	c.SpatialReport(TotalGrid, DroppedTotals, period, pg)
+	Report.SectorResults[c.Sector][period].SpatialResults = totals
+	c.ResultMaps(TotalGrid, period, pg)
 	MesgChan <- "Finished spatializing " + period + " " + c.Sector
 	return
 }

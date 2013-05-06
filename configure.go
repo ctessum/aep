@@ -141,7 +141,6 @@ func (p *configInput) setup(e *ErrCat) {
 		c.Sectors[sector].FillWithDefaults(c.DefaultSettings, e)
 		c.Sectors[sector].setup(e)
 		c.Sectors[sector].catPaths(c.Dirs, e)
-		c.Sectors[sector].ConfigReport()
 	}
 	*p = c
 }
@@ -288,13 +287,9 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 	if c.Sector == "" {
 		c.sectorLogs = d.Logs
 	} else {
+		c.sectorLogs = d.Logs
 		sectorPath := filepath.Join(d.Input, c.CaseName, c.Sector)
 		e.statOS(sectorPath, "Sector "+c.Sector+" input")
-		c.sectorLogs = filepath.Join(d.Logs, c.Sector)
-		err := os.MkdirAll(c.sectorLogs, os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
 		for i, name := range c.InvFileNames {
 			if c.InventoryFreq == "annual" {
 				c.InvFileNames[i] = filepath.Join(sectorPath, name)

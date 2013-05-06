@@ -139,10 +139,10 @@ func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 
 type SpecProf struct {
 	db         *sql.DB
-	sRef       map[string]map[string]string                        // map[SCC][pol]code
+	sRef       map[string]map[string]string             // map[SCC][pol]code
 	sRefCombo  map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
-	sPro       map[string]map[string]*specHolder                   //map[code][NewPol]fracs
-	droppedPro map[string]map[string]*specHolder                   //map[code][NewPol]fracs
+	sPro       map[string]map[string]*specHolder        //map[code][NewPol]fracs
+	droppedPro map[string]map[string]*specHolder        //map[code][NewPol]fracs
 }
 
 func (c *RunData) NewSpecProf() (sp *SpecProf, err error) {
@@ -226,10 +226,12 @@ func (sp *SpecProf) GetProfileSingleSpecies(pol string, c *RunData) (
 func (sp *SpecProf) GetProfileGas(number string,
 	doubleCountPols []string, c *RunData) (
 	profile map[string]*specHolder,
-	droppedProfile map[string]*specHolder) {
+	droppedDoubleCount map[string]*specHolder,
+	droppedNotInGroup map[string]*specHolder) {
 
 	profile = make(map[string]*specHolder)
-	droppedProfile = make(map[string]*specHolder)
+	droppedDoubleCount = make(map[string]*specHolder)
+	droppedNotInGroup = make(map[string]*specHolder)
 	var err error
 	var total float64
 	var tempConvFac sql.NullFloat64
@@ -316,11 +318,11 @@ func (sp *SpecProf) GetProfileGas(number string,
 			fmt.Println(x.factor, groupfactor)
 			profile[group.String].factor += x.factor * groupfactor
 		} else if !group.Valid {
-			// Add ungrouped pollutants to the outputs
-			profile[specName] = x
+			// ungrouped pollutants
+			droppedNotInGroup[specName] = x
 		} else {
-			// Add double counted pollutants to the droppedProfile
-			droppedProfile[specName] = x
+			// double counted pollutants
+			droppedDoubleCount[specName] = x
 		}
 	}
 	rows.Close()
@@ -333,16 +335,12 @@ func (sp *SpecProf) GetProfileGas(number string,
 	return
 }
 
-type reportData struct {
-	totals map[string]float64
-	units  map[string]string
-}
-
 // Match SCC in record to speciation profile. If none matches exactly, find a
 // more general SCC that matches.
 func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	period string) (
-	specFactors, droppedSpecFactors map[string]*specHolder) {
+	specFactors, doubleCountSpecFactors,
+	ungroupedSpecFactors map[string]*specHolder) {
 	var ok bool
 	var err error
 	var ref map[string]string
@@ -388,13 +386,16 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 					countryCode := GetCountryCode(record.Country)
 					codes := sp.sRefCombo[pol][countryCode+record.FIPS]
 					specFactors = make(map[string]*specHolder)
-					droppedSpecFactors = make(map[string]*specHolder)
+					doubleCountSpecFactors = make(map[string]*specHolder)
+					ungroupedSpecFactors = make(map[string]*specHolder)
 					for code2, frac := range codes {
 						tempSpecFactors := make(map[string]*specHolder)
-						tempDroppedSpecFactors := make(map[string]*specHolder)
+						tempDoubleCountSpecFactors := make(map[string]*specHolder)
+						tempUngroupedSpecFactors := make(map[string]*specHolder)
 						tempSpecFactors, ok = sp.sPro[code2]
 						if !ok || record.DoubleCountPols != nil {
-							tempSpecFactors, tempDroppedSpecFactors =
+							tempSpecFactors, tempDoubleCountSpecFactors,
+								tempUngroupedSpecFactors =
 								sp.GetProfileGas(code2, record.DoubleCountPols, c)
 							if record.DoubleCountPols == nil {
 								sp.sPro[code2] = tempSpecFactors
@@ -412,14 +413,26 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 								}
 							}
 						}
-						for pol, val := range tempDroppedSpecFactors {
-							if _, ok := specFactors[pol]; !ok {
-								droppedSpecFactors[pol] = new(specHolder)
-								droppedSpecFactors[pol].factor = val.factor * frac
-								droppedSpecFactors[pol].units = val.units
+						for pol, val := range tempDoubleCountSpecFactors {
+							if _, ok := doubleCountSpecFactors[pol]; !ok {
+								doubleCountSpecFactors[pol] = new(specHolder)
+								doubleCountSpecFactors[pol].factor = val.factor * frac
+								doubleCountSpecFactors[pol].units = val.units
 							} else {
-								droppedSpecFactors[pol].factor += val.factor * frac
-								if droppedSpecFactors[pol].units != val.units {
+								doubleCountSpecFactors[pol].factor += val.factor * frac
+								if doubleCountSpecFactors[pol].units != val.units {
+									panic("Units error!")
+								}
+							}
+						}
+						for pol, val := range tempUngroupedSpecFactors {
+							if _, ok := ungroupedSpecFactors[pol]; !ok {
+								ungroupedSpecFactors[pol] = new(specHolder)
+								ungroupedSpecFactors[pol].factor = val.factor * frac
+								ungroupedSpecFactors[pol].units = val.units
+							} else {
+								ungroupedSpecFactors[pol].factor += val.factor * frac
+								if ungroupedSpecFactors[pol].units != val.units {
 									panic("Units error!")
 								}
 							}
@@ -428,7 +441,8 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 				} else {
 					specFactors, ok = sp.sPro[code]
 					if !ok || record.DoubleCountPols != nil {
-						specFactors, droppedSpecFactors = sp.GetProfileGas(
+						specFactors, doubleCountSpecFactors,
+							ungroupedSpecFactors = sp.GetProfileGas(
 							code, record.DoubleCountPols, c)
 						if record.DoubleCountPols == nil {
 							sp.sPro[code] = specFactors
@@ -453,6 +467,68 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	return
 }
 
+type SpecTotals struct {
+	Kept          map[string]*specValUnits
+	DoubleCounted map[string]*specValUnits
+	Ungrouped     map[string]*specValUnits
+}
+
+func newSpeciationTotalHolder() *SpecTotals {
+	out := new(SpecTotals)
+	out.Kept = make(map[string]*specValUnits)
+	out.DoubleCounted = make(map[string]*specValUnits)
+	out.Ungrouped = make(map[string]*specValUnits)
+	return out
+}
+
+func (h *SpecTotals) AddKept(pol string, data *specValUnits) {
+	t := *h
+	if _, ok := t.Kept[pol]; !ok {
+		t.Kept[pol] = new(specValUnits)
+		t.Kept[pol].Units = data.Units
+	} else {
+		if t.Kept[pol].Units != data.Units {
+			err := fmt.Errorf("Units problem: %v! = %v",
+				t.Kept[pol].Units, data.Units)
+			panic(err)
+		}
+	}
+	t.Kept[pol].Val += data.Val
+	*h = t
+}
+
+func (h *SpecTotals) AddDoubleCounted(pol string, val float64, units string) {
+	t := *h
+	if _, ok := t.DoubleCounted[pol]; !ok {
+		t.DoubleCounted[pol] = new(specValUnits)
+		t.DoubleCounted[pol].Units = units
+	} else {
+		if t.DoubleCounted[pol].Units != units {
+			err := fmt.Errorf("Units problem: %v! = %v",
+				t.DoubleCounted[pol].Units, units)
+			panic(err)
+		}
+	}
+	t.DoubleCounted[pol].Val += val
+	*h = t
+}
+
+func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
+	t := *h
+	if _, ok := t.Ungrouped[pol]; !ok {
+		t.Ungrouped[pol] = new(specValUnits)
+		t.Ungrouped[pol].Units = units
+	} else {
+		if t.Ungrouped[pol].Units != units {
+			err := fmt.Errorf("Units problem: %v! = %v",
+				t.Ungrouped[pol].Units, units)
+			panic(err)
+		}
+	}
+	t.Ungrouped[pol].Val += val
+	*h = t
+}
+
 // Check if there is a speciation record for this 
 // SCC/pollutant combination.If not, check if the pollutant
 // is in the list of pollutants to drop. If it is not in the
@@ -472,17 +548,15 @@ func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
 		panic(err)
 	}
 
-	r := new(reportData)
-	r.totals = make(map[string]float64)
-	r.units = make(map[string]string)
-	totalDropped := make(map[string]float64)
+	totals := newSpeciationTotalHolder()
 	polFracs := make(map[string]*specHolder)
-	droppedPolFracs := make(map[string]*specHolder)
+	doubleCountPolFracs := make(map[string]*specHolder)
+	ungroupedPolFracs := make(map[string]*specHolder)
 	for record := range InputChan {
 		newAnnEmis := make(map[string]*specValUnits)
 		for pol, AnnEmis := range record.ANN_EMIS {
-			polFracs, droppedPolFracs = sp.getSccFracs(
-				record, pol, c, period)
+			polFracs, doubleCountPolFracs, ungroupedPolFracs =
+				sp.getSccFracs(record, pol, c, period)
 			for newpol, factor := range polFracs {
 				if _, ok := newAnnEmis[newpol]; ok {
 					err = fmt.Errorf("Possible double counting of"+
@@ -490,21 +564,29 @@ func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
 					panic(err)
 				}
 				newAnnEmis[newpol] = new(specValUnits)
-				newAnnEmis[newpol].val = AnnEmis.val *
+				newAnnEmis[newpol].Val = AnnEmis.Val *
 					c.InputConv * factor.factor
-				newAnnEmis[newpol].units = strings.Replace(
+				newAnnEmis[newpol].Units = strings.Replace(
 					factor.units, "/gram", "/year", -1)
-				r.totals[newpol] += newAnnEmis[newpol].val
+				totals.AddKept(newpol, newAnnEmis[newpol])
 			}
-			for droppedpol, factor := range droppedPolFracs {
-				totalDropped[droppedpol] += AnnEmis.val *
-					c.InputConv * factor.factor
+			for droppedpol, factor := range doubleCountPolFracs {
+				totals.AddDoubleCounted(droppedpol, AnnEmis.Val*
+					c.InputConv*factor.factor, strings.Replace(
+					factor.units, "/gram", "/year", -1))
+			}
+			for droppedpol, factor := range ungroupedPolFracs {
+				totals.AddUngrouped(droppedpol, AnnEmis.Val*
+					c.InputConv*factor.factor, strings.Replace(
+					factor.units, "/gram", "/year", -1))
 			}
 		}
 		record.ANN_EMIS = newAnnEmis
 		OutputChan <- record
 	}
-	c.SpeciationReport(r, totalDropped, period)
+	Report.SectorResults[c.Sector][period].
+		SpeciationResults = totals
+
 	MesgChan <- "Finished speciating " + period + " " + c.Sector
 	if OutputChan != TotalReportChan {
 		close(OutputChan)

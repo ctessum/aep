@@ -81,8 +81,8 @@ type ParsedRecord struct {
 }
 
 type specValUnits struct {
-	val     float64
-	units   string
+	Val     float64
+	Units   string
 	gridded []*matrix.SparseMatrix
 }
 
@@ -183,10 +183,10 @@ func (c RunData) parseRecordPointORL(record string, fInfo *FileInfo) *ParsedReco
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
-	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[22], "\""), 64)
-	if err != nil || fields.ANN_EMIS[pol].val < 0. {
+	fields.ANN_EMIS[pol].Val, err = strconv.ParseFloat(strings.Trim(splitString[22], "\""), 64)
+	if err != nil || fields.ANN_EMIS[pol].Val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
+		fields.ANN_EMIS[pol].Val = fields.AVD_EMIS[pol] * 365.
 	}
 	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[24], "\""), 64)
 	if err != nil {
@@ -222,10 +222,10 @@ func (c RunData) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedRecor
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
-	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[7], "\""), 64)
-	if err != nil || fields.ANN_EMIS[pol].val < 0. {
+	fields.ANN_EMIS[pol].Val, err = strconv.ParseFloat(strings.Trim(splitString[7], "\""), 64)
+	if err != nil || fields.ANN_EMIS[pol].Val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
+		fields.ANN_EMIS[pol].Val = fields.AVD_EMIS[pol] * 365.
 	}
 	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[9], "\""), 64)
 	if err != nil {
@@ -258,10 +258,10 @@ func (c RunData) parseRecordNonroadORL(record string, fInfo *FileInfo) *ParsedRe
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
-	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
-	if err != nil || fields.ANN_EMIS[pol].val < 0. {
+	fields.ANN_EMIS[pol].Val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
+	if err != nil || fields.ANN_EMIS[pol].Val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
+		fields.ANN_EMIS[pol].Val = fields.AVD_EMIS[pol] * 365.
 	}
 	fields.CEFF[pol], err = strconv.ParseFloat(strings.Trim(splitString[5], "\""), 64)
 	if err != nil {
@@ -296,10 +296,10 @@ func (c RunData) parseRecordMobileORL(record string, fInfo *FileInfo) *ParsedRec
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
-	fields.ANN_EMIS[pol].val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
-	if err != nil || fields.ANN_EMIS[pol].val < 0. {
+	fields.ANN_EMIS[pol].Val, err = strconv.ParseFloat(strings.Trim(splitString[3], "\""), 64)
+	if err != nil || fields.ANN_EMIS[pol].Val < 0. {
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[pol].val = fields.AVD_EMIS[pol] * 365.
+		fields.ANN_EMIS[pol].Val = fields.AVD_EMIS[pol] * 365.
 	}
 	fields.SRCTYPE = splitString[5]
 
@@ -373,10 +373,10 @@ func (c RunData) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedReco
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
 		fields.ANN_EMIS[strings.Trim(pol, " ")] = new(specValUnits)
-		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+13], " "), 64)
-		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0. {
+		fields.ANN_EMIS[strings.Trim(pol, " ")].Val, err = strconv.ParseFloat(strings.Trim(record[start:start+13], " "), 64)
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].Val < 0. {
 			fields.ANN_EMIS[strings.Trim(pol, " ")] = new(specValUnits)
-			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
+			fields.ANN_EMIS[strings.Trim(pol, " ")].Val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
 		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+13+13:start+13+13+7], " "), 64)
 		if err != nil {
@@ -407,10 +407,10 @@ func (c RunData) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedRecor
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
-		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0 {
+		fields.ANN_EMIS[strings.Trim(pol, " ")].Val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].Val < 0 {
 			fields.ANN_EMIS[pol] = new(specValUnits)
-			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
+			fields.ANN_EMIS[strings.Trim(pol, " ")].Val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
 		fields.CEFF[strings.Trim(pol, " ")], err = strconv.ParseFloat(strings.Trim(record[start+10+10+11:start+10+10+11+7], " "), 64)
 		if err != nil {
@@ -444,10 +444,10 @@ func (c RunData) parseRecordMobileIDA(record string, fInfo *FileInfo) *ParsedRec
 			fields.AVD_EMIS[strings.Trim(pol, " ")] = 0.
 		}
 		fields.ANN_EMIS[pol] = new(specValUnits)
-		fields.ANN_EMIS[strings.Trim(pol, " ")].val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
-		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].val < 0. {
+		fields.ANN_EMIS[strings.Trim(pol, " ")].Val, err = strconv.ParseFloat(strings.Trim(record[start:start+10], " "), 64)
+		if err != nil || fields.ANN_EMIS[strings.Trim(pol, " ")].Val < 0. {
 			fields.ANN_EMIS[pol] = new(specValUnits)
-			fields.ANN_EMIS[strings.Trim(pol, " ")].val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
+			fields.ANN_EMIS[strings.Trim(pol, " ")].Val = fields.AVD_EMIS[strings.Trim(pol, " ")] * 365.
 		}
 	}
 	return fields
@@ -527,10 +527,10 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			// add emissions to totals for report
 			for pol, emis := range record.ANN_EMIS {
 				if _, ok := config.PolsToKeep[pol]; ok {
-					fInfo.Totals[pol] += emis.val
+					fInfo.Totals[pol] += emis.Val
 				} else {
 					// delete value if we don't want to keep it
-					fInfo.DroppedTotals[pol] += emis.val
+					fInfo.DroppedTotals[pol] += emis.Val
 					delete(record.ANN_EMIS, pol)
 				}
 			}
