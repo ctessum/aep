@@ -1,15 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	// Imports below this line are for performance profiling: comment them out for production running
+
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -27,7 +29,7 @@ func main() {
 		"   Copyright 2012 Chris Tessum\n",
 		"-------------------------------------\n")
 
-	// HTTP server for performance profiling. Comment these three lines out for production running.
+	// HTTP server for performance profiling.
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -36,7 +38,9 @@ func main() {
 	// Read from configuration file and prepare sectors for processing
 	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")
 	var configFile *string = flag.String("config", "none", "Path to configuration file")
+	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
 	flag.Parse()
+
 	if *configFile == "none" {
 		fmt.Println("Please set `-config' flag and run again: ie: aep -config=/path/to/config_file")
 		fmt.Println("For more information try typing `aep --help'")
@@ -49,8 +53,32 @@ func main() {
 
 	// parse configuration file
 	ConfigAll := ReadConfigFile(configFile, e)
+
+	if *reportOnly {
+		// The reportServer function will run forever (go to localhost:8080 in web browser to view report).
+		file := filepath.Join(ConfigAll.Dirs.Logs, "Report.json")
+		f, err := os.Open(file)
+		if err != nil {
+			panic(err)
+		}
+		reader := bufio.NewReader(f)
+		bytes, err := ioutil.ReadAll(reader)
+		if err != nil {
+			panic(err)
+		}
+		err = json.Unmarshal(bytes, Report)
+		if err != nil {
+			panic(err)
+		}
+		ReportServer()
+	}
+
 	Report.Config = ConfigAll.DefaultSettings
 	Report.SectorResults = make(map[string]map[string]*Results)
+
+	// Start server for html report (go to localhost:8080 in web browser to view report)
+	// Here, we run the report server in the background while the rest of the program is running.
+	go ReportServer()
 
 	runChan := make(chan string, 1)
 

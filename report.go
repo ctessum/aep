@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
+	"html/template"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -97,44 +99,6 @@ func (c *RunData) ErrorReport(errmesg interface{}) {
 	return
 }
 
-func (c *RunData) ConfigReport() {
-	path := filepath.Join(c.sectorLogs, c.Sector+"_configuration.csv")
-	rep, err := os.Create(path)
-	defer rep.Close()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Fprintf(rep, "sector: %v\n", c.Sector)
-	fmt.Fprintf(rep, "sectorType: %v\n", c.SectorType)
-	fmt.Fprintf(rep, "sectorLogs: %v\n", c.sectorLogs)
-	fmt.Fprintf(rep, "startDate: %v\n", c.startDate)
-	fmt.Fprintf(rep, "endDate: %v\n", c.endDate)
-	fmt.Fprintf(rep, "tStep: %v\n", c.tStep)
-	fmt.Fprintf(rep, "outputType: %v\n", c.OutputType)
-	fmt.Fprintf(rep, "specRef: %v\n", c.SpecRefFile)
-	fmt.Fprintf(rep, "specRefCombo: %v\n", c.SpecRefComboFile)
-	fmt.Fprintf(rep, "specProFile: %v\n", c.SpecProFile)
-	fmt.Fprintf(rep, "specType: %v\n", c.SpecType)
-	fmt.Fprintf(rep, "SpeciesGroupName: %v\n", c.SpeciesGroupName)
-	fmt.Fprintf(rep, "PolsToKeep: %v\n", c.PolsToKeep)
-	fmt.Fprintf(rep, "GridRefFile: %v\n", c.GridRefFile)
-	fmt.Fprintf(rep, "SrgSpecFile: %v\n", c.SrgSpecFile)
-	fmt.Fprintf(rep, "TemporalRefFile: %v\n", c.TemporalRefFile)
-	fmt.Fprintf(rep, "CaseName: %v\n", c.CaseName)
-	fmt.Fprintf(rep, "inventoryFreq: %v\n", c.InventoryFreq)
-	fmt.Fprintf(rep, "inputUnits: %v\n", c.InputUnits)
-	fmt.Fprintf(rep, "inputConv: %v\n", c.InputConv)
-	fmt.Fprintf(rep, "EarthRadius: %v\n", c.EarthRadius)
-	fmt.Fprintf(rep, "WpsNamelist: %v\n", c.WpsNamelist)
-	fmt.Fprintf(rep, "SimuationName: %v\n", c.SimulationName)
-	fmt.Fprintf(rep, "RegenerateSpatialData: %v\n", c.RegenerateSpatialData)
-	_, err = fmt.Fprintf(rep, "invFileNames: %v\n", c.InvFileNames)
-	if err != nil {
-		panic(err)
-	}
-	return
-}
-
 type ReportHolder struct {
 	Config        *RunData
 	SectorResults map[string]map[string]*Results // map[sector][period]Results
@@ -162,7 +126,7 @@ func (c *RunData) ResultMaps(
 			if err != nil {
 				panic(err)
 			}
-			filename := filepath.Join(dir,tableName+"_"+pol+".tif")
+			filename := filepath.Join(dir, tableName+"_"+pol+".tif")
 			pg.WriteOutRaster(c.SimulationName, tableName, pol, filename)
 		}
 	}
@@ -411,4 +375,70 @@ func (c *RunData) NAICSdesc() (map[string]string, error) {
 
 func cleanDescription(d string) string {
 	return "\"" + strings.Replace(strings.Trim(d, "\n"), "\"", "", -1) + "\""
+}
+
+// HTML report server
+
+type htmlData struct {
+	PageName    string
+	IsConfigure bool
+	IsSpec      bool
+	IsSpatial   bool
+}
+
+func configHandler(w http.ResponseWriter, r *http.Request) {
+	pageData := new(htmlData)
+	pageData.PageName = "Configuration"
+	pageData.IsConfigure = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	renderBodyTemplate(w, "config")
+	renderHeaderFooter(w, "footer", pageData)
+}
+
+func speciateHandler(w http.ResponseWriter, r *http.Request) {
+	pageData := new(htmlData)
+	pageData.PageName = "Speciation"
+	pageData.IsSpec = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	//	renderBodyTemplate(w, "speciate")
+	renderHeaderFooter(w, "footer", pageData)
+}
+
+func spatialHandler(w http.ResponseWriter, r *http.Request) {
+	pageData := new(htmlData)
+	pageData.PageName = "Gridding"
+	pageData.IsSpatial = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	//	renderBodyTemplate(w, "spatial")
+	renderHeaderFooter(w, "footer", pageData)
+}
+
+var templates = template.Must(template.ParseFiles("reportfiles/config.html", "reportfiles/header.html", "reportfiles/nav.html", "reportfiles/footer.html"))
+
+func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
+	err := templates.ExecuteTemplate(w, tmpl+".html", Report)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func renderHeaderFooter(w http.ResponseWriter, tmpl string, data *htmlData) {
+	err := templates.ExecuteTemplate(w, tmpl+".html", data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func ReportServer() {
+	http.Handle("/css/", http.StripPrefix("/css/",
+		http.FileServer(http.Dir("reportfiles/css"))))
+	http.Handle("/js/", http.StripPrefix("/js/",
+		http.FileServer(http.Dir("reportfiles/js"))))
+	http.HandleFunc("/speciate", speciateHandler)
+	http.HandleFunc("/spatial", spatialHandler)
+	http.HandleFunc("/", configHandler)
+	http.ListenAndServe(":8080", nil)
 }
