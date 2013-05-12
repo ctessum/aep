@@ -241,10 +241,13 @@ func (sp *SpecProf) GetProfileGas(number string,
 	if err != nil {
 		panic(err)
 	}
-	if tempConvFac.Valid {
+	if tempConvFac.Valid && !c.testMode {
 		convFac = tempConvFac.Float64
 	} else {
-		convFac = 0.
+		convFac = 1.
+		msg := fmt.Sprintf("VOC to TOG conversion factor is missing for "+
+			"SPECIATE pollutant ID %v. Setting it to 1.0.", number)
+		c.Log(msg,1)
 	}
 
 	rows, err := sp.db.Query("select species_id,weight_per from " +
@@ -327,9 +330,9 @@ func (sp *SpecProf) GetProfileGas(number string,
 	}
 	rows.Close()
 
-	if AbsBias(totalWeight, total) > 0.001 {
+	if AbsBias(totalWeight, 100.0) > 0.00001 {
 		err = fmt.Errorf("For Gas speciation profile %v, sum of species weights"+
-			" (%v) does not match profile total (%v)", totalWeight, total)
+			" (%v) is not equal to 100 percent", totalWeight)
 		panic(err)
 	}
 	return

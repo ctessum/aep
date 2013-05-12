@@ -39,6 +39,7 @@ func main() {
 	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")
 	var configFile *string = flag.String("config", "none", "Path to configuration file")
 	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
+	var testmode *bool = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
 	flag.Parse()
 
 	if *configFile == "none" {
@@ -52,7 +53,7 @@ func main() {
 	sectors := strings.Split(*sectorFlag, " ")
 
 	// parse configuration file
-	ConfigAll := ReadConfigFile(configFile, e)
+	ConfigAll := ReadConfigFile(configFile, testmode, e)
 
 	if *reportOnly {
 		// The reportServer function will run forever (go to localhost:8080 in web browser to view report).

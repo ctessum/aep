@@ -19,6 +19,8 @@ type FileInfo struct {
 	Country       string
 	Totals        map[string]float64
 	DroppedTotals map[string]float64
+	Units         string  // Units for emissions values
+	InputConv     float64 // factor for converting emissions to grams
 	polid         string
 	fid           *os.File
 	buf           *bufio.Reader
@@ -292,7 +294,7 @@ func (c RunData) parseRecordMobileORL(record string, fInfo *FileInfo) *ParsedRec
 	fields.SCC = strings.Trim(splitString[1], "\" ")
 	pol := strings.Trim(splitString[2], "\" ")
 	fields.AVD_EMIS[pol], err = strconv.ParseFloat(strings.Trim(splitString[4], "\""), 64)
-	if err != nil || fields.AVD_EMIS[pol] < 0.{
+	if err != nil || fields.AVD_EMIS[pol] < 0. {
 		fields.AVD_EMIS[pol] = 0.
 	}
 	fields.ANN_EMIS[pol] = new(specValUnits)
@@ -479,7 +481,7 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			file = strings.Replace(file, "[month]", period, -1)
 		}
 		config.Log("Checking file "+file+" for possible double counting", 1)
-		fInfo := OpenFile(file)
+		fInfo := config.OpenFile(file)
 		for {
 			record, EOF := fInfo.ParseLine(config)
 			if EOF {
@@ -511,7 +513,7 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			file = strings.Replace(file, "[month]", period, -1)
 		}
 		config.Log("Processing file "+file, 1)
-		fInfo := OpenFile(file)
+		fInfo := config.OpenFile(file)
 		for {
 			record, EOF := fInfo.ParseLine(config)
 			if EOF {
@@ -549,12 +551,14 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 	}
 }
 
-func OpenFile(file string) (fInfo *FileInfo) {
+func (config *RunData) OpenFile(file string) (fInfo *FileInfo) {
 	var record string
 	var err error
 	fInfo = newFileInfo()
 	fInfo.fname = file
 	fInfo.fid, err = os.Open(file)
+	fInfo.Units = config.InputUnits
+	fInfo.InputConv = config.InputConv
 	if err != nil {
 		err = fmt.Errorf("While opening file %v\n Error= %v",
 			file, err.Error())
