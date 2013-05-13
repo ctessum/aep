@@ -413,7 +413,7 @@ FROM srgSelect
 UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}})
-SELECT geom AS geom, ST_PointOnSurface(geom) AS pip
+SELECT geom AS geom, ST_Line_Interpolate_Point(geom,0.5) AS pip
 FROM St_Dump((SELECT St_Union(ST_snaptogrid(geom,
 	{{.SnapDistance}})) AS geom FROM all_lines));
 {{end}}{{if .Point}}
@@ -431,7 +431,7 @@ SELECT c.gid AS grid_gid, b.{{.ShapeColumn}}, a.gid AS srg_gid,
 {{if .Line}} a.weight * ST_Length(p.geom) AS weight {{end}}
 {{if .Point}} a.weight AS weight {{end}}
 FROM new_shapes p
-RIGHT JOIN srgSelect a ON St_Within(p.pip, a.geom)
+RIGHT JOIN srgSelect a ON {{if .Line}}p.geom && a.geom AND ST_distance(p.pip,a.geom) < 1.e-9{{else}}St_Within(p.pip, a.geom){{end}}
 RIGHT JOIN shapeSelect b ON St_Within(p.pip, b.geom)
 LEFT JOIN {{.Grid.Schema}}.{{.Grid.Name}} c ON St_Within(p.pip, c.geom)),
 shapeTotals AS (select {{.ShapeColumn}},sum(weight) AS weight FROM polyWithAttributes

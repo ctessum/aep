@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+const tolerance = 1.e-9 // fractional difference between two numbers where they can be considered the same
+
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
 func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 	specRef = make(map[string]map[string]string)
@@ -138,11 +140,9 @@ func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 }
 
 type SpecProf struct {
-	db         *sql.DB
-	sRef       map[string]map[string]string             // map[SCC][pol]code
-	sRefCombo  map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
-	sPro       map[string]map[string]*specHolder        //map[code][NewPol]fracs
-	droppedPro map[string]map[string]*specHolder        //map[code][NewPol]fracs
+	db        *sql.DB
+	sRef      map[string]map[string]string             // map[SCC][pol]code
+	sRefCombo map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
 }
 
 func (c *RunData) NewSpecProf() (sp *SpecProf, err error) {
@@ -153,8 +153,6 @@ func (c *RunData) NewSpecProf() (sp *SpecProf, err error) {
 	if err != nil {
 		return
 	}
-	sp.sPro = make(map[string]map[string]*specHolder)
-	sp.droppedPro = make(map[string]map[string]*specHolder)
 	return
 }
 
@@ -166,7 +164,7 @@ type specHolder struct {
 // A default speciation profile for when we don't have any other
 // information.
 func (sp *SpecProf) DefaultProfile(pol string) (profile map[string]*specHolder) {
-	// We don't know the molecular weight, so don't 
+	// We don't know the molecular weight, so don't
 	// perform any conversion
 	profile = make(map[string]*specHolder)
 	profile[pol] = new(specHolder)
@@ -176,7 +174,7 @@ func (sp *SpecProf) DefaultProfile(pol string) (profile map[string]*specHolder) 
 }
 
 func (sp *SpecProf) GetProfileSingleSpecies(pol string, c *RunData) (
-	profile map[string]*specHolder) {
+	profile map[string]*specHolder, droppedNotInGroup map[string]*specHolder) {
 	var tempMW sql.NullFloat64
 	var MW float64
 	var group sql.NullString
@@ -196,7 +194,7 @@ func (sp *SpecProf) GetProfileSingleSpecies(pol string, c *RunData) (
 			" in SPECIATE database.", pol)
 		panic(err)
 	}
-	if tempgroupfactor.Valid {
+	if tempgroupfactor.Valid && !c.testMode {
 		groupfactor = tempgroupfactor.Float64
 	} else {
 		groupfactor = 1.0
@@ -213,12 +211,13 @@ func (sp *SpecProf) GetProfileSingleSpecies(pol string, c *RunData) (
 		err = fmt.Errorf("Invalid specType %v. Options are \"mass\" "+
 			"and \"mol\"", c.SpecType)
 	}
-	profile = make(map[string]*specHolder)
 	if group.Valid { // If pollutant is part of a species group, add to the group
+		profile = make(map[string]*specHolder)
 		profile[group.String] = x
-		profile[group.String].factor += x.factor * groupfactor
+		profile[group.String].factor *= groupfactor
 	} else {
-		profile[pol] = x
+		droppedNotInGroup = make(map[string]*specHolder)
+		droppedNotInGroup[pol] = x
 	}
 	return
 }
@@ -247,7 +246,7 @@ func (sp *SpecProf) GetProfileGas(number string,
 		convFac = 1.
 		msg := fmt.Sprintf("VOC to TOG conversion factor is missing for "+
 			"SPECIATE pollutant ID %v. Setting it to 1.0.", number)
-		c.Log(msg,1)
+		c.Log(msg, 1)
 	}
 
 	rows, err := sp.db.Query("select species_id,weight_per from " +
@@ -298,27 +297,27 @@ func (sp *SpecProf) GetProfileGas(number string,
 		switch c.SpecType {
 		case "mol":
 			x.factor = convFac * weightPercent /
-				100. / MW
+				100. / MW * 100 / total
 			x.units = "mol/gram"
 		case "mass":
 			x.factor = convFac * weightPercent /
-				100.
+				100. * 100 / total
 			x.units = "gram/gram"
 		default:
 			err = fmt.Errorf("Invalid specType %v. Options are \"mass\" "+
 				"and \"mol\"", c.SpecType)
 		}
-		if group.Valid && IsStringInArray(doubleCountPols, specName) {
+		if group.Valid && !IsStringInArray(doubleCountPols, specName) {
 			// If pollutant is part of a species group, and it isn't
 			// double counting an explicit emissions record,
 			// add to the group
-			if _, ok := sp.sPro[number][group.String]; !ok {
+			if _, ok := profile[group.String]; !ok {
 				profile[group.String] = new(specHolder)
-			} else if x.units != sp.sPro[number][group.String].units {
+				profile[group.String].units = x.units
+			} else if x.units != profile[group.String].units {
 				err = fmt.Errorf("Units %v and %v don't match", x.units,
 					profile[group.String].units)
 			}
-			fmt.Println(x.factor, groupfactor)
 			profile[group.String].factor += x.factor * groupfactor
 		} else if !group.Valid {
 			// ungrouped pollutants
@@ -330,9 +329,9 @@ func (sp *SpecProf) GetProfileGas(number string,
 	}
 	rows.Close()
 
-	if AbsBias(totalWeight, 100.0) > 0.00001 {
+	if c.testMode && AbsBias(totalWeight, total) > tolerance {
 		err = fmt.Errorf("For Gas speciation profile %v, sum of species weights"+
-			" (%v) is not equal to 100 percent", totalWeight)
+			" (%v) is not equal to total (%v)", number, totalWeight, total)
 		panic(err)
 	}
 	return
@@ -369,10 +368,10 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	}
 
 	if c.PolsToKeep[pol].SpecNames != nil {
-		// For explicit species, convert the value to moles 
-		// if required and add the emissions to a species group 
+		// For explicit species, convert the value to moles
+		// if required and add the emissions to a species group
 		// if one exists
-		specFactors = sp.GetProfileSingleSpecies(
+		specFactors, ungroupedSpecFactors = sp.GetProfileSingleSpecies(
 			c.PolsToKeep[pol].SpecNames[0], c)
 	} else {
 		switch c.PolsToKeep[pol].SpecType {
@@ -395,15 +394,9 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 						tempSpecFactors := make(map[string]*specHolder)
 						tempDoubleCountSpecFactors := make(map[string]*specHolder)
 						tempUngroupedSpecFactors := make(map[string]*specHolder)
-						tempSpecFactors, ok = sp.sPro[code2]
-						if !ok || record.DoubleCountPols != nil {
-							tempSpecFactors, tempDoubleCountSpecFactors,
-								tempUngroupedSpecFactors =
-								sp.GetProfileGas(code2, record.DoubleCountPols, c)
-							if record.DoubleCountPols == nil {
-								sp.sPro[code2] = tempSpecFactors
-							}
-						}
+						tempSpecFactors, tempDoubleCountSpecFactors,
+							tempUngroupedSpecFactors =
+							sp.GetProfileGas(code2, record.DoubleCountPols, c)
 						for pol, val := range tempSpecFactors {
 							if _, ok := specFactors[pol]; !ok {
 								specFactors[pol] = new(specHolder)
@@ -442,15 +435,9 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 						}
 					}
 				} else {
-					specFactors, ok = sp.sPro[code]
-					if !ok || record.DoubleCountPols != nil {
-						specFactors, doubleCountSpecFactors,
-							ungroupedSpecFactors = sp.GetProfileGas(
-							code, record.DoubleCountPols, c)
-						if record.DoubleCountPols == nil {
-							sp.sPro[code] = specFactors
-						}
-					}
+					specFactors, doubleCountSpecFactors,
+						ungroupedSpecFactors = sp.GetProfileGas(
+						code, record.DoubleCountPols, c)
 				}
 			} else { // no speciation profile reference is found
 				specFactors = sp.DefaultProfile(pol)
@@ -465,6 +452,23 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 			panic("In PolsToKeep, either `SpecNames' or `SpecType" +
 				" needs to be specified. `SpecType' can only be VOC, " +
 				"PM2.5, NOx, or SOx")
+		}
+	}
+	if c.testMode { // fractions only add up to 1 in test mode.
+		fracSum := 0.
+		for _, data := range specFactors {
+			fracSum += data.factor
+		}
+		for _, data := range doubleCountSpecFactors {
+			fracSum += data.factor
+		}
+		for _, data := range ungroupedSpecFactors {
+			fracSum += data.factor
+		}
+		if AbsBias(fracSum, 1.0) > tolerance {
+			err = fmt.Errorf("Sum of speciation fractions (%v) for pollutant %v "+
+				"is not equal to 1.", fracSum, pol)
+			panic(err)
 		}
 	}
 	return
@@ -532,12 +536,12 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 	*h = t
 }
 
-// Check if there is a speciation record for this 
+// Check if there is a speciation record for this
 // SCC/pollutant combination.If not, check if the pollutant
 // is in the list of pollutants to drop. If it is not in the
 // drop list, transfer it to the speciated record without any
-// speciating. Otherwise, add it to the totals of dropped 
-// pollutants. If the record is a speciatable record, multiply the 
+// speciating. Otherwise, add it to the totals of dropped
+// pollutants. If the record is a speciatable record, multiply the
 // annual emissions by the speciation factors. Multiply all
 // speciated emissions by a conversion factor from the input
 // units to g/year.
