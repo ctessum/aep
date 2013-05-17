@@ -313,7 +313,7 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		FilterString += ")"
 	}
 
-	snapDistance := 1. // increase this to avoid "found non-noded intersection" errors
+	snapDistance := "1.e-8" // try changing this to fix "found non-noded intersection" errors
 
 	type holder struct {
 		ShapeTbl          string
@@ -334,7 +334,7 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		Line              bool
 		Point             bool
 		UseFilter         bool
-		SnapDistance      float64
+		SnapDistance      string
 	}
 	shapeSRID := pg.GetSRID(shapefileSchema, shapeTable)
 	srgSRID := pg.GetSRID(shapefileSchema, surrogateTable)
@@ -359,8 +359,7 @@ CREATE TEMP TABLE shapeSelect ON COMMIT DROP AS
 WITH 
 gridbdy AS (select ST_BuildArea(ST_Boundary(ST_Union(geom))) 
 	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}})
-SELECT a.{{.ShapeColumn}},ST_SnapToGrid(
-	ST_Transform(a.geom,{{.Grid.SRID}}),{{.SnapDistance}}) as geom 
+SELECT a.{{.ShapeColumn}},ST_Transform(a.geom,{{.Grid.SRID}}) as geom 
 	FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridbdy b
 WHERE ST_Intersects(a.geom, ST_Transform(b.geom,{{.ShapeSRID}}));
 CREATE INDEX shapeSelect_gix ON shapeSelect USING GIST (geom);
@@ -370,20 +369,16 @@ CREATE TEMP TABLE srgSelect ON COMMIT DROP AS
 WITH
 shapebdy AS (select ST_Transform(ST_BuildArea(ST_Boundary(ST_Union(geom))),
 	{{.SrgSRID}}) AS geom FROM shapeSelect)
-SELECT a.gid, ST_SnapToGrid(ST_Transform(a.geom,{{.Grid.SRID}}),
-	{{.SnapDistance}}) as geom,
-{{if .PolygonWithWeight}} ({{.WeightColumns}})/ST_Area(a.geom) AS weight {{else}}
-{{if .LineWithWeight}} ({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}
-{{if .PointWithWeight}} {{.WeightColumns}} AS weight {{else}}
-	1.0 as weight
-{{end}} {{end}} {{end}}
+SELECT a.gid, ST_Transform(a.geom,{{.Grid.SRID}}) as geom,{{if .PolygonWithWeight}} 
+({{.WeightColumns}})/ST_Area(a.geom) AS weight {{else}}{{if .LineWithWeight}} 
+({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}{{if .PointWithWeight}} 
+{{.WeightColumns}} AS weight {{else}}1.0 as weight{{end}} {{end}} {{end}}
 	FROM {{.ShapefileSchema}}."{{.SrgTbl}}" a, shapebdy b
 WHERE ST_Intersects(a.geom,b.geom){{if .UseFilter}} {{.FilterString}}{{end}}{{if .WithWeight}} AND ({{.WeightColumns}})!=0.{{end}};
 CREATE INDEX srgSelect_gix ON srgSelect USING GIST (geom);
 ANALYZE srgSelect;
   
-{{if .Polygon}}
-CREATE TEMP TABLE new_shapes ON COMMIT DROP AS 
+{{if .Polygon}}CREATE TEMP TABLE new_shapes ON COMMIT DROP AS 
 WITH
 all_lines AS( 
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
@@ -395,7 +390,7 @@ UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}}),
 noded_lines AS (
-SELECT St_Union(geom) AS geom
+SELECT St_Union(ST_snaptogrid(geom,{{.SnapDistance}})) AS geom
 FROM all_lines) 
 SELECT geom AS geom, ST_PointOnSurface(geom) AS pip
 FROM St_Dump((
@@ -426,12 +421,12 @@ ANALYZE new_shapes;
 CREATE TABLE {{.Grid.Schema}}.{{.OutName}} AS
 WITH
 polyWithAttributes AS (
-SELECT c.gid AS grid_gid, b.{{.ShapeColumn}}, a.gid AS srg_gid, 
-{{if .Polygon}} a.weight * ST_Area(p.geom) AS weight {{end}}
-{{if .Line}} a.weight * ST_Length(p.geom) AS weight {{end}}
-{{if .Point}} a.weight AS weight {{end}}
+SELECT c.gid AS grid_gid, b.{{.ShapeColumn}}, a.gid AS srg_gid, {{if .Polygon}} 
+a.weight * ST_Area(p.geom) AS weight {{end}}{{if .Line}} 
+a.weight * ST_Length(p.geom) AS weight {{end}}{{if .Point}} 
+a.weight AS weight {{end}}
 FROM new_shapes p
-RIGHT JOIN srgSelect a ON {{if .Line}}p.geom && a.geom AND ST_distance(p.pip,a.geom) < 1.e-9{{else}}St_Within(p.pip, a.geom){{end}}
+RIGHT JOIN srgSelect a ON {{if .Line}}p.geom && a.geom AND ST_distance(p.pip,a.geom) < {{.SnapDistance}}{{else}}St_Within(p.pip, a.geom){{end}}
 RIGHT JOIN shapeSelect b ON St_Within(p.pip, b.geom)
 LEFT JOIN {{.Grid.Schema}}.{{.Grid.Name}} c ON St_Within(p.pip, c.geom)),
 shapeTotals AS (select {{.ShapeColumn}},sum(weight) AS weight FROM polyWithAttributes

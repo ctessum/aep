@@ -35,6 +35,7 @@ func (c *RunData) ErrorRecover(msgchan chan string) {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
+		Status.Sectors[c.Sector] = "Failed!"
 		msgchan <- c.Sector + " failed!"
 	}
 }
@@ -50,6 +51,7 @@ func (c *RunData) ErrorRecoverCloseChan(msgchan chan string,
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
+		Status.Sectors[c.Sector] = "Failed!"
 		msgchan <- c.Sector + " failed!"
 		close(recordChan)
 	}
@@ -96,18 +98,33 @@ func (c *RunData) ErrorReport(errmesg interface{}) {
 	err += fmt.Sprintf("%s\n", debug.Stack())
 	err += "--------------------------\n"
 	fmt.Print(err)
+	Status.ErrorMessages += err + "\n\n"
 	return
 }
 
 type ReportHolder struct {
 	Config        *RunData
 	SectorResults map[string]map[string]*Results // map[sector][period]Results
+	ReportOnly    bool                           // whether main program is running at the same time
 }
 
 type Results struct {
 	InventoryResults  map[string]*FileInfo
 	SpeciationResults *SpecTotals
 	SpatialResults    *SpatialTotals
+}
+
+type StatusHolder struct {
+	Sectors       map[string]string
+	Surrogates    map[string]string
+	ErrorMessages string
+}
+
+func NewStatus() *StatusHolder {
+	out := new(StatusHolder)
+	out.Sectors = make(map[string]string)
+	out.Surrogates = make(map[string]string)
+	return out
 }
 
 // Prepare maps of emissions for each species and domain.
@@ -380,14 +397,24 @@ func cleanDescription(d string) string {
 // HTML report server
 
 type htmlData struct {
-	PageName    string
-	IsConfigure bool
-	IsSpec      bool
-	IsSpatial   bool
+	PageName      string
+	IncludeStatus bool
+	IsConfigure   bool
+	IsStatus      bool
+	IsSpec        bool
+	IsSpatial     bool
+}
+
+func newHtmlData() *htmlData {
+	data := new(htmlData)
+	if !Report.ReportOnly {
+		data.IncludeStatus = true
+	}
+	return data
 }
 
 func configHandler(w http.ResponseWriter, r *http.Request) {
-	pageData := new(htmlData)
+	pageData := newHtmlData()
 	pageData.PageName = "Configuration"
 	pageData.IsConfigure = true
 	renderHeaderFooter(w, "header", pageData)
@@ -396,8 +423,21 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 	renderHeaderFooter(w, "footer", pageData)
 }
 
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	if Report.ReportOnly {
+		http.Redirect(w, r, "/config", http.StatusFound)
+	}
+	pageData := newHtmlData()
+	pageData.PageName = "Status"
+	pageData.IsStatus = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	renderStatusTemplate(w)
+	renderHeaderFooter(w, "footer", pageData)
+}
+
 func speciateHandler(w http.ResponseWriter, r *http.Request) {
-	pageData := new(htmlData)
+	pageData := newHtmlData()
 	pageData.PageName = "Speciation"
 	pageData.IsSpec = true
 	renderHeaderFooter(w, "header", pageData)
@@ -407,7 +447,7 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func spatialHandler(w http.ResponseWriter, r *http.Request) {
-	pageData := new(htmlData)
+	pageData := newHtmlData()
 	pageData.PageName = "Gridding"
 	pageData.IsSpatial = true
 	renderHeaderFooter(w, "header", pageData)
@@ -416,10 +456,48 @@ func spatialHandler(w http.ResponseWriter, r *http.Request) {
 	renderHeaderFooter(w, "footer", pageData)
 }
 
-var templates = template.Must(template.ParseFiles("reportfiles/config.html", "reportfiles/header.html", "reportfiles/nav.html", "reportfiles/footer.html"))
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	if Report.ReportOnly {
+		http.Redirect(w, r, "/config", http.StatusFound)
+	} else {
+		http.Redirect(w, r, "/status", http.StatusFound)
+	}
+}
+
+func init() {
+	template.Must(templates.Funcs(
+		template.FuncMap{"class": TableClass}).ParseFiles(
+		"reportfiles/config.html", "reportfiles/status.html",
+		"reportfiles/header.html", "reportfiles/nav.html",
+		"reportfiles/footer.html"))
+}
+
+var templates = template.New("x")
+
+func TableClass(in string) string {
+	if strings.Index(in, "Running") >= 0 {
+		return "info"
+	} else if in == "Failed!" {
+		return "error"
+	} else if in == "Finished" {
+		return "success"
+	} else if in == "Ready" {
+		return "success"
+	} else if in == "Generating" {
+		return "info"
+	} else {
+		return "warning"
+	}
+}
 
 func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	err := templates.ExecuteTemplate(w, tmpl+".html", Report)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+func renderStatusTemplate(w http.ResponseWriter) {
+	err := templates.ExecuteTemplate(w, "status.html", Status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -439,6 +517,8 @@ func ReportServer() {
 		http.FileServer(http.Dir("reportfiles/js"))))
 	http.HandleFunc("/speciate", speciateHandler)
 	http.HandleFunc("/spatial", spatialHandler)
-	http.HandleFunc("/", configHandler)
+	http.HandleFunc("/config", configHandler)
+	http.HandleFunc("/status", statusHandler)
+	http.HandleFunc("/", rootHandler)
 	http.ListenAndServe(":8080", nil)
 }

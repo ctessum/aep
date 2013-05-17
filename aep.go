@@ -19,6 +19,7 @@ import (
 var (
 	TotalReportChan = make(chan *ParsedRecord)
 	Report          = new(ReportHolder)
+	Status          *StatusHolder
 )
 
 func main() {
@@ -71,11 +72,16 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+		Report.ReportOnly = *reportOnly
 		ReportServer()
 	}
 
+	Report.ReportOnly = *reportOnly
 	Report.Config = ConfigAll.DefaultSettings
 	Report.SectorResults = make(map[string]map[string]*Results)
+
+	// track status of all of the running sectors
+	Status = NewStatus()
 
 	// Start server for html report (go to localhost:8080 in web browser to view report)
 	// Here, we run the report server in the background while the rest of the program is running.
@@ -91,7 +97,7 @@ func main() {
 		go DiscardRecords(runChan)
 	}
 
-	// start surrogate generator subroutine
+	// Set up spatial environment
 	if ConfigAll.DefaultSettings.Spatialize {
 		ConfigAll.DefaultSettings.SpatialSetup(e)
 		err := ConfigAll.DefaultSettings.SurrogateSpecification()
@@ -168,11 +174,15 @@ func (c RunData) Run(runChan chan string) {
 		c.nextTime()
 	}
 
+	if Status.Sectors[c.Sector] != "Failed!" {
+		Status.Sectors[c.Sector] = "Finished"
+	}
 	runChan <- "Finished processing " + c.Sector
 }
 
 // Set up the correct subroutines to run for each sector and period
 func (c RunData) RunPeriod(period string) {
+	Status.Sectors[c.Sector] = "Running " + period
 	MesgChan := make(chan string, 1)
 	n := 0 // number of subroutines that we need to wait to finish
 
