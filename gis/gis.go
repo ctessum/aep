@@ -206,6 +206,20 @@ func (pg *PostGis) VacuumAnalyze(schema, name string) error {
 	return err
 }
 
+func (pg *PostGis) Vacuum() error {
+	cmd := "VACUUM;"
+	Log(cmd, 3)
+	_, err := pg.db.Exec(cmd)
+	return err
+}
+
+func (pg *PostGis) Rollback() error {
+	cmd := "ROLLBACK;"
+	Log(cmd, 3)
+	_, err := pg.db.Exec(cmd)
+	return err
+}
+
 func (pg *PostGis) GetSRID(schema, name string) (SRID int) {
 	cmd := fmt.Sprintf("SELECT ST_SRID(geom) FROM %v.\"%v\" LIMIT 1;", schema, name)
 	Log(cmd, 3)
@@ -313,8 +327,6 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		FilterString += ")"
 	}
 
-	snapDistance := "1.e-8" // try changing this to fix "found non-noded intersection" errors
-
 	type holder struct {
 		ShapeTbl          string
 		ShapeColumn       string
@@ -349,7 +361,7 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		(srgType == "line"),
 		(srgType == "point"),
 		(FilterFunction != nil),
-		snapDistance}
+		"0"}
 
 	Log("Creating gridding surrogate "+grid.Schema+"."+OutName+"...", 0)
 
@@ -443,18 +455,39 @@ COMMIT;`
 
 	pg.DropTable(grid.Schema, OutName)
 	t2 := template.Must(template.New("CreateSurrogate").Parse(t))
-	var b bytes.Buffer
-	err = t2.Execute(&b, data)
-	if err != nil {
-		return
-	}
-	cmd := b.String()
-	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
-	if err != nil {
-		return
+
+	// try multiple snap distances to circumvent
+	// "found non-noded intersection" errors
+	snapdistances := []string{"1.e-10", "1.e-8", "1.e-4", "1"}
+	for i, j := range snapdistances {
+		data.SnapDistance = j
+		var b bytes.Buffer
+		err = t2.Execute(&b, data)
+		if err != nil {
+			return
+		}
+		cmd := b.String()
+		Log(cmd, 3)
+		_, err = pg.db.Exec(cmd)
+		if err == nil {
+			break
+		} else if strings.Index(err.Error(),
+			"TopologyException: found non-noded intersection") == -1 ||
+			i == len(snapdistances)-1 {
+			return
+		} else {
+			msg := fmt.Sprintf("Surrogate generation for %v_%v with "+
+				"SnapDistance=%v failed. Trying again with larger SnapDistance.",
+				grid.Schema, OutName, data.SnapDistance)
+			Log(msg, 0)
+			pg.Vacuum()
+			pg.Rollback()
+		}
 	}
 	err = pg.VacuumAnalyze(grid.Schema, OutName)
+	if err != nil {
+		return
+	}
 
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.%v.", grid.Schema,
 		OutName), 0)
@@ -619,13 +652,13 @@ COMMIT;`
 //
 //	const t = `
 //BEGIN;
-//INSERT INTO {{.Schema}}.{{.TableName}}(name,rast) 
-//VALUES 
-//('{{.RowName}}',ST_MakeEmptyRaster({{.Nx}}, {{.Ny}}, {{.X0}}, {{.Y0}}, 
+//INSERT INTO {{.Schema}}.{{.TableName}}(name,rast)
+//VALUES
+//('{{.RowName}}',ST_MakeEmptyRaster({{.Nx}}, {{.Ny}}, {{.X0}}, {{.Y0}},
 //	{{.Dx}}, {{.Dy}}, 0., 0., {{.SRID}}));
 //
 //UPDATE {{.Schema}}.{{.TableName}}
-//SET rast=ST_AddBand(rast,'64BF'::text,0.)  
+//SET rast=ST_AddBand(rast,'64BF'::text,0.)
 //WHERE name='{{.RowName}}';
 //
 //UPDATE {{.Schema}}.{{.TableName}}

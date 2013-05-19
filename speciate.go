@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const tolerance = 1.e-9 // fractional difference between two numbers where they can be considered the same
+const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
 
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
 func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {

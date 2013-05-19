@@ -11,9 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var (
@@ -29,12 +26,6 @@ func main() {
 		"Program (A)ir (E)missions (P)rocessor\n",
 		"   Copyright 2012 Chris Tessum\n",
 		"-------------------------------------\n")
-
-	// HTTP server for performance profiling.
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-	//------
 
 	// Read from configuration file and prepare sectors for processing
 	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")

@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -125,6 +126,27 @@ func NewStatus() *StatusHolder {
 	out.Sectors = make(map[string]string)
 	out.Surrogates = make(map[string]string)
 	return out
+}
+
+func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string {
+	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
+		return "Generating"
+	} else if status, ok := s.Surrogates[srg]; ok && status == "Ready" {
+		return "Ready"
+	} else if status, ok := s.Surrogates[srg]; ok && status == "Failed!" {
+		err := fmt.Errorf("Surrogate generation has previously failed for %v.\n",
+			srg)
+		panic(err)
+	} else if _, ok := s.Surrogates[srg]; !ok {
+		if pg.TableExists(schema, srg) {
+			Status.Surrogates[srg] = "Ready"
+			return "Ready"
+		} else {
+			return "Empty"
+		}
+	} else {
+		panic("Unknown status: " + s.Surrogates[srg])
+	}
 }
 
 // Prepare maps of emissions for each species and domain.
@@ -476,7 +498,7 @@ var templates = template.New("x")
 
 func TableClass(in string) string {
 	if strings.Index(in, "Running") >= 0 {
-		return "info"
+		return "warning"
 	} else if in == "Failed!" {
 		return "error"
 	} else if in == "Finished" {
@@ -484,9 +506,9 @@ func TableClass(in string) string {
 	} else if in == "Ready" {
 		return "success"
 	} else if in == "Generating" {
-		return "info"
-	} else {
 		return "warning"
+	} else {
+		return "info"
 	}
 }
 
@@ -520,5 +542,5 @@ func ReportServer() {
 	http.HandleFunc("/config", configHandler)
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/", rootHandler)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":6060", nil)
 }
