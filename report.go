@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -464,7 +465,42 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 	pageData.IsSpec = true
 	renderHeaderFooter(w, "header", pageData)
 	renderHeaderFooter(w, "nav", pageData)
-	//	renderBodyTemplate(w, "speciate")
+	const body1 = `
+<div class="container">
+	<h4>Speciation</h4>
+	<p>(See file Report.json in the log directory for more detail)</p>
+	<div class="row">
+		<div class="span12">
+			<h5>Kept pollutants</h5>
+			<p>These are the emissions that go on to the next modeling step.</p>`
+	fmt.Fprint(w, body1)
+	sectors, pols, units, data := Report.PrepDataReport("Speciation", "Kept")
+	DrawTable("%.4g",sectors, pols, units, data, w)
+	const body2 = `
+		</div>
+	</div>
+	<div class="row">
+		<div class="span12">
+			<h5>Pollutants dropped due to double counting</h5>
+			<p>When there is a general species group (like VOCs) that is speciated into specific chemicals, but some of the specific chemicals are also explicitely tracked in the inventory, there is a possibility for double counting. So for records that include both the general species group and specific data for some of its components the specific components that are explicitly included in the inventory are dropped from the speciation of the general group.</p>`
+	fmt.Fprint(w, body2)
+	sectors, pols, units, data = Report.PrepDataReport("Speciation", "DoubleCounted")
+	DrawTable("%.4g",sectors, pols, units, data, w)
+	const body3 = `
+		</div>
+	</div>
+	<div class="row">
+		<div class="span12">
+			<h5>Pollutants dropped due to lack of a species group</h5>
+			<p>The individual chemicals are lumped into groups for representation in air quality model chemical mechanisms. These are the emissions that do not fit into any of the specified groups.</p>`
+	fmt.Fprint(w, body3)
+	sectors, pols, units, data = Report.PrepDataReport("Speciation", "Ungrouped")
+	DrawTable("%.4g",sectors, pols, units, data, w)
+	const body4 = `
+		</div>
+	</div>
+</div>`
+	fmt.Fprint(w, body4)
 	renderHeaderFooter(w, "footer", pageData)
 }
 
@@ -491,7 +527,7 @@ func init() {
 		template.FuncMap{"class": TableClass}).ParseFiles(
 		"reportfiles/config.html", "reportfiles/status.html",
 		"reportfiles/header.html", "reportfiles/nav.html",
-		"reportfiles/footer.html"))
+		"reportfiles/footer.html", "reportfiles/speciate.html"))
 }
 
 var templates = template.New("x")
@@ -530,6 +566,119 @@ func renderHeaderFooter(w http.ResponseWriter, tmpl string, data *htmlData) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// Organize data in report for making a table or plot.
+// If procType="Spatializaton", then countType is actually the domain
+// (d01, d02 etc).
+func (r *ReportHolder) PrepDataReport(procType, countType string) (
+	sectors, pols []string, units map[string]string,
+	data map[string]map[string]float64) {
+
+	sectors = make([]string, 0)
+	pols = make([]string, 0)
+	units = make(map[string]string, 0)
+	data = make(map[string]map[string]float64)
+
+	for sector, sectorData := range r.SectorResults {
+		data[sector] = make(map[string]float64)
+		sectors = append(sectors, sector)
+		numPeriods := float64(len(sectorData))
+		for _, periodData := range sectorData {
+			switch procType {
+			case "Inventory":
+				for _, fileData := range periodData.InventoryResults {
+					switch countType {
+					case "Totals":
+						for pol, val := range fileData.Totals {
+							if !IsStringInArray(pols, pol) {
+								pols = append(pols, pol)
+								units[pol] = fileData.Units
+							}
+							data[sector][pol] += val / numPeriods
+						}
+					case "DroppedTotals":
+						for pol, val := range fileData.Totals {
+							if !IsStringInArray(pols, pol) {
+								pols = append(pols, pol)
+								units[pol] = fileData.Units
+							}
+							data[sector][pol] += val / numPeriods
+						}
+					}
+				}
+			case "Speciation":
+				switch countType {
+				case "Kept":
+					for pol, poldata := range periodData.SpeciationResults.Kept {
+						if !IsStringInArray(pols, pol) {
+							pols = append(pols, pol)
+							units[pol] = poldata.Units
+						}
+						data[sector][pol] += poldata.Val / numPeriods
+					}
+				case "DoubleCounted":
+					for pol, poldata := range periodData.SpeciationResults.DoubleCounted {
+						if !IsStringInArray(pols, pol) {
+							pols = append(pols, pol)
+							units[pol] = poldata.Units
+						}
+						data[sector][pol] += poldata.Val / numPeriods
+					}
+				case "Ungrouped":
+					for pol, poldata := range periodData.SpeciationResults.Ungrouped {
+						if !IsStringInArray(pols, pol) {
+							pols = append(pols, pol)
+							units[pol] = poldata.Units
+						}
+						data[sector][pol] += poldata.Val / numPeriods
+					}
+				}
+			case "Spatialization":
+				for pol, inData := range periodData.SpatialResults.InsideDomainTotals[countType] {
+					outData := periodData.SpatialResults.
+						OutsideDomainTotals[countType][pol]
+					if !IsStringInArray(pols, pol) {
+						pols = append(pols, pol)
+						units[pol] = inData.Units
+					}
+					// Fraction inside the domain
+					data[sector][pol] += inData.Val /
+						(inData.Val + outData.Val) * 100. / numPeriods
+				}
+			}
+		}
+	}
+	sort.Strings(pols)
+	sort.Strings(sectors)
+	return
+}
+
+func DrawTable(format string, sectors, pols []string,
+	units map[string]string, data map[string]map[string]float64, w io.Writer) {
+	fmt.Fprint(w, "<table class=\"table table-striped\">\n<thead>\n<tr><td></td>")
+	totals := make(map[string]float64)
+	for _, pol := range pols {
+		fmt.Fprintf(w, "<td>%v</td>", pol)
+	}
+	fmt.Fprint(w, "</tr>\n<tr><td></td>")
+	for _, pol := range pols {
+		fmt.Fprintf(w, "<td>%v</td>", units[pol])
+	}
+	fmt.Fprint(w, "</tr></thead>\n<tbody>\n")
+	for _, sector := range sectors {
+		fmt.Fprintf(w, "<tr><td>%v</td>", sector)
+		for _, pol := range pols {
+			fmt.Fprintf(w, "<td>"+format+"</td>", data[sector][pol])
+			totals[pol] += data[sector][pol]
+		}
+		fmt.Fprint(w, "</tr>\n")
+	}
+	fmt.Fprint(w, "<tr><td><strong>Totals</strong></td>")
+	for _, pol := range pols {
+		fmt.Fprintf(w, "<td><strong>"+format+"</strong></td>", totals[pol])
+	}
+	fmt.Fprint(w, "</tbody></table>\n")
 }
 
 func ReportServer() {

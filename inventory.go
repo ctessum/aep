@@ -460,14 +460,15 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 
 	// make a list of species that can possibly be double counted.
 	doubleCountablePols := make([]string, 0)
-	for _, polInfo := range config.PolsToKeep {
-		for _, name := range polInfo.SpecNames {
-			if !IsStringInArray(doubleCountablePols, name) {
+	for pol, polInfo := range config.PolsToKeep {
+		if polInfo.SpecNames != nil {
+			if !IsStringInArray(doubleCountablePols, pol) {
 				doubleCountablePols = append(
-					doubleCountablePols, name)
+					doubleCountablePols, pol)
 			}
 		}
 	}
+	fmt.Println(doubleCountablePols)
 	recordsThatDoubleCount := make(map[string][]string)
 
 	config.Log("Importing inventory for "+period+" "+
@@ -495,15 +496,18 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 					if _, ok := recordsThatDoubleCount[key]; !ok {
 						recordsThatDoubleCount[key] = make([]string, 0)
 					}
-					if !IsStringInArray(recordsThatDoubleCount[key], pol) {
-						recordsThatDoubleCount[key] = append(
-							recordsThatDoubleCount[key], pol)
+					for _, specName := range config.PolsToKeep[pol].SpecNames {
+						if !IsStringInArray(recordsThatDoubleCount[key], specName) {
+							recordsThatDoubleCount[key] = append(
+								recordsThatDoubleCount[key], specName)
+						}
 					}
 				}
 			}
 		}
 		fInfo.fid.Close()
 	}
+	fmt.Println(recordsThatDoubleCount)
 
 	// Now, go through the files a second time, marking records
 	// that need to be adjusted for double counting and then
