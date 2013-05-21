@@ -343,7 +343,6 @@ func (sp *SpecProf) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	period string) (
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*specHolder) {
-	fmt.Println(record.DoubleCountPols)
 	var ok bool
 	var err error
 	var ref map[string]string

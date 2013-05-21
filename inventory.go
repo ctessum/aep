@@ -468,7 +468,6 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 			}
 		}
 	}
-	fmt.Println(doubleCountablePols)
 	recordsThatDoubleCount := make(map[string][]string)
 
 	config.Log("Importing inventory for "+period+" "+
@@ -507,7 +506,6 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 		}
 		fInfo.fid.Close()
 	}
-	fmt.Println(recordsThatDoubleCount)
 
 	// Now, go through the files a second time, marking records
 	// that need to be adjusted for double counting and then
