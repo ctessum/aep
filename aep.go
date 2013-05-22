@@ -88,6 +88,11 @@ func main() {
 		go DiscardRecords(runChan)
 	}
 
+	// Start server for retrieving profiles from the 
+	// SPECIATE database
+	go ConfigAll.DefaultSettings.SpecProfiles(e)
+
+
 	// Set up spatial environment
 	if ConfigAll.DefaultSettings.Spatialize {
 		ConfigAll.DefaultSettings.SpatialSetup(e)
