@@ -16,6 +16,9 @@
 					{{if .IsConfigure}}
 					<li class="active"><a href="#">Configuration</a></li>{{else}}
 					<li><a href="/config">Configuration</a></li>{{end}}
+					{{if .IsInv}}
+					<li class="active"><a href="#">Inventory</a></li>{{else}}
+					<li><a href="/inventory">Inventory</a></li>{{end}}
 					{{if .IsSpec}}
 					<li class="active"><a href="#">Speciation</a></li>{{else}}
 					<li><a href="/speciate">Speciation</a></li>{{end}}

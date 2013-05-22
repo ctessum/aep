@@ -442,7 +442,7 @@ func (p *RunData) ParseWPSnamelist(e *ErrCat) {
 		c.wpsData.nx[i] = c.wpsData.e_we[i] - 1
 		c.wpsData.ny[i] = c.wpsData.e_sn[i] - 1
 	}
-
+	Report.GridNames = c.wpsData.domainName
 	*p = c
 }
 

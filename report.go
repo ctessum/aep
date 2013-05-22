@@ -108,6 +108,7 @@ type ReportHolder struct {
 	Config        *RunData
 	SectorResults map[string]map[string]*Results // map[sector][period]Results
 	ReportOnly    bool                           // whether main program is running at the same time
+	GridNames     []string                       // names of the grids
 }
 
 type Results struct {
@@ -424,6 +425,7 @@ type htmlData struct {
 	IncludeStatus bool
 	IsConfigure   bool
 	IsStatus      bool
+	IsInv         bool
 	IsSpec        bool
 	IsSpatial     bool
 }
@@ -459,6 +461,41 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	renderHeaderFooter(w, "footer", pageData)
 }
 
+func inventoryHandler(w http.ResponseWriter, r *http.Request) {
+	pageData := newHtmlData()
+	pageData.PageName = "Inventory"
+	pageData.IsInv = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	const body1 = `
+<div class="container">
+	<h4>Inventory</h4>
+	<p>(See file Report.json in the log directory for more detail)</p>
+	<div class="row">
+		<div class="span12">
+			<h5>Kept pollutants</h5>
+			<p>These are the emissions that go on to the next modeling step, as specified in the PolsToKeep setting in the configuration file.</p>`
+	fmt.Fprint(w, body1)
+	sectors, pols, units, data := Report.PrepDataReport("Inventory", "Totals")
+	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	const body2 = `
+		</div>
+	</div>
+	<div class="row">
+		<div class="span12">
+			<h5>Dropped pollutants</h5>
+			<p>These are the pollutants that are not specified in the PolsToKeep setting in the configuration file.</p>`
+	fmt.Fprint(w, body2)
+	sectors, pols, units, data = Report.PrepDataReport("Inventory", "DroppedTotals")
+	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	const body3 = `
+		</div>
+	</div>
+</div>`
+	fmt.Fprint(w, body3)
+	renderHeaderFooter(w, "footer", pageData)
+}
+
 func speciateHandler(w http.ResponseWriter, r *http.Request) {
 	pageData := newHtmlData()
 	pageData.PageName = "Speciation"
@@ -475,7 +512,7 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 			<p>These are the emissions that go on to the next modeling step.</p>`
 	fmt.Fprint(w, body1)
 	sectors, pols, units, data := Report.PrepDataReport("Speciation", "Kept")
-	DrawTable("%.4g",sectors, pols, units, data, w)
+	DrawTable("%.4g", true, sectors, pols, units, data, w)
 	const body2 = `
 		</div>
 	</div>
@@ -485,17 +522,17 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 			<p>When there is a general species group (like VOCs) that is speciated into specific chemicals, but some of the specific chemicals are also explicitely tracked in the inventory, there is a possibility for double counting. So for records that include both the general species group and specific data for some of its components the specific components that are explicitly included in the inventory are dropped from the speciation of the general group.</p>`
 	fmt.Fprint(w, body2)
 	sectors, pols, units, data = Report.PrepDataReport("Speciation", "DoubleCounted")
-	DrawTable("%.4g",sectors, pols, units, data, w)
+	DrawTable("%.4g", true, sectors, pols, units, data, w)
 	const body3 = `
 		</div>
 	</div>
 	<div class="row">
 		<div class="span12">
 			<h5>Pollutants dropped due to lack of a species group</h5>
-			<p>The individual chemicals are lumped into groups for representation in air quality model chemical mechanisms. These are the emissions that do not fit into any of the specified groups.</p>`
+			<p>The individual chemicals are lumped into groups for representation in air quality model chemical mechanisms. These are the emissions that are speciated from general groups (such as VOCs) but do not fit into any of the specified groups.</p>`
 	fmt.Fprint(w, body3)
 	sectors, pols, units, data = Report.PrepDataReport("Speciation", "Ungrouped")
-	DrawTable("%.4g",sectors, pols, units, data, w)
+	DrawTable("%.4g", true, sectors, pols, units, data, w)
 	const body4 = `
 		</div>
 	</div>
@@ -510,7 +547,26 @@ func spatialHandler(w http.ResponseWriter, r *http.Request) {
 	pageData.IsSpatial = true
 	renderHeaderFooter(w, "header", pageData)
 	renderHeaderFooter(w, "nav", pageData)
-	//	renderBodyTemplate(w, "spatial")
+	const body1 = `
+<div class="container">
+	<h4>Gridding</h4>
+	<p>(See file Report.json in the log directory for more detail)</p>`
+	fmt.Fprint(w, body1)
+	const body2 = `
+	<div class="row">
+		<div class="span12">`
+	const body3 = `
+		</div>
+	</div>`
+
+	for _, grid := range Report.GridNames {
+		fmt.Fprint(w, body2)
+		fmt.Fprintf(w, "<h5>Fraction of emissions within domain %v</h5>\n", grid)
+		sectors, pols, units, data := Report.PrepDataReport("Spatialization", grid)
+		DrawTable("%.3g%%", false, sectors, pols, units, data, w)
+		fmt.Fprint(w, body3)
+	}
+	fmt.Fprint(w, "\n</div")
 	renderHeaderFooter(w, "footer", pageData)
 }
 
@@ -587,64 +643,70 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) (
 		for _, periodData := range sectorData {
 			switch procType {
 			case "Inventory":
-				for _, fileData := range periodData.InventoryResults {
-					switch countType {
-					case "Totals":
-						for pol, val := range fileData.Totals {
-							if !IsStringInArray(pols, pol) {
-								pols = append(pols, pol)
-								units[pol] = fileData.Units
+				if periodData.InventoryResults != nil {
+					for _, fileData := range periodData.InventoryResults {
+						switch countType {
+						case "Totals":
+							for pol, val := range fileData.Totals {
+								if !IsStringInArray(pols, pol) {
+									pols = append(pols, pol)
+									units[pol] = fileData.Units
+								}
+								data[sector][pol] += val / numPeriods
 							}
-							data[sector][pol] += val / numPeriods
-						}
-					case "DroppedTotals":
-						for pol, val := range fileData.Totals {
-							if !IsStringInArray(pols, pol) {
-								pols = append(pols, pol)
-								units[pol] = fileData.Units
+						case "DroppedTotals":
+							for pol, val := range fileData.DroppedTotals {
+								if !IsStringInArray(pols, pol) {
+									pols = append(pols, pol)
+									units[pol] = fileData.Units
+								}
+								data[sector][pol] += val / numPeriods
 							}
-							data[sector][pol] += val / numPeriods
 						}
 					}
 				}
 			case "Speciation":
-				switch countType {
-				case "Kept":
-					for pol, poldata := range periodData.SpeciationResults.Kept {
-						if !IsStringInArray(pols, pol) {
-							pols = append(pols, pol)
-							units[pol] = poldata.Units
+				if periodData.SpeciationResults != nil {
+					switch countType {
+					case "Kept":
+						for pol, poldata := range periodData.SpeciationResults.Kept {
+							if !IsStringInArray(pols, pol) {
+								pols = append(pols, pol)
+								units[pol] = poldata.Units
+							}
+							data[sector][pol] += poldata.Val / numPeriods
 						}
-						data[sector][pol] += poldata.Val / numPeriods
-					}
-				case "DoubleCounted":
-					for pol, poldata := range periodData.SpeciationResults.DoubleCounted {
-						if !IsStringInArray(pols, pol) {
-							pols = append(pols, pol)
-							units[pol] = poldata.Units
+					case "DoubleCounted":
+						for pol, poldata := range periodData.SpeciationResults.DoubleCounted {
+							if !IsStringInArray(pols, pol) {
+								pols = append(pols, pol)
+								units[pol] = poldata.Units
+							}
+							data[sector][pol] += poldata.Val / numPeriods
 						}
-						data[sector][pol] += poldata.Val / numPeriods
-					}
-				case "Ungrouped":
-					for pol, poldata := range periodData.SpeciationResults.Ungrouped {
-						if !IsStringInArray(pols, pol) {
-							pols = append(pols, pol)
-							units[pol] = poldata.Units
+					case "Ungrouped":
+						for pol, poldata := range periodData.SpeciationResults.Ungrouped {
+							if !IsStringInArray(pols, pol) {
+								pols = append(pols, pol)
+								units[pol] = poldata.Units
+							}
+							data[sector][pol] += poldata.Val / numPeriods
 						}
-						data[sector][pol] += poldata.Val / numPeriods
 					}
 				}
 			case "Spatialization":
-				for pol, inData := range periodData.SpatialResults.InsideDomainTotals[countType] {
-					outData := periodData.SpatialResults.
-						OutsideDomainTotals[countType][pol]
-					if !IsStringInArray(pols, pol) {
-						pols = append(pols, pol)
-						units[pol] = inData.Units
+				if periodData.SpatialResults != nil {
+					for pol, inData := range periodData.SpatialResults.InsideDomainTotals[countType] {
+						outData := periodData.SpatialResults.
+							OutsideDomainTotals[countType][pol]
+						if !IsStringInArray(pols, pol) {
+							pols = append(pols, pol)
+							units[pol] = inData.Units
+						}
+						// Fraction inside the domain
+						data[sector][pol] += inData.Val /
+							(inData.Val + outData.Val) * 100. / numPeriods
 					}
-					// Fraction inside the domain
-					data[sector][pol] += inData.Val /
-						(inData.Val + outData.Val) * 100. / numPeriods
 				}
 			}
 		}
@@ -654,7 +716,7 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) (
 	return
 }
 
-func DrawTable(format string, sectors, pols []string,
+func DrawTable(format string, includeTotals bool, sectors, pols []string,
 	units map[string]string, data map[string]map[string]float64, w io.Writer) {
 	fmt.Fprint(w, "<table class=\"table table-striped\">\n<thead>\n<tr><td></td>")
 	totals := make(map[string]float64)
@@ -674,9 +736,11 @@ func DrawTable(format string, sectors, pols []string,
 		}
 		fmt.Fprint(w, "</tr>\n")
 	}
-	fmt.Fprint(w, "<tr><td><strong>Totals</strong></td>")
-	for _, pol := range pols {
-		fmt.Fprintf(w, "<td><strong>"+format+"</strong></td>", totals[pol])
+	if includeTotals {
+		fmt.Fprint(w, "<tr><td><strong>Totals</strong></td>")
+		for _, pol := range pols {
+			fmt.Fprintf(w, "<td><strong>"+format+"</strong></td>", totals[pol])
+		}
 	}
 	fmt.Fprint(w, "</tbody></table>\n")
 }
@@ -686,6 +750,7 @@ func ReportServer() {
 		http.FileServer(http.Dir("reportfiles/css"))))
 	http.Handle("/js/", http.StripPrefix("/js/",
 		http.FileServer(http.Dir("reportfiles/js"))))
+	http.HandleFunc("/inventory", inventoryHandler)
 	http.HandleFunc("/speciate", speciateHandler)
 	http.HandleFunc("/spatial", spatialHandler)
 	http.HandleFunc("/config", configHandler)
