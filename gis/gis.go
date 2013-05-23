@@ -402,7 +402,7 @@ UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}}),
 noded_lines AS (
-SELECT St_Union(ST_snaptogrid(geom,{{.SnapDistance}})) AS geom
+SELECT St_Union(ST_MakeValid(ST_snaptogrid(geom,{{.SnapDistance}}))) AS geom
 FROM all_lines) 
 SELECT geom AS geom, ST_PointOnSurface(geom) AS pip
 FROM St_Dump((
@@ -421,8 +421,8 @@ UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}})
 SELECT geom AS geom, ST_Line_Interpolate_Point(geom,0.5) AS pip
-FROM St_Dump((SELECT St_Union(ST_snaptogrid(geom,
-	{{.SnapDistance}})) AS geom FROM all_lines));
+FROM St_Dump((SELECT St_Union(ST_MakeValid(ST_snaptogrid(geom,
+	{{.SnapDistance}}))) AS geom FROM all_lines));
 {{end}}{{if .Point}}
 CREATE TEMP TABLE new_shapes ON COMMIT DROP AS
 SELECT geom as geom, geom as pip FROM srgSelect;
