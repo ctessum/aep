@@ -24,7 +24,7 @@
 		"SpeciesGroupName":"AROMATICS_ONLY",
 		"RegenerateSpatialData": false,
 		"SimulationName":"aep_Minneapolis2005",
-        "DebugLevel": 0,
+        "DebugLevel": 4,
         "Ncpus": 2,
         "Speciate": true,
         "Spatialize": true,

@@ -347,6 +347,7 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		Point             bool
 		UseFilter         bool
 		SnapDistance      string
+		FixPoints         string
 	}
 	shapeSRID := pg.GetSRID(shapefileSchema, shapeTable)
 	srgSRID := pg.GetSRID(shapefileSchema, surrogateTable)
@@ -361,7 +362,8 @@ func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
 		(srgType == "line"),
 		(srgType == "point"),
 		(FilterFunction != nil),
-		"0"}
+		"1.e-5",
+		""}
 
 	Log("Creating gridding surrogate "+grid.Schema+"."+OutName+"...", 0)
 
@@ -371,7 +373,8 @@ CREATE TEMP TABLE shapeSelect ON COMMIT DROP AS
 WITH 
 gridbdy AS (select ST_BuildArea(ST_Boundary(ST_Union(geom))) 
 	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}})
-SELECT a.{{.ShapeColumn}},ST_Transform(a.geom,{{.Grid.SRID}}) as geom 
+SELECT a.{{.ShapeColumn}},ST_SimplifyPreserveTopology(ST_Transform(a.geom,
+		{{.Grid.SRID}}),{{.Grid.Dx}}) as geom 
 	FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridbdy b
 WHERE ST_Intersects(a.geom, ST_Transform(b.geom,{{.ShapeSRID}}));
 CREATE INDEX shapeSelect_gix ON shapeSelect USING GIST (geom);
@@ -381,7 +384,8 @@ CREATE TEMP TABLE srgSelect ON COMMIT DROP AS
 WITH
 shapebdy AS (select ST_Transform(ST_BuildArea(ST_Boundary(ST_Union(geom))),
 	{{.SrgSRID}}) AS geom FROM shapeSelect)
-SELECT a.gid, ST_Transform(a.geom,{{.Grid.SRID}}) as geom,{{if .PolygonWithWeight}} 
+SELECT a.gid, ST_SimplifyPreserveTopology(ST_Transform(a.geom,{{.Grid.SRID}}),
+	{{.Grid.Dx}}) as geom,{{if .PolygonWithWeight}} 
 ({{.WeightColumns}})/ST_Area(a.geom) AS weight {{else}}{{if .LineWithWeight}} 
 ({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}{{if .PointWithWeight}} 
 {{.WeightColumns}} AS weight {{else}}1.0 as weight{{end}} {{end}} {{end}}
@@ -389,6 +393,8 @@ SELECT a.gid, ST_Transform(a.geom,{{.Grid.SRID}}) as geom,{{if .PolygonWithWeigh
 WHERE ST_Intersects(a.geom,b.geom){{if .UseFilter}} {{.FilterString}}{{end}}{{if .WithWeight}} AND ({{.WeightColumns}})!=0.{{end}};
 CREATE INDEX srgSelect_gix ON srgSelect USING GIST (geom);
 ANALYZE srgSelect;
+
+{{.FixPoints}}
   
 {{if .Polygon}}CREATE TEMP TABLE new_shapes ON COMMIT DROP AS 
 WITH
@@ -402,7 +408,8 @@ UNION ALL
 SELECT St_ExteriorRing((ST_Dump(geom)).geom) AS geom
 FROM {{.Grid.Schema}}.{{.Grid.Name}}),
 noded_lines AS (
-SELECT St_Union(ST_MakeValid(ST_snaptogrid(geom,{{.SnapDistance}}))) AS geom
+SELECT St_Union(ST_MakeValid(ST_snaptogrid(geom,
+	{{.SnapDistance}}))) AS geom
 FROM all_lines) 
 SELECT geom AS geom, ST_PointOnSurface(geom) AS pip
 FROM St_Dump((
@@ -458,9 +465,8 @@ COMMIT;`
 
 	// try multiple snap distances to circumvent
 	// "found non-noded intersection" errors
-	snapdistances := []string{"1.e-10", "1.e-8", "1.e-4", "1"}
-	for i, j := range snapdistances {
-		data.SnapDistance = j
+	i := 1
+	for {
 		var b bytes.Buffer
 		err = t2.Execute(&b, data)
 		if err != nil {
@@ -472,13 +478,25 @@ COMMIT;`
 		if err == nil {
 			break
 		} else if strings.Index(err.Error(),
-			"TopologyException: found non-noded intersection") == -1 ||
-			i == len(snapdistances)-1 {
+			"TopologyException: found non-noded intersection") == -1 {
 			return
 		} else {
-			msg := fmt.Sprintf("Surrogate generation for %v_%v with "+
-				"SnapDistance=%v failed. Trying again with larger SnapDistance.",
-				grid.Schema, OutName, data.SnapDistance)
+			// get the point where the error occured from the error message
+			point := strings.TrimSpace(strings.Split(
+				strings.Split(err.Error(), "at")[1],"\"")[0])
+			if i == 1 {
+				data.FixPoints = fmt.Sprintf("UPDATE srgSelect\nSET geom=" +
+					"ST_Translate(geom, random()*%v, random()*%v) WHERE\n",
+					data.SnapDistance,data.SnapDistance)
+			} else {
+				data.FixPoints = data.FixPoints[0 : len(data.FixPoints)-1]
+				data.FixPoints += " OR\n"
+			}
+			data.FixPoints += fmt.Sprintf("geom && ST_Buffer(ST_GeomFromText("+
+				"'Point(%v)',%v),%v);", point, grid.SRID, data.SnapDistance)
+			msg := fmt.Sprintf("Surrogate generation for %v_%v failed around "+
+				"point %v. Fixing the point and trying again.",
+				grid.Schema, OutName, point)
 			Log(msg, 0)
 			pg.Vacuum()
 			pg.Rollback()
