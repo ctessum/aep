@@ -9,7 +9,9 @@ import (
 	"github.com/skelterjohn/go.matrix"
 	"log"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -148,8 +150,14 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 }
 
 func (pg *PostGis) DropTable(schema, name string) {
-	pg.db.Exec("DROP TABLE " + schema + "." + name + ";")
-	pg.db.Exec("DROP INDEX " + schema + "." + name + "_gix;")
+	_, err := pg.db.Exec("DROP TABLE IF EXISTS " + schema + "." + name + ";")
+	if err != nil {
+		panic(err)
+	}
+	_, err = pg.db.Exec("DROP INDEX IF EXISTS " + schema + "." + name + "_gix;")
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (pg *PostGis) DropSchema(name string) {
@@ -276,7 +284,7 @@ func (pg *PostGis) GetNumShapes(schema, name string) (shapes int) {
 	return
 }
 
-func (pg *PostGis) CreateGriddingSurrogate(srgCode, shapeTable,
+func (pg *PostGis) CreateGriddingSurrogateOld(srgCode, shapeTable,
 	ShapeColumn, surrogateTable, WeightColumns string,
 	FilterFunction *SurrogateFilter, grid *GridDef,
 	shapefileSchema string) (
@@ -483,11 +491,11 @@ COMMIT;`
 		} else {
 			// get the point where the error occured from the error message
 			point := strings.TrimSpace(strings.Split(
-				strings.Split(err.Error(), "at")[1],"\"")[0])
+				strings.Split(err.Error(), "at")[1], "\"")[0])
 			if i == 1 {
-				data.FixPoints = fmt.Sprintf("UPDATE srgSelect\nSET geom=" +
+				data.FixPoints = fmt.Sprintf("UPDATE srgSelect\nSET geom="+
 					"ST_Translate(geom, random()*%v, random()*%v) WHERE\n",
-					data.SnapDistance,data.SnapDistance)
+					data.SnapDistance, data.SnapDistance)
 			} else {
 				data.FixPoints = data.FixPoints[0 : len(data.FixPoints)-1]
 				data.FixPoints += " OR\n"
@@ -510,6 +518,394 @@ COMMIT;`
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.%v.", grid.Schema,
 		OutName), 0)
 	return
+}
+
+type PostGISconnecter interface {
+	PGconnect() (*PostGis, error)
+}
+
+type srgdataholder struct {
+	ShapeTbl          string
+	ShapeColumn       string
+	ShapeSRID         int
+	SrgTbl            string
+	SrgSRID           int
+	Grid              *GridDef
+	FilterString      string
+	ShapefileSchema   string
+	WeightColumns     string
+	PolygonWithWeight bool
+	LineWithWeight    bool
+	PointWithWeight   bool
+	WithWeight        bool
+	Polygon           bool
+	Line              bool
+	Point             bool
+	UseFilter         bool
+	SnapDistance      string
+	Geom              string
+	InputID           string
+}
+
+func newsrgdataholder(ShapeTbl, ShapeColumn string, ShapeSRID int,
+	SrgTbl string, SrgSRID int, Grid *GridDef, FilterString,
+	ShapefileSchema, WeightColumns string, PolygonWithWeight, LineWithWeight,
+	PointWithWeight, WithWeight, Polygon, Line, Point, UseFilter bool,
+	SnapDistance, Geom, InputID string) srgdataholder {
+	return srgdataholder{ShapeTbl, ShapeColumn, ShapeSRID,
+		SrgTbl, SrgSRID, Grid, FilterString,
+		ShapefileSchema, WeightColumns, PolygonWithWeight, LineWithWeight,
+		PointWithWeight, WithWeight, Polygon, Line, Point, UseFilter,
+		SnapDistance, Geom, InputID}
+}
+
+func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
+	ShapeColumn, surrogateTable, WeightColumns string,
+	FilterFunction *SurrogateFilter, grid *GridDef,
+	shapefileSchema string) (err error) {
+
+	pg, err := PGc.PGconnect()
+	if err != nil {
+		return
+	}
+	defer pg.Disconnect()
+
+	if !pg.TableExists(shapefileSchema, surrogateTable) {
+		err = fmt.Errorf("Table %v.%v doesn't exist", shapefileSchema,
+			surrogateTable)
+		return
+	}
+	if !pg.TableExists(shapefileSchema, shapeTable) {
+		err = fmt.Errorf("Table %v.%v doesn't exist", shapefileSchema,
+			shapeTable)
+		return
+	}
+
+	var srgType string
+	numShapes := pg.GetNumShapes(shapefileSchema, surrogateTable)
+	if pg.GetNumPolygons(shapefileSchema, surrogateTable) == numShapes {
+		srgType = "polygon"
+	} else if pg.GetNumLines(shapefileSchema, surrogateTable) == numShapes {
+		srgType = "line"
+	} else if pg.GetNumPoints(shapefileSchema, surrogateTable) == numShapes {
+		srgType = "point"
+	} else {
+		err = fmt.Errorf("Surrogate shapefiles need to contain shapes that are "+
+			"all either points, lines, or polygons (the same file cannot contain more "+
+			"than one type of shapes). Shapefile %v does not meet this requirement.",
+			surrogateTable)
+		return
+	}
+
+	FilterString := " AND ("
+	if FilterFunction != nil {
+		for i, val := range FilterFunction.Values {
+			if i != 0 {
+				FilterString += " OR a." + FilterFunction.Column
+			} else {
+				FilterString += "a." + FilterFunction.Column
+			}
+			if FilterFunction.EqualNotEqual == "NotEqual" {
+				FilterString += "!="
+			} else {
+				FilterString += "="
+			}
+			FilterString += "'" + val + "'"
+		}
+		FilterString += ")"
+	}
+
+	shapeSRID := pg.GetSRID(shapefileSchema, shapeTable)
+	srgSRID := pg.GetSRID(shapefileSchema, surrogateTable)
+	OutName := grid.Name + "_" + srgCode
+	data := newsrgdataholder(shapeTable, ShapeColumn, shapeSRID, surrogateTable,
+		srgSRID, grid, FilterString, shapefileSchema, WeightColumns,
+		(srgType == "polygon" && WeightColumns != ""),
+		(srgType == "line" && WeightColumns != ""),
+		(srgType == "point" && WeightColumns != ""),
+		(WeightColumns != ""),
+		(srgType == "polygon"),
+		(srgType == "line"),
+		(srgType == "point"),
+		(FilterFunction != nil),
+		"1.e-9",
+		"", "")
+
+	Log("Creating gridding surrogate "+grid.Schema+"."+OutName+"...", 0)
+	pg.DropTable(grid.Schema, OutName)
+
+	inputIDchan := make(chan string)
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.GOMAXPROCS(-1); i++ {
+		wg.Add(1)
+		data := newsrgdataholder(shapeTable, ShapeColumn, shapeSRID, surrogateTable,
+			srgSRID, grid, FilterString, shapefileSchema, WeightColumns,
+			(srgType == "polygon" && WeightColumns != ""),
+			(srgType == "line" && WeightColumns != ""),
+			(srgType == "point" && WeightColumns != ""),
+			(WeightColumns != ""),
+			(srgType == "polygon"),
+			(srgType == "line"),
+			(srgType == "point"),
+			(FilterFunction != nil),
+			"1.e-9",
+			"", "")
+		go srgGenWorker(inputIDchan, data, PGc, &wg)
+	}
+
+	pg.DropTable("public", "shapeSelect")
+	pg.DropTable("public", "srgSelect")
+	const t = `
+BEGIN;
+CREATE TABLE shapeSelect AS
+WITH 
+gridbdy AS (select ST_BuildArea(ST_Boundary(ST_Union(geom))) 
+	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}})
+SELECT a.{{.ShapeColumn}} as inputID,
+	ST_MakeValid(ST_SimplifyPreserveTopology(ST_Transform(a.geom,
+		{{.Grid.SRID}}),{{.Grid.Dx}})) as geom 
+FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridbdy b
+WHERE ST_Intersects(a.geom, ST_Transform(b.geom,{{.ShapeSRID}}));
+CREATE INDEX shapeSelect_gix ON shapeSelect USING GIST (geom);
+ANALYZE shapeSelect;
+
+CREATE TABLE srgSelect AS
+WITH
+shapebdy AS (select ST_Transform(ST_BuildArea(ST_Boundary(ST_Union(geom))),
+	{{.SrgSRID}}) AS geom FROM shapeSelect)
+SELECT a.gid, ST_MakeValid(ST_SimplifyPreserveTopology(
+	ST_Transform(a.geom,{{.Grid.SRID}}),{{.Grid.Dx}})) as geom,{{if .PolygonWithWeight}} 
+({{.WeightColumns}})/ST_Area(a.geom) AS weight {{else}}{{if .LineWithWeight}} 
+({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}{{if .PointWithWeight}} 
+{{.WeightColumns}} AS weight {{else}}1.0 as weight{{end}} {{end}} {{end}}
+	FROM {{.ShapefileSchema}}."{{.SrgTbl}}" a, shapebdy b
+WHERE ST_Intersects(a.geom,b.geom){{if .UseFilter}} {{.FilterString}}{{end}}{{if .WithWeight}} AND ({{.WeightColumns}})!=0.{{end}};
+CREATE INDEX srgSelect_gix ON srgSelect USING GIST (geom);
+ANALYZE srgSelect;
+COMMIT;`
+	t2 := template.Must(template.New("temptables").Parse(t))
+	var b bytes.Buffer
+	err = t2.Execute(&b, data)
+	if err != nil {
+		return
+	}
+	cmd := b.String()
+	Log(cmd, 3)
+	_, err = pg.db.Exec(cmd)
+	if err != nil {
+		return
+	}
+
+	pg.DropTable(grid.Schema, "tempsrg")
+	cmd = fmt.Sprintf("CREATE TABLE %v.tempsrg (row int, col int, "+
+		"inputID text, shapeFraction double precision, geom geometry);",
+		grid.Schema)
+	Log(cmd, 3)
+	_, err = pg.db.Exec(cmd)
+	if err != nil {
+		return
+	}
+
+	shapeRows, err := pg.db.Query("SELECT inputID FROM shapeSelect;")
+	if err != nil {
+		return
+	}
+	for shapeRows.Next() {
+		var inputID string
+		err = shapeRows.Scan(&inputID)
+		if err != nil {
+			return
+		}
+		inputIDchan <- inputID
+	}
+	close(inputIDchan)
+	shapeRows.Close()
+	wg.Wait()
+
+	cmd = fmt.Sprintf("ALTER TABLE %v.tempsrg RENAME TO %v",
+		grid.Schema, OutName)
+	Log(cmd, 3)
+	_, err = pg.db.Exec(cmd)
+	if err != nil {
+		return
+	}
+	err = pg.VacuumAnalyze(grid.Schema, OutName)
+	if err != nil {
+		return
+	}
+
+	Log(fmt.Sprintf("Finished creating gridding surrogate %v.%v.", grid.Schema,
+		OutName), 0)
+	return
+}
+
+func srgGenWorker(inputIDchan chan string, data srgdataholder,
+	PGc PostGISconnecter, wg *sync.WaitGroup) {
+	pg, err := PGc.PGconnect()
+	if err != nil {
+		panic(err)
+	}
+	defer pg.Disconnect()
+	defer wg.Done()
+
+	templates := template.New("srgGen")
+	templates, err = templates.New("shapeSrg").Parse(`
+CREATE TABLE singleShapeSrgs_{{.InputID}} AS
+WITH 
+singleShape AS(
+SELECT geom from shapeSelect where inputID='{{.InputID}}'),
+splitSrgs AS(
+	SELECT a.weight, (ST_Dump(ST_Split(a.geom,b.geom))).geom AS geom 
+	FROM 
+		(SELECT x.weight, x.geom from srgSelect x, singleShape y
+		WHERE ST_Overlaps(x.geom,y.geom)) a, 
+		(SELECT ST_ExteriorRing((ST_Dump(geom)).geom) as geom 
+		FROM singleShape) b)
+SELECT a.weight, a.geom from srgSelect a, singleShape b 
+	WHERE ST_Within(a.geom,b.geom)
+UNION ALL
+SELECT a.weight, b.geom from srgSelect a, singleShape b 
+	WHERE ST_Within(b.geom,a.geom)
+UNION ALL
+SELECT a.weight, a.geom from splitSrgs a, singleShape b 
+	WHERE ST_Intersects(b.geom,a.geom) 
+	AND ST_Touches(ST_Snap(b.geom,a.geom,{{.SnapDistance}}),a.geom) = false;
+CREATE INDEX singleShapeSrgs_{{.InputID}}_gix ON singleShapeSrgs_{{.InputID}} 
+	USING GIST (geom);
+ANALYZE singleShapeSrgs_{{.InputID}};`)
+	if err != nil {
+		panic(err)
+	}
+
+	templates, err = templates.New("gridSrg").Parse(`
+CREATE TEMP TABLE srgsInGrid AS
+WITH
+gridcell AS(
+	SELECT ST_GeomFromEWKT('{{.Geom}}') as geom),
+splitSrgs AS(
+	SELECT a.weight, (ST_Dump(ST_Split(a.geom,b.geom))).geom AS geom 
+	FROM 
+		(SELECT x.weight, x.geom from singleShapeSrgs_{{.InputID}} x, gridcell y
+		WHERE {{if .Line}}ST_Crosses{{else}}ST_Overlaps{{end}}(x.geom,y.geom)) a,
+		(SELECT ST_ExteriorRing(geom) as geom FROM gridcell) b)
+SELECT a.weight, a.geom from singleShapeSrgs_{{.InputID}} a, gridcell b
+	WHERE ST_Within(a.geom,b.geom)
+UNION ALL
+SELECT a.weight, b.geom 
+	FROM singleShapeSrgs_{{.InputID}} a, gridcell b
+	WHERE ST_Within(b.geom,a.geom)
+UNION ALL
+SELECT a.weight, a.geom from splitSrgs a, gridcell b
+	WHERE ST_Intersects(b.geom,a.geom) 
+	AND ST_Touches(ST_Snap(b.geom,a.geom,1.e-9),a.geom) = false;`)
+	if err != nil {
+		panic(err)
+	}
+
+	for data.InputID = range inputIDchan {
+		pg.db.Exec("DROP TABLE singleShapeSrgs_" + data.InputID + ";")
+		var b bytes.Buffer
+		err = templates.ExecuteTemplate(&b, "shapeSrg", data)
+		if err != nil {
+			panic(err)
+		}
+		cmd := b.String()
+		Log(cmd, 3)
+		_, err = pg.db.Exec(cmd)
+		if err != nil {
+			panic(err)
+		}
+
+		var singleShapeSrgWeightTemp sql.NullFloat64
+		var singleShapeSrgWeight float64
+		if data.Polygon {
+			cmd = fmt.Sprintf("SELECT SUM(weight*ST_Area(geom)) "+
+				"FROM singleShapeSrgs_%v;", data.InputID)
+		} else if data.Line {
+			cmd = fmt.Sprintf("SELECT SUM(weight*ST_Length(geom)) "+
+				"FROM singleShapeSrgs_%v;", data.InputID)
+		} else if data.Point {
+			cmd = fmt.Sprintf("SELECT SUM(weight) "+
+				"FROM singleShapeSrgs_%v;", data.InputID)
+		}
+		Log(cmd, 3)
+		err = pg.db.QueryRow(cmd).Scan(&singleShapeSrgWeightTemp)
+		if err != nil {
+			panic(err)
+		}
+		if singleShapeSrgWeightTemp.Valid {
+			singleShapeSrgWeight = singleShapeSrgWeightTemp.Float64
+		} else {
+			continue
+		}
+
+		gridQuery := fmt.Sprintf("SELECT a.row,a.col,ST_AsEWKT(a.geom) "+
+			"FROM aep_minneapolis2005.d01 a, "+
+			"(SELECT geom from shapeSelect where inputID='%v') b "+
+			"WHERE ST_Intersects(a.geom,b.geom);", data.InputID)
+
+		Log(gridQuery, 3)
+		gridRows, err := pg.db.Query(gridQuery)
+		if err != nil {
+			panic(err)
+		}
+		for gridRows.Next() {
+			var geom string
+			var row, col int
+			err = gridRows.Scan(&row, &col, &geom)
+			if err != nil {
+				panic(err)
+			}
+			var b bytes.Buffer
+			data.Geom = geom
+			err = templates.ExecuteTemplate(&b, "gridSrg", data)
+			if err != nil {
+				panic(err)
+			}
+			cmd := b.String()
+			Log(cmd, 4)
+			_, err = pg.db.Exec(cmd)
+			if err != nil {
+				panic(err)
+			}
+
+			var gridCellSrgWeightTemp sql.NullFloat64
+			var gridCellSrgWeight float64
+			if data.Polygon {
+				cmd = "SELECT SUM(weight*ST_Area(geom)) FROM srgsInGrid;"
+			} else if data.Line {
+				cmd = "SELECT SUM(weight*ST_Length(geom)) FROM srgsInGrid;"
+			} else if data.Point {
+				cmd = "SELECT SUM(weight) FROM srgsInGrid;"
+			}
+			Log(cmd, 4)
+			err = pg.db.QueryRow(cmd).Scan(&gridCellSrgWeightTemp)
+			if err != nil {
+				panic(err)
+			}
+			if gridCellSrgWeightTemp.Valid {
+				gridCellSrgWeight = gridCellSrgWeightTemp.Float64
+			}
+
+			var frac float64
+			if gridCellSrgWeight > 0 {
+				frac = gridCellSrgWeight / singleShapeSrgWeight
+				cmd = fmt.Sprintf("INSERT INTO %v.tempsrg "+
+					"(row, col, inputID, shapeFraction, geom) "+
+					"VALUES (%v,%v,%v,%v,ST_GeomFromEWKT('%v'));",
+					data.Grid.Schema, row, col, data.InputID, frac, geom)
+				Log(cmd, 4)
+				_, err = pg.db.Exec(cmd)
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			pg.db.Exec("DROP TABLE srgsInGrid;")
+		}
+		gridRows.Close()
+		pg.db.Exec("DROP TABLE singleShapeSrgs;")
+	}
 }
 
 type SurrogateFilter struct {

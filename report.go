@@ -133,6 +133,9 @@ func NewStatus() *StatusHolder {
 func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string {
 	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
 		return "Generating"
+	} else if status, ok := s.Surrogates[srg]; ok &&
+		status == "Waiting to generate" {
+		return "Waiting to generate"
 	} else if status, ok := s.Surrogates[srg]; ok && status == "Ready" {
 		return "Ready"
 	} else if status, ok := s.Surrogates[srg]; ok && status == "Failed!" {
@@ -599,6 +602,8 @@ func TableClass(in string) string {
 		return "success"
 	} else if in == "Generating" {
 		return "warning"
+	} else if in == "Waiting to generate" {
+		return "info"
 	} else {
 		return "info"
 	}

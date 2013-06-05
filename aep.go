@@ -100,6 +100,7 @@ func main() {
 		e.Add(err)
 		err = ConfigAll.DefaultSettings.GridRef()
 		e.Add(err)
+		go ConfigAll.DefaultSettings.SurrogateGenerator()
 	}
 
 	e.Report() // Print errors, if any

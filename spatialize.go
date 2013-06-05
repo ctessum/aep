@@ -16,17 +16,23 @@ import (
 )
 
 var (
-	srgSpec  = make(map[string]*srgSpecHolder)
-	srgCodes = make(map[string]string)
-	grids    = make([]*gis.GridDef, 0)
-	gridRef  = make(map[string]map[string]map[string]string)
+	srgSpec                = make(map[string]*srgSpecHolder)
+	srgCodes               = make(map[string]string)
+	grids                  = make([]*gis.GridDef, 0)
+	gridRef                = make(map[string]map[string]map[string]string)
+	SurrogateGeneratorChan = make(chan *SrgGenData)
 )
+
+func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
+	pg, err = gis.Connect(c.PostGISuser, c.PostGISdatabase,
+		c.PostGISpassword)
+	return
+}
 
 func (c *RunData) SpatialSetup(e *ErrCat) {
 	c.Log("Setting up spatial environment...", 0)
 	gis.DebugLevel = c.DebugLevel
-	pg, err := gis.Connect(c.PostGISuser, c.PostGISdatabase,
-		c.PostGISpassword)
+	pg, err := c.PGconnect()
 	defer pg.Disconnect()
 	if err != nil {
 		e.Add(err)
@@ -112,8 +118,7 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	totals := newSpatialTotalHolder()
 	TotalGrid := make(map[*gis.GridDef]map[string]*matrix.SparseMatrix) // map[grid][pol]data
 
-	pg, err := gis.Connect(c.PostGISuser, c.PostGISdatabase,
-		c.PostGISpassword)
+	pg, err := c.PGconnect()
 	defer pg.Disconnect()
 
 	switch c.SectorType {
@@ -208,15 +213,20 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	pg *gis.PostGis, upstreamSrgs []string) (srg *matrix.SparseMatrix) {
 
 	tableName := grid.Name + "_" + srgNum
-	switch Status.GetSrgStatus(tableName, grid.Schema, pg) {
+	status := Status.GetSrgStatus(tableName, grid.Schema, pg)
+	switch status {
 	case "Generating":
 		c.WaitSrgToFinish(tableName)
+	case "Waiting to generate":
+		c.WaitSrgToFinish(tableName)
 	case "Empty":
-		Status.Surrogates[tableName] = "Generating"
-		err := c.generateSurrogate(srgNum, grid, pg)
-		if err != nil {
-			panic(err)
-		}
+		Status.Surrogates[tableName] = "Waiting to generate"
+		srgGenData := NewSrgGenData(srgNum, grid, pg)
+		SurrogateGeneratorChan <- srgGenData
+		<-srgGenData.finishedChan
+	case "Ready":
+	default:
+		panic(fmt.Sprintf("Unknown status \"%v\"", status))
 	}
 	srg = c.retrieveSurrogate(srgNum, FIPS, grid, pg, upstreamSrgs)
 	return
@@ -277,54 +287,96 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	return
 }
 
+type SrgGenData struct {
+	srgNum       string
+	grid         *gis.GridDef
+	pg           *gis.PostGis
+	finishedChan chan int
+}
+
+func NewSrgGenData(srgNum string, grid *gis.GridDef, pg *gis.PostGis) (
+	d *SrgGenData) {
+	d = new(SrgGenData)
+	d.srgNum = srgNum
+	d.grid = grid
+	d.pg = pg
+	d.finishedChan = make(chan int)
+	return
+}
+
 // Generate spatial surrogates
-func (c *RunData) generateSurrogate(srgNum string, grid *gis.GridDef,
-	pg *gis.PostGis) (err error) {
-	c.Log(srgSpec[srgNum], 2)
+func (c *RunData) SurrogateGenerator() {
+	for srgData := range SurrogateGeneratorChan {
+		srgNum := srgData.srgNum
+		c.Log(srgSpec[srgNum], 2)
+		MergeFunction := srgSpec[srgNum].MergeFunction
+		if MergeFunction == nil {
+			c.genSrgNoMerge(srgData)
+		} else {
+			c.genSrgMerge(srgData)
+		}
+		srgData.finishedChan <- 0
+	}
+}
+
+// Generate a surrogate that doesn't require merging
+func (c *RunData) genSrgNoMerge(srgData *SrgGenData) {
+	srgNum := srgData.srgNum
+	grid := srgData.grid
 	inputMap := srgSpec[srgNum].DATASHAPEFILE
 	inputColumn := srgSpec[srgNum].DATAATTRIBUTE
 	surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
-	MergeFunction := srgSpec[srgNum].MergeFunction
-	if MergeFunction == nil {
-		err = pg.CreateGriddingSurrogate(srgNum, inputMap,
-			inputColumn, surrogateMap, WeightColumns, FilterFunction,
-			grid, c.ShapefileSchema)
-		if err == nil {
-			Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
-		} else {
-			Status.Surrogates[grid.Name+"_"+srgNum] = "Failed!"
-			return
-		}
-	} else { // surrogate merging: create a surrogate from other surrogates
-		// Here, we just create weight surrogate tables if they don't exist.
-		// The actual merging happens elsewhere.
-		for _, mrgval := range MergeFunction {
-			newSrgNum, ok := srgCodes[mrgval.name]
-			if !ok {
-				panic("No match for surrogate named " + mrgval.name)
-			}
-			tableName := grid.Name + "_" + newSrgNum
-			switch Status.GetSrgStatus(tableName, grid.Schema, pg) {
-			case "Generating":
-				c.WaitSrgToFinish(tableName)
-			case "Empty":
-				Status.Surrogates[tableName] = "Generating"
-				err = c.generateSurrogate(newSrgNum, grid, pg)
-				if err != nil {
-					Status.Surrogates[grid.Name+"_"+srgNum] = "Failed!"
-				}
-			}
-		}
+	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	err := gis.CreateGriddingSurrogate(c, srgNum, inputMap,
+		inputColumn, surrogateMap, WeightColumns, FilterFunction,
+		grid, c.ShapefileSchema)
+	if err == nil {
 		Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
+	} else {
+		Status.Surrogates[grid.Name+"_"+srgNum] = "Failed!"
+		panic("Surrogate " + grid.Name + "_" + srgNum + " Failed!")
 	}
-	return
+}
+
+// surrogate merging: create a surrogate from other surrogates
+// Here, we just create weight surrogate tables if they don't exist.
+// The actual merging happens elsewhere.
+func (c *RunData) genSrgMerge(srgData *SrgGenData) {
+	srgNum := srgData.srgNum
+	grid := srgData.grid
+	pg := srgData.pg
+	c.Log(srgSpec[srgNum], 2)
+	MergeFunction := srgSpec[srgNum].MergeFunction
+	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	for _, mrgval := range MergeFunction {
+		newSrgNum, ok := srgCodes[mrgval.name]
+		if !ok {
+			panic("No match for surrogate named " + mrgval.name)
+		}
+		tableName := grid.Name + "_" + newSrgNum
+		status := Status.GetSrgStatus(tableName, grid.Schema, pg)
+		switch status {
+		case "Generating":
+			c.WaitSrgToFinish(tableName)
+		case "Waiting to generate":
+			c.WaitSrgToFinish(tableName)
+		case "Empty":
+			newSrgData := NewSrgGenData(newSrgNum, grid, pg)
+			c.genSrgNoMerge(newSrgData)
+		case "Ready":
+		default:
+			panic(fmt.Sprintf("Unknown status \"%v\"", status))
+		}
+	}
+	Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
 }
 
 func (c *RunData) WaitSrgToFinish(srgNum string) {
 	for {
-		if Status.Surrogates[srgNum] == "Generating" {
+		if Status.Surrogates[srgNum] == "Generating" ||
+			Status.Surrogates[srgNum] == "Waiting to generate" {
 			time.Sleep(1000 * time.Millisecond)
 			msg := fmt.Sprintf("Waiting for $v...\n", srgNum)
 			c.Log(msg, 4)
