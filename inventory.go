@@ -455,8 +455,8 @@ func (c RunData) parseRecordMobileIDA(record string, fInfo *FileInfo) *ParsedRec
 	return fields
 }
 
-func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRecord, period string) {
-	defer config.ErrorRecover(MesgChan)
+func (config *RunData) inventory(OutputChan chan *ParsedRecord, period string) {
+	defer config.ErrorRecover()
 
 	// make a list of species that can possibly be double counted.
 	doubleCountablePols := make([]string, 0)
@@ -545,7 +545,7 @@ func (config *RunData) inventory(MesgChan chan string, OutputChan chan *ParsedRe
 		Report.SectorResults[config.Sector][period].
 			InventoryResults[file] = fInfo
 	}
-	MesgChan <- "Finished importing inventory for " + period + " " + config.Sector
+	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
 	// unless the output is going to the TotalReportChan
 	if OutputChan != TotalReportChan {
@@ -676,6 +676,8 @@ func (fInfo *FileInfo) ParseLine(config *RunData) (fields *ParsedRecord, EOF boo
 	fields.Country = fInfo.Country
 	if fields.Country == "US" {
 		fields.Country = "USA"
+	} else if fields.Country == "CANADA" {
+		fields.Country = "CA"
 	}
 	return
 }

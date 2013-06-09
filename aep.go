@@ -180,43 +180,43 @@ func (c RunData) Run(runChan chan string) {
 // Set up the correct subroutines to run for each sector and period
 func (c RunData) RunPeriod(period string) {
 	Status.Sectors[c.Sector] = "Running " + period
-	MesgChan := make(chan string, 1)
+	c.msgchan = make(chan string, 1)
 	n := 0 // number of subroutines that we need to wait to finish
 
 	// only run inventory
 	if c.Speciate == false && c.Spatialize == false {
-		go c.inventory(MesgChan, TotalReportChan, period)
+		go c.inventory(TotalReportChan, period)
 		n++
 	}
 
 	// speciate but don't spatialize
 	if c.Speciate == true && c.Spatialize == false {
 		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(MesgChan, ChanFromInventory, period)
-		go c.speciate(MesgChan, ChanFromInventory, TotalReportChan, period)
+		go c.inventory(ChanFromInventory, period)
+		go c.speciate(ChanFromInventory, TotalReportChan, period)
 		n += 2
 	}
 
 	// speciate and spatialize
 	if c.Speciate == true && c.Spatialize == true {
 		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(MesgChan, ChanFromInventory, period)
+		go c.inventory(ChanFromInventory, period)
 		SpecSpatialChan := make(chan *ParsedRecord, 1)
-		go c.speciate(MesgChan, ChanFromInventory, SpecSpatialChan, period)
-		go c.spatialize(MesgChan, SpecSpatialChan, TotalReportChan, period)
+		go c.speciate(ChanFromInventory, SpecSpatialChan, period)
+		go c.spatialize(SpecSpatialChan, TotalReportChan, period)
 		n += 3
 	}
 	// spatialize but don't speciate
 	if c.Speciate == false && c.Spatialize == true {
 		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(MesgChan, ChanFromInventory, period)
-		go c.spatialize(MesgChan, ChanFromInventory, TotalReportChan, period)
+		go c.inventory(ChanFromInventory, period)
+		go c.spatialize(ChanFromInventory, TotalReportChan, period)
 		n += 2
 	}
 
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
-		message := <-MesgChan
+		message := <-c.msgchan
 		c.Log(message, 0)
 	}
 

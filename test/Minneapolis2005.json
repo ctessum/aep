@@ -14,11 +14,15 @@
         "InputUnits": "tons/year",
         "MatchFullSCC": true,
         "WpsNamelist": "[Ancilliary]/namelist.wps",
-		"SRID":500002,
+		"SRID":500001,
         "EarthRadius": 6370000,
-		"PostGISuser":"chris",
-		"PostGISdatabase":"gis",
-		"PostGISpassword":"pw",
+		"xPostGISuser":"chris",
+		"xPostGISdatabase":"gis",
+		"xPostGISpassword":"pw",
+		"PostGISuser":"tessumcm",
+		"PostGISdatabase":"postgres",
+		"PostGISpassword":"",
+		"OtherLibpqConnectionParameters":"sslmode=disable",
 		"ShapefileSchema":"aepshp",
         "LineMap": "CoastAndPolitical",
 		"SpeciesGroupName":"AROMATICS_ONLY",
@@ -75,7 +79,7 @@
             "CaseName": "2005cs_05b",
             "SectorType": "point",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
                 "ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
                 "ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt"
@@ -85,7 +89,7 @@
             "CaseName": "2005ah_tox_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_ag_cmaq_cb05_tx_2005ah_tox_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_ag_cmaq_cb05_tx_2005ah_tox_05b_05b.txt",
             "InvFileNames": [
                 "arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
             ]
@@ -94,7 +98,7 @@
             "CaseName": "2005as_05b",
             "SectorType": "point",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
             "InvFileNames": [
                 "ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
                 "ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
@@ -104,7 +108,7 @@
             "CaseName": "2005cr_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
                 "arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
             ]
@@ -113,8 +117,7 @@
             "CaseName": "2005cr_05b",
             "SectorType": "area",
             "InventoryFreq": "monthly",
-            "SpecRef": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefCombo": "[Ancilliary]/gspro_combo_2022aeo2_nonroadrfl_stationary_31aug2010_v2.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
                 "arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
                 "arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
@@ -124,8 +127,7 @@
             "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
-            "SpecRef": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefCombo": "[Ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
                 "mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
@@ -134,8 +136,7 @@
             "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
-            "SpecRef": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefCombo": "[Ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
                 "mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
@@ -144,8 +145,7 @@
             "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
-            "SpecRef": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefCombo": "[Ancilliary]/gspro_combo_2012_onroad_exhevp_24sep2010_v1.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
                 "mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
                 "mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
@@ -155,7 +155,7 @@
             "CaseName": "2005cs_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
                 "arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
                 "arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
@@ -165,7 +165,7 @@
             "CaseName": "2005cs_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
-            "SpecRef": "[Ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
+            "SpecRefFile": "[Ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
                 "arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
                 "arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",

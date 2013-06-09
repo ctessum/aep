@@ -28,7 +28,7 @@ func (c *RunData) Log(msg interface{}, DebugLevel int) {
 
 // Handle an error occuring within a function to allow the function
 // to fail without killing the whole program.
-func (c *RunData) ErrorRecover(msgchan chan string) {
+func (c *RunData) ErrorRecover() {
 	if err := recover(); err != nil {
 		if c.DebugLevel > 0 {
 			panic(err)
@@ -38,13 +38,12 @@ func (c *RunData) ErrorRecover(msgchan chan string) {
 			c.ErrorFlag = true
 		}
 		Status.Sectors[c.Sector] = "Failed!"
-		msgchan <- c.Sector + " failed!"
+		c.msgchan <- c.Sector + " failed!"
 	}
 }
 
 // Same as ErrorRecover, but also close a channel
-func (c *RunData) ErrorRecoverCloseChan(msgchan chan string,
-	recordChan chan *ParsedRecord) {
+func (c *RunData) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
 	if err := recover(); err != nil {
 		if c.DebugLevel > 0 {
 			panic(err)
@@ -54,7 +53,7 @@ func (c *RunData) ErrorRecoverCloseChan(msgchan chan string,
 			c.ErrorFlag = true
 		}
 		Status.Sectors[c.Sector] = "Failed!"
-		msgchan <- c.Sector + " failed!"
+		c.msgchan <- c.Sector + " failed!"
 		close(recordChan)
 	}
 }
@@ -584,12 +583,18 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 func init() {
 	template.Must(templates.Funcs(
 		template.FuncMap{"class": TableClass}).ParseFiles(
-		"reportfiles/config.html", "reportfiles/status.html",
-		"reportfiles/header.html", "reportfiles/nav.html",
-		"reportfiles/footer.html", "reportfiles/speciate.html"))
+		filepath.Join(reportfiles, "config.html"),
+		filepath.Join(reportfiles, "status.html"),
+		filepath.Join(reportfiles, "header.html"),
+		filepath.Join(reportfiles, "nav.html"),
+		filepath.Join(reportfiles, "footer.html")))
 }
 
-var templates = template.New("x")
+var (
+	templates   = template.New("x")
+	reportfiles = filepath.Join(os.Getenv("GOPATH"),
+		"src", "bitbucket.org", "ctessum", "aep", "reportfiles")
+)
 
 func TableClass(in string) string {
 	if strings.Index(in, "Running") >= 0 {

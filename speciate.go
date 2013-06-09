@@ -9,11 +9,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
 
-var SpecProfChan = make(chan *SpecProfRequest)
+var (
+	SpecProfChan = make(chan *SpecProfRequest)
+	SpecRefFileLock = new(sync.Mutex)
+)
 
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
 func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
@@ -48,7 +52,7 @@ func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 			record = record[0:i]
 		}
 
-		if record[0] != '#' && record[0] != '/' {
+		if record[0] != '#' && record[0] != '/' && record[0] != '\n' {
 			// for point sources, only match to SCC code.
 			splitLine := strings.Split(record, ";")
 			SCC := strings.Trim(splitLine[0], "\"")
@@ -106,7 +110,7 @@ func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 			record = record[0:i]
 		}
 
-		if record[0] != '#' && record[0] != '/' {
+		if record[0] != '#' && record[0] != '/' && record[0] != '\n' {
 			// for point sources, only match to SCC code.
 			splitLine := strings.Split(record, ";")
 			pol := strings.Trim(splitLine[0], "\" ")
@@ -170,7 +174,7 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 	var tempMW sql.NullFloat64
 	var MW float64
 	var group sql.NullString
-	var tempgroupfactor sql.NullFloat64
+	var tempgroupfactor sql.NullString
 	var groupFactor float64
 	for request := range SpecProfChan {
 		profile := make(map[string]*specHolder)
@@ -216,6 +220,9 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 						"species_properties where ID=?", specID).Scan(
 						&specName, &tempMW, &group, &tempgroupfactor)
 					if err != nil {
+						err = fmt.Errorf("Problem retrieving species "+
+							"properties for SPECIATE pollutant ID=%v: %v",
+							specID, err.Error())
 						panic(err)
 					}
 					if tempMW.Valid {
@@ -231,8 +238,11 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 							specName, specID, weightPercent)
 						panic(err)
 					}
-					if tempgroupfactor.Valid {
-						groupFactor = tempgroupfactor.Float64
+					if tempgroupfactor.Valid && tempgroupfactor.String != "" && !c.testMode {
+						groupFactor, err = strconv.ParseFloat(tempgroupfactor.String, 64)
+						if err != nil {
+							panic(err)
+						}
 					} else {
 						groupFactor = 1.0
 					}
@@ -290,8 +300,11 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 						request.PolNameOrProfNumber)
 					panic(err)
 				}
-				if tempgroupfactor.Valid && !c.testMode {
-					groupFactor = tempgroupfactor.Float64
+				if tempgroupfactor.Valid && tempgroupfactor.String != "" && !c.testMode {
+					groupFactor, err = strconv.ParseFloat(tempgroupfactor.String, 64)
+					if err != nil {
+						panic(err)
+					}
 				} else {
 					groupFactor = 1.0
 				}
@@ -328,7 +341,9 @@ type SpecRef struct {
 
 func (c *RunData) NewSpecRef() (sp *SpecRef, err error) {
 	sp = new(SpecRef)
+	SpecRefFileLock.Lock()
 	sp.sRef, err = c.SpecRef()
+	SpecRefFileLock.Unlock()
 	if err != nil {
 		return
 	}
@@ -627,9 +642,9 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 // annual emissions by the speciation factors. Multiply all
 // speciated emissions by a conversion factor from the input
 // units to g/year.
-func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
+func (c *RunData) speciate(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
-	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
+	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Speciating "+period+" "+c.Sector+"...", 0)
 
 	sp, err := c.NewSpecRef()
@@ -676,7 +691,7 @@ func (c *RunData) speciate(MesgChan chan string, InputChan chan *ParsedRecord,
 	Report.SectorResults[c.Sector][period].
 		SpeciationResults = totals
 
-	MesgChan <- "Finished speciating " + period + " " + c.Sector
+	c.msgchan <- "Finished speciating " + period + " " + c.Sector
 	if OutputChan != TotalReportChan {
 		close(OutputChan)
 	}

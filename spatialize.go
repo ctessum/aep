@@ -25,7 +25,7 @@ var (
 
 func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
 	pg, err = gis.Connect(c.PostGISuser, c.PostGISdatabase,
-		c.PostGISpassword)
+		c.PostGISpassword, c.OtherLibpqConnectionParameters)
 	return
 }
 
@@ -48,8 +48,17 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 			" that is currently supported (your projection is " +
 			x.map_proj + ").")
 	}
-	err = pg.NewProjection(c.SRID, proj, x.truelat1,
-		x.truelat2, x.ref_lat, x.ref_lon, c.EarthRadius)
+	projInfo := new(gis.ParsedProj4)
+	projInfo.SRID = c.SRID
+	projInfo.Proj = proj
+	projInfo.Lat_1 = x.truelat1
+	projInfo.Lat_2 = x.truelat2
+	projInfo.Lat_0 = x.ref_lat
+	projInfo.Lon_0 = x.ref_lon
+	projInfo.EarthRadius_a = c.EarthRadius
+	projInfo.EarthRadius_b = c.EarthRadius
+	projInfo.To_meter = 1.
+	err = pg.NewProjection(projInfo)
 	if err != nil {
 		e.Add(err)
 		return
@@ -108,9 +117,9 @@ func (h *SpatialTotals) Add(pol, grid string, data *specValUnits, i int) {
 	*h = t
 }
 
-func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
+func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
-	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
+	defer c.ErrorRecoverCloseChan(InputChan)
 	var err error
 
 	c.Log("Spatializing "+period+" "+c.Sector+"...", 0)
@@ -205,7 +214,7 @@ func (c *RunData) spatialize(MesgChan chan string, InputChan chan *ParsedRecord,
 	}
 	Report.SectorResults[c.Sector][period].SpatialResults = totals
 	c.ResultMaps(TotalGrid, period, pg)
-	MesgChan <- "Finished spatializing " + period + " " + c.Sector
+	c.msgchan <- "Finished spatializing " + period + " " + c.Sector
 	return
 }
 
@@ -223,7 +232,10 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		Status.Surrogates[tableName] = "Waiting to generate"
 		srgGenData := NewSrgGenData(srgNum, grid, pg)
 		SurrogateGeneratorChan <- srgGenData
-		<-srgGenData.finishedChan
+		err := <-srgGenData.finishedChan
+		if err != nil {
+			panic(err)
+		}
 	case "Ready":
 	default:
 		panic(fmt.Sprintf("Unknown status \"%v\"", status))
@@ -291,7 +303,7 @@ type SrgGenData struct {
 	srgNum       string
 	grid         *gis.GridDef
 	pg           *gis.PostGis
-	finishedChan chan int
+	finishedChan chan error
 }
 
 func NewSrgGenData(srgNum string, grid *gis.GridDef, pg *gis.PostGis) (
@@ -300,27 +312,34 @@ func NewSrgGenData(srgNum string, grid *gis.GridDef, pg *gis.PostGis) (
 	d.srgNum = srgNum
 	d.grid = grid
 	d.pg = pg
-	d.finishedChan = make(chan int)
+	d.finishedChan = make(chan error)
 	return
 }
 
 // Generate spatial surrogates
 func (c *RunData) SurrogateGenerator() {
 	for srgData := range SurrogateGeneratorChan {
+		var err error
 		srgNum := srgData.srgNum
 		c.Log(srgSpec[srgNum], 2)
+		if _, ok := srgSpec[srgNum]; !ok {
+			err := fmt.Errorf("There is no surrogate specification for surrogate "+
+				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
+			srgData.finishedChan <- err
+			continue
+		}
 		MergeFunction := srgSpec[srgNum].MergeFunction
 		if MergeFunction == nil {
-			c.genSrgNoMerge(srgData)
+			err = c.genSrgNoMerge(srgData)
 		} else {
-			c.genSrgMerge(srgData)
+			err = c.genSrgMerge(srgData)
 		}
-		srgData.finishedChan <- 0
+		srgData.finishedChan <- err
 	}
 }
 
 // Generate a surrogate that doesn't require merging
-func (c *RunData) genSrgNoMerge(srgData *SrgGenData) {
+func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
 	inputMap := srgSpec[srgNum].DATASHAPEFILE
@@ -329,21 +348,24 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) {
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
-	err := gis.CreateGriddingSurrogate(c, srgNum, inputMap,
+	err = gis.CreateGriddingSurrogate(c, srgNum, inputMap,
 		inputColumn, surrogateMap, WeightColumns, FilterFunction,
 		grid, c.ShapefileSchema)
 	if err == nil {
 		Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
+		return
 	} else {
 		Status.Surrogates[grid.Name+"_"+srgNum] = "Failed!"
-		panic("Surrogate " + grid.Name + "_" + srgNum + " Failed!")
+		err = fmt.Errorf("Surrogate %v_%v Failed!\n%v",
+			grid.Name, srgNum, err.Error())
+		return
 	}
 }
 
 // surrogate merging: create a surrogate from other surrogates
 // Here, we just create weight surrogate tables if they don't exist.
 // The actual merging happens elsewhere.
-func (c *RunData) genSrgMerge(srgData *SrgGenData) {
+func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
 	pg := srgData.pg
@@ -353,7 +375,8 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) {
 	for _, mrgval := range MergeFunction {
 		newSrgNum, ok := srgCodes[mrgval.name]
 		if !ok {
-			panic("No match for surrogate named " + mrgval.name)
+			err = fmt.Errorf("No match for surrogate named %v.", mrgval.name)
+			return
 		}
 		tableName := grid.Name + "_" + newSrgNum
 		status := Status.GetSrgStatus(tableName, grid.Schema, pg)
@@ -364,13 +387,18 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) {
 			c.WaitSrgToFinish(tableName)
 		case "Empty":
 			newSrgData := NewSrgGenData(newSrgNum, grid, pg)
-			c.genSrgNoMerge(newSrgData)
+			err = c.genSrgNoMerge(newSrgData)
+			if err != nil {
+				return
+			}
 		case "Ready":
 		default:
-			panic(fmt.Sprintf("Unknown status \"%v\"", status))
+			err = fmt.Errorf("Unknown status \"%v\"", status)
+			return
 		}
 	}
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
+	return
 }
 
 func (c *RunData) WaitSrgToFinish(srgNum string) {
@@ -536,7 +564,7 @@ func (c *RunData) GridRef() (err error) {
 			record = record[0:i]
 		}
 
-		if record[0] != '#' {
+		if record[0] != '#' && record[0] != '\n' {
 			splitLine := strings.Split(record, ";")
 			SCC := splitLine[1]
 			if len(SCC) == 8 {

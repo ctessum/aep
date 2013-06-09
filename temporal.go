@@ -12,8 +12,8 @@ var (
 	temporalRef = make(map[string]map[string][3]string)
 )
 
-// TemporalRef reads the SMOKE tref file, which maps FIPS and SCC 
-// codes to grid surrogates. Although the tref file allows the 
+// TemporalRef reads the SMOKE tref file, which maps FIPS and SCC
+// codes to grid surrogates. Although the tref file allows the
 // specification of code by pollutant name, that functionality is
 // not included here.
 func (c *RunData) TemporalRef() (err error) {
@@ -44,7 +44,7 @@ func (c *RunData) TemporalRef() (err error) {
 			record = record[0:i]
 		}
 
-		if record[0] != '#' {
+		if record[0] != '#' && record[0] != '\n' {
 			splitLine := strings.Split(record, ";")
 			SCC := splitLine[0]
 			if len(SCC) == 0 {
@@ -72,11 +72,10 @@ func (c *RunData) TemporalRef() (err error) {
 	return
 }
 
-func (c *RunData) AreaTemporalAggregator(MesgChan chan string,
-	InputChan chan *ParsedRecord,
+func (c *RunData) AreaTemporalAggregator(InputChan chan *ParsedRecord,
 	period string) {
 	var err error
-	defer c.ErrorRecoverCloseChan(MesgChan, InputChan)
+	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Aggregating by temporal profile "+period+" "+c.Sector+"...", 0)
 
 	data := make(map[[3]string]map[string][]*matrix.SparseMatrix)

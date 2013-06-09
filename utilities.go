@@ -166,6 +166,8 @@ func GetCountryCode(country string) (code string) {
 		code = "0"
 	case "CA": // Canada
 		code = "1"
+	case "CANADA":
+		code = "1"
 	case "MEXICO":
 		code = "2"
 	case "CUBA":
@@ -177,7 +179,7 @@ func GetCountryCode(country string) (code string) {
 	case "DOMINICANREPUBLIC":
 		code = "6"
 	default:
-		err := fmt.Errorf("Unknown country %v.",country)
+		err := fmt.Errorf("Unknown country %v.", country)
 		panic(err)
 	}
 	return
@@ -199,7 +201,7 @@ func GetCountryName(code string) (country string) {
 	case "6":
 		country = "DOMINICANREPUBLIC"
 	default:
-		err := fmt.Errorf("Unknown country code %v.",code)
+		err := fmt.Errorf("Unknown country code %v.", code)
 		panic(err)
 	}
 	return

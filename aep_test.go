@@ -64,7 +64,8 @@ func TestSpeciation(t *testing.T) {
 // This test might fail if there are surrogates for more than one country
 func TestGriddingSurrogates(t *testing.T) {
 	pg, err := gis.Connect(Report.Config.PostGISuser,
-		Report.Config.PostGISdatabase, Report.Config.PostGISpassword)
+		Report.Config.PostGISdatabase, Report.Config.PostGISpassword,
+		Report.Config.OtherLibpqConnectionParameters)
 	defer pg.Disconnect()
 	if err != nil {
 		panic(err)
