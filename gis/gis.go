@@ -649,6 +649,7 @@ func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
 	shapefileSchema string) (err error) {
 
 	srgCompletion := 0
+	SrgProgress = 0.
 	pg, err := PGc.PGconnect()
 	if err != nil {
 		err = handle(err, "")
@@ -656,7 +657,12 @@ func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
 	}
 	defer pg.Disconnect()
 
-	pg.Vacuum()
+	OutName := grid.Name + "_" + srgCode
+	// if this surrogate was requested by more than one sector, make sure we
+	// don't create it twice.
+	if pg.TableExists(grid.Schema, OutName) {
+		return
+	}
 
 	if !pg.TableExists(shapefileSchema, surrogateTable) {
 		err = fmt.Errorf("Table %v.%v doesn't exist", shapefileSchema,
@@ -706,7 +712,6 @@ func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
 
 	shapeSRID := pg.GetSRID(shapefileSchema, shapeTable)
 	srgSRID := pg.GetSRID(shapefileSchema, surrogateTable)
-	OutName := grid.Name + "_" + srgCode
 	SnapDistance := "1.e-9"
 	data := newsrgdataholder(shapeTable, ShapeColumn, shapeSRID, surrogateTable,
 		srgSRID, grid, FilterString, shapefileSchema, WeightColumns, srgType,
@@ -728,17 +733,18 @@ func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
 
 	pg.DropTable("public", "shapeSelect")
 	pg.DropTable("public", "srgSelect")
+	pg.DropTable("public", "gridBoundary")
 	const t = `
 BEGIN;
+CREATE TABLE gridBoundary AS
+SELECT ST_BuildArea(ST_Boundary(ST_Union(geom))) 
+	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}};
 CREATE TABLE shapeSelect AS
-WITH 
-gridbdy AS (select ST_BuildArea(ST_Boundary(ST_Union(geom))) 
-	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}})
 SELECT a.{{.ShapeColumn}} as inputID,
 	ST_SimplifyPreserveTopology({{if .ShapeSameSRID}}
 		ST_Buffer(a.geom,0){{else}}
 		ST_Transform(ST_Buffer(a.geom,0),{{.Grid.SRID}}){{end}},{{.Grid.Dx}}) as geom 
-FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridbdy b
+FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridBoundary b
 WHERE ST_Intersects(ST_Buffer(a.geom,0), {{if .ShapeSameSRID}}b.geom{{else}}
 	ST_Transform(b.geom,{{.ShapeSRID}}){{end}});
 CREATE INDEX shapeSelect_gix ON shapeSelect USING GIST (geom);
@@ -776,7 +782,8 @@ COMMIT;`
 
 	pg.DropTable(grid.Schema, "tempsrg")
 	cmd = fmt.Sprintf("CREATE TABLE %v.tempsrg (row int, col int, "+
-		"inputID text, shapeFraction double precision, geom geometry);",
+		"inputID text, shapeFraction double precision, geom geometry, "+
+		"coveredByGrid boolean);",
 		grid.Schema)
 	Log(cmd, 3)
 	_, err = pg.db.Exec(cmd)
@@ -836,11 +843,6 @@ COMMIT;`
 		return
 	}
 	pg.VacuumAnalyze(grid.Schema, OutName)
-	if err != nil {
-		err = handle(err, "")
-		return
-	}
-	pg.Vacuum()
 
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.%v.", grid.Schema,
 		OutName), 0)
@@ -976,7 +978,18 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 	}
 
 	for data.InputID = range inputIDchan {
+		var cmd string
 		pg.DropTable("public", "singleShapeSrgs_"+data.InputID)
+
+		var coveredByGrid bool
+		cmd = fmt.Sprintf("SELECT ST_Within(a.geom,b.geom) FROM "+
+			"(SELECT geom FROM shapeSelect where inputID='%v') a, "+
+			"gridBoundary b;", data.InputID)
+		err = pg.db.QueryRow(cmd).Scan(&coveredByGrid)
+		if err != nil {
+			errchan <- handle(err, cmd)
+		}
+
 		// First run the faster version of the sql query, and if there is
 		// an error, run it again with the slower
 		// (and more error tolerant) version.
@@ -991,7 +1004,6 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 
 		var singleShapeSrgWeightTemp sql.NullFloat64
 		var singleShapeSrgWeight float64
-		var cmd string
 		if data.Polygon {
 			cmd = fmt.Sprintf("SELECT SUM(weight*ST_Area(geom)) "+
 				"FROM singleShapeSrgs_%v;", data.InputID)
@@ -1071,9 +1083,10 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 			if gridCellSrgWeight > 0 {
 				frac = gridCellSrgWeight / singleShapeSrgWeight
 				cmd = fmt.Sprintf("INSERT INTO %v.tempsrg "+
-					"(row, col, inputID, shapeFraction, geom) "+
-					"VALUES (%v,%v,%v,%v,ST_GeomFromEWKT('%v'));",
-					data.Grid.Schema, row, col, data.InputID, frac, geom)
+					"(row, col, inputID, shapeFraction, geom, coveredByGrid) "+
+					"VALUES (%v,%v,%v,%v,ST_GeomFromEWKT('%v'),%v);",
+					data.Grid.Schema, row, col, data.InputID, frac, geom,
+					coveredByGrid)
 				Log(cmd, 4)
 				_, err = pg.db.Exec(cmd)
 				if err != nil {
@@ -1083,7 +1096,6 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 			}
 
 			pg.db.Exec("DROP TABLE srgsInGrid;")
-			pg.Vacuum()
 		}
 		gridRows.Close()
 		pg.DropTable("public", "singleShapeSrgs_"+data.InputID)
@@ -1124,8 +1136,8 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 
 	srg = matrix.ZerosSparse(grid.Ny, grid.Nx)
 
-	cmd := fmt.Sprintf("SELECT row,col,shapeFraction FROM %v.%v_%v "+
-		"WHERE inputID='%v';", strings.ToLower(schema),
+	cmd := fmt.Sprintf("SELECT row,col,shapeFraction,coveredByGrid "+
+		"FROM %v.%v_%v WHERE inputID='%v';", strings.ToLower(schema),
 		strings.ToLower(grid.Name), srgNum, inputID)
 
 	Log(cmd, 3)
@@ -1133,13 +1145,32 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 	if err != nil {
 		return
 	}
+	var coveredByGrid bool // this should be the same for all rows
 	for rows.Next() {
 		var row, col int
 		var fraction float64
-		rows.Scan(&row, &col, &fraction)
+		rows.Scan(&row, &col, &fraction, &coveredByGrid)
 		srg.Set(row-1, col-1, fraction)
 	}
 	rows.Close()
+	// If this input shape is completely within the boundaries of the grid,
+	// renormalize it so the surrogate sum = 1. This shouldn't be necessary
+	// but sometimes there are GIS problems that cause the sum != 1.
+	// In cases where part of the input shape is outside of the grid boundary,
+	// the sum of the surrogate should be less than 1.
+	if coveredByGrid {
+		sum := MatrixSum(srg)
+		srg.Scale(1. / sum)
+	}
+	return
+}
+
+func MatrixSum(mat *matrix.SparseMatrix) (sum float64) {
+	for j := 0; j < mat.Rows(); j++ {
+		for i := 0; i < mat.Cols(); i++ {
+			sum += mat.Get(j, i)
+		}
+	}
 	return
 }
 

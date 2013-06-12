@@ -12,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var (
@@ -58,8 +57,8 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	projInfo.EarthRadius_a = c.EarthRadius
 	projInfo.EarthRadius_b = c.EarthRadius
 	projInfo.To_meter = 1.
-	msg:= fmt.Sprintf("Output projection is:\n%v",projInfo.ToString())
-	c.Log(msg,0)
+	msg := fmt.Sprintf("Output projection is:\n%v", projInfo.ToString())
+	c.Log(msg, 0)
 	err = pg.NewProjection(projInfo)
 	if err != nil {
 		e.Add(err)
@@ -225,12 +224,9 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 
 	tableName := grid.Name + "_" + srgNum
 	status := Status.GetSrgStatus(tableName, grid.Schema, pg)
-	switch status {
-	case "Generating":
-		c.WaitSrgToFinish(tableName)
-	case "Waiting to generate":
-		c.WaitSrgToFinish(tableName)
-	case "Empty":
+	switch {
+	case status == "Generating" || status == "Waiting to generate" ||
+		status == "Empty":
 		Status.Surrogates[tableName] = "Waiting to generate"
 		srgGenData := NewSrgGenData(srgNum, grid, pg)
 		SurrogateGeneratorChan <- srgGenData
@@ -238,7 +234,7 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		if err != nil {
 			panic(err)
 		}
-	case "Ready":
+	case status == "Ready":
 	default:
 		panic(fmt.Sprintf("Unknown status \"%v\"", status))
 	}
@@ -383,18 +379,15 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 		}
 		tableName := grid.Name + "_" + newSrgNum
 		status := Status.GetSrgStatus(tableName, grid.Schema, pg)
-		switch status {
-		case "Generating":
-			c.WaitSrgToFinish(tableName)
-		case "Waiting to generate":
-			c.WaitSrgToFinish(tableName)
-		case "Empty":
+		switch {
+		case status == "Generating" || status == "Waiting to generate" ||
+			status == "Empty":
 			newSrgData := NewSrgGenData(newSrgNum, grid, pg)
 			err = c.genSrgNoMerge(newSrgData)
 			if err != nil {
 				return
 			}
-		case "Ready":
+		case status == "Ready":
 		default:
 			err = fmt.Errorf("Unknown status \"%v\"", status)
 			return
@@ -402,19 +395,6 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 	}
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
 	return
-}
-
-func (c *RunData) WaitSrgToFinish(srgNum string) {
-	for {
-		if Status.Surrogates[srgNum] == "Generating" ||
-			Status.Surrogates[srgNum] == "Waiting to generate" {
-			time.Sleep(1000 * time.Millisecond)
-			msg := fmt.Sprintf("Waiting for $v...\n", srgNum)
-			c.Log(msg, 4)
-		} else {
-			break
-		}
-	}
 }
 
 type srgSpecHolder struct {
