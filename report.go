@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/skelterjohn/go.matrix"
+	"go/build"
 	"html/template"
 	"io"
 	"log"
@@ -117,9 +118,11 @@ type Results struct {
 }
 
 type StatusHolder struct {
-	Sectors       map[string]string
-	Surrogates    map[string]string
-	ErrorMessages string
+	Sectors           map[string]string
+	Surrogates        map[string]string
+	ErrorMessages     string
+	HTMLerrorMessages template.HTML
+	SrgProgress       float64
 }
 
 func NewStatus() *StatusHolder {
@@ -581,6 +584,11 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
+	pkg, err := build.Import("bitbucket.org/ctessum/aep", "", build.FindOnly)
+	if err != nil {
+		panic(err)
+	}
+	reportfiles = filepath.Join(pkg.SrcRoot, pkg.ImportPath, "reportfiles")
 	template.Must(templates.Funcs(
 		template.FuncMap{"class": TableClass}).ParseFiles(
 		filepath.Join(reportfiles, "config.html"),
@@ -592,8 +600,7 @@ func init() {
 
 var (
 	templates   = template.New("x")
-	reportfiles = filepath.Join(os.Getenv("GOPATH"),
-		"src", "bitbucket.org", "ctessum", "aep", "reportfiles")
+	reportfiles = ""
 )
 
 func TableClass(in string) string {
@@ -621,6 +628,9 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	}
 }
 func renderStatusTemplate(w http.ResponseWriter) {
+	Status.SrgProgress = gis.SrgProgress
+	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
+		"\n", "<br>", -1))
 	err := templates.ExecuteTemplate(w, "status.html", Status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -756,10 +766,8 @@ func DrawTable(format string, includeTotals bool, sectors, pols []string,
 }
 
 func ReportServer() {
-	http.Handle("/css/", http.StripPrefix("/css/",
-		http.FileServer(http.Dir("reportfiles/css"))))
-	http.Handle("/js/", http.StripPrefix("/js/",
-		http.FileServer(http.Dir("reportfiles/js"))))
+	http.Handle("/css/", http.FileServer(http.Dir(reportfiles)))
+	http.Handle("/js/", http.FileServer(http.Dir(reportfiles)))
 	http.HandleFunc("/inventory", inventoryHandler)
 	http.HandleFunc("/speciate", speciateHandler)
 	http.HandleFunc("/spatial", spatialHandler)

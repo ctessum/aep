@@ -32,13 +32,17 @@
 					</tr>{{end}} 
 				</tbody>
 			</table>
+			<p>Progress of currently generating surrogate:</p>
+			<div class="progress">
+				<div class="bar" style="width: {{.SrgProgress}}%;"></div>
+		    </div>
 		</div>
 	</div>
 	<div class="row">
 		<div class="span12">
 			<hr>
 			<h5>Error Messages</h5>
-			{{.ErrorMessages}}
+			{{.HTMLerrorMessages}}
 		</div>
 	</div>
 </div>

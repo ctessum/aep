@@ -30,7 +30,7 @@ func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
 }
 
 func (c *RunData) SpatialSetup(e *ErrCat) {
-	c.Log("Setting up spatial environment...", 0)
+	c.Log("Setting up spatial environment...", 1)
 	gis.DebugLevel = c.DebugLevel
 	pg, err := c.PGconnect()
 	defer pg.Disconnect()
@@ -58,6 +58,8 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	projInfo.EarthRadius_a = c.EarthRadius
 	projInfo.EarthRadius_b = c.EarthRadius
 	projInfo.To_meter = 1.
+	msg:= fmt.Sprintf("Output projection is:\n%v",projInfo.ToString())
+	c.Log(msg,0)
 	err = pg.NewProjection(projInfo)
 	if err != nil {
 		e.Add(err)
@@ -325,6 +327,7 @@ func (c *RunData) SurrogateGenerator() {
 		if _, ok := srgSpec[srgNum]; !ok {
 			err := fmt.Errorf("There is no surrogate specification for surrogate "+
 				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
+			Status.Surrogates[srgData.grid.Name+"_"+srgNum] = "Failed!"
 			srgData.finishedChan <- err
 			continue
 		}
@@ -442,10 +445,10 @@ type SrgMerge struct {
 func (c *RunData) SurrogateSpecification() (err error) {
 	var record []string
 	fid, err := os.Open(c.SrgSpecFile)
-	defer fid.Close()
 	if err != nil {
 		return
 	}
+	defer fid.Close()
 	reader := csv.NewReader(fid)
 	reader.Comment = '#'
 	firstLine := true
