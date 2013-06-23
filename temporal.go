@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
 	"fmt"
-	"github.com/skelterjohn/go.matrix"
 	"os"
 	"strings"
 )
@@ -78,7 +78,7 @@ func (c *RunData) AreaTemporalAggregator(InputChan chan *ParsedRecord,
 	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Aggregating by temporal profile "+period+" "+c.Sector+"...", 0)
 
-	data := make(map[[3]string]map[string][]*matrix.SparseMatrix)
+	data := make(map[[3]string]map[string][]*sparse.SparseArray)
 
 	for record := range InputChan {
 		var matchedSCC string
@@ -98,24 +98,21 @@ func (c *RunData) AreaTemporalAggregator(InputChan chan *ParsedRecord,
 
 		// Create matricies if they don't exist
 		if _, ok := data[temporalCodes]; !ok {
-			data[temporalCodes] = make(map[string][]*matrix.SparseMatrix)
+			data[temporalCodes] = make(map[string][]*sparse.SparseArray)
 		}
 		// Add data from record into matricies.
 
 		for pol, vals := range record.ANN_EMIS {
 			if _, ok := data[temporalCodes][pol]; !ok {
 				data[temporalCodes][pol] =
-					make([]*matrix.SparseMatrix, len(grids))
+					make([]*sparse.SparseArray, len(grids))
 				for i, grid := range grids {
 					data[temporalCodes][pol][i] =
-						matrix.ZerosSparse(grid.Ny, grid.Nx)
+						sparse.ZerosSparse(grid.Ny, grid.Nx)
 				}
 			}
 			for i, _ := range grids {
-				err = data[temporalCodes][pol][i].AddSparse(vals.gridded[i])
-				if err != nil {
-					panic(err)
-				}
+				data[temporalCodes][pol][i].AddSparse(vals.gridded[i])
 			}
 		}
 	}

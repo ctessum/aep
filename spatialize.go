@@ -2,10 +2,10 @@ package main
 
 import (
 	"bitbucket.org/ctessum/aep/gis"
+	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
 	"encoding/csv"
 	"fmt"
-	"github.com/skelterjohn/go.matrix"
 	"io"
 	"log"
 	"math"
@@ -112,7 +112,7 @@ func (h *SpatialTotals) Add(pol, grid string, data *specValUnits, i int) {
 			panic(err)
 		}
 	}
-	gridTotal := MatrixSum(data.gridded[i])
+	gridTotal := data.gridded[i].Sum()
 	t.InsideDomainTotals[grid][pol].Val += gridTotal
 	t.OutsideDomainTotals[grid][pol].Val += data.Val - gridTotal
 	*h = t
@@ -126,7 +126,7 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 	c.Log("Spatializing "+period+" "+c.Sector+"...", 0)
 
 	totals := newSpatialTotalHolder()
-	TotalGrid := make(map[*gis.GridDef]map[string]*matrix.SparseMatrix) // map[grid][pol]data
+	TotalGrid := make(map[*gis.GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
 
 	pg, err := c.PGconnect()
 	defer pg.Disconnect()
@@ -142,17 +142,17 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 			}
 
 			for pol, data := range record.ANN_EMIS {
-				data.gridded = make([]*matrix.SparseMatrix, len(grids))
+				data.gridded = make([]*sparse.SparseArray, len(grids))
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
-						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
+						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
 					}
 					if _, ok := TotalGrid[grid][pol]; !ok {
 						TotalGrid[grid][pol] =
-							matrix.ZerosSparse(grid.Ny, grid.Nx)
+							sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
-					data.gridded[i] = matrix.ZerosSparse(grid.Ny,
+					data.gridded[i] = sparse.ZerosSparse(grid.Ny,
 						grid.Nx)
 					row := int((record.PointYcoord - grid.Y0) /
 						grid.Dy)
@@ -160,8 +160,8 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 						grid.Dx)
 					if row > 0 && row < grid.Ny &&
 						col > 0 && col < grid.Nx {
-						data.gridded[i].Set(row, col, data.Val)
-						TotalGrid[grid][pol].Add(data.gridded[i])
+						data.gridded[i].Set(data.Val,row, col)
+						TotalGrid[grid][pol].AddVal(data.Val,row, col)
 					}
 					totals.Add(pol, grid.Name, data, i)
 				}
@@ -187,20 +187,20 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 			srgNum := gridRef[record.Country][matchedSCC][matchedFIPS]
 
 			for pol, val := range record.ANN_EMIS {
-				val.gridded = make([]*matrix.SparseMatrix,
+				val.gridded = make([]*sparse.SparseArray,
 					len(grids))
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
-						TotalGrid[grid] = make(map[string]*matrix.SparseMatrix)
+						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
 					}
 					if _, ok := TotalGrid[grid][pol]; !ok {
-						TotalGrid[grid][pol] = matrix.ZerosSparse(grid.Ny, grid.Nx)
+						TotalGrid[grid][pol] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
 					val.gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid, pg,
 						make([]string, 0))
 					val.gridded[i].Scale(val.Val)
-					TotalGrid[grid][pol].Add(val.gridded[i])
+					TotalGrid[grid][pol].AddSparse(val.gridded[i])
 					totals.Add(pol, grid.Name, val, i)
 				}
 			}
@@ -220,14 +220,16 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 }
 
 func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
-	pg *gis.PostGis, upstreamSrgs []string) (srg *matrix.SparseMatrix) {
+	pg *gis.PostGis, upstreamSrgs []string) (srg *sparse.SparseArray) {
 
 	tableName := grid.Name + "_" + srgNum
 	status := Status.GetSrgStatus(tableName, grid.Schema, pg)
 	switch {
 	case status == "Generating" || status == "Waiting to generate" ||
 		status == "Empty":
-		Status.Surrogates[tableName] = "Waiting to generate"
+		if status == "Empty" {
+			Status.Surrogates[tableName] = "Waiting to generate"
+		}
 		srgGenData := NewSrgGenData(srgNum, grid, pg)
 		SurrogateGeneratorChan <- srgGenData
 		err := <-srgGenData.finishedChan
@@ -243,7 +245,7 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 }
 
 func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
-	pg *gis.PostGis, upstreamSrgs []string) (srg *matrix.SparseMatrix) {
+	pg *gis.PostGis, upstreamSrgs []string) (srg *sparse.SparseArray) {
 
 	var err error
 	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
@@ -259,7 +261,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		}
 
 		// Try backup surrogates if the surrogate sums to zero.
-		if MatrixSum(srg) == 0 {
+		if srg.Sum() == 0. {
 			backupNames := []string{secondarySrg, tertiarySrg, quarternarySrg}
 			for _, backupName := range backupNames {
 				if backupName != "" {
@@ -269,13 +271,13 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 							append(upstreamSrgs, newSrgNum))
 					}
 				}
-				if MatrixSum(srg) != 0 {
+				if srg.Sum() != 0 {
 					break
 				}
 			}
 		}
 	} else {
-		srg = matrix.ZerosSparse(grid.Ny, grid.Nx)
+		srg = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for _, mrgval := range MergeFunction {
 			newSrgNum, ok := srgCodes[mrgval.name]
 			if !ok {
@@ -289,8 +291,8 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 
 		}
 	}
-	srgSum := MatrixSum(srg)
-	if srgSum > 1.000001 || math.IsNaN(srgSum) {
+	srgSum := srg.Sum()
+	if srgSum > 1.001 || math.IsNaN(srgSum) {
 		err = fmt.Errorf("Sum for surrogate !<= 1.0: %v", srgSum)
 		panic(err)
 	}
@@ -383,7 +385,12 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 		case status == "Generating" || status == "Waiting to generate" ||
 			status == "Empty":
 			newSrgData := NewSrgGenData(newSrgNum, grid, pg)
-			err = c.genSrgNoMerge(newSrgData)
+			newMergeFunction := srgSpec[newSrgNum].MergeFunction
+			if newMergeFunction == nil {
+				err = c.genSrgNoMerge(newSrgData)
+			} else {
+				err = c.genSrgMerge(newSrgData)
+			}
 			if err != nil {
 				return
 			}
@@ -431,6 +438,7 @@ func (c *RunData) SurrogateSpecification() (err error) {
 	defer fid.Close()
 	reader := csv.NewReader(fid)
 	reader.Comment = '#'
+	reader.TrailingComma = true
 	firstLine := true
 	for {
 		record, err = reader.Read()

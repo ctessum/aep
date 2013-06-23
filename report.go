@@ -2,10 +2,10 @@ package main
 
 import (
 	"bitbucket.org/ctessum/aep/gis"
+	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/skelterjohn/go.matrix"
 	"go/build"
 	"html/template"
 	"io"
@@ -158,7 +158,7 @@ func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string 
 
 // Prepare maps of emissions for each species and domain.
 func (c *RunData) ResultMaps(
-	TotalGrid map[*gis.GridDef]map[string]*matrix.SparseMatrix,
+	TotalGrid map[*gis.GridDef]map[string]*sparse.SparseArray,
 	period string, pg *gis.PostGis) {
 
 	for grid, d1 := range TotalGrid {

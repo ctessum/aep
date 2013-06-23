@@ -1,12 +1,12 @@
 package gis
 
 import (
+	"bitbucket.org/ctessum/aep/sparse"
 	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	_ "github.com/bmizerany/pq"
-	"github.com/skelterjohn/go.matrix"
 	"log"
 	"os"
 	"runtime"
@@ -115,7 +115,7 @@ func (pg *PostGis) NewProjection(p *ParsedProj4) (err error) {
 			// if it doesn't exist, create it
 			cmd := fmt.Sprintf("INSERT INTO spatial_ref_sys "+
 				"(srid, auth_name, auth_srid, proj4text) "+
-				"VALUES (%v,'aep',%v,'%v');", p.SRID, p.SRID, p.ToString)
+				"VALUES (%v,'aep',%v,'%v');", p.SRID, p.SRID, p.ToString())
 			Log(cmd, 3)
 			_, err = pg.db.Exec(cmd)
 			return
@@ -756,7 +756,7 @@ SELECT a.gid, ST_SimplifyPreserveTopology({{if .SrgSameSRID}}
 	ST_Transform(ST_Buffer(a.geom,0),{{.Grid.SRID}})
 	{{end}},{{.Grid.Dx}}) as geom,{{if .PolygonWithWeight}} 
 ({{.WeightColumns}})/ST_Area(ST_Buffer(a.geom,0)) AS weight {{else}}{{if .LineWithWeight}} 
-({{.WeightColumns}})/ST_Length(ST_Buffer(a.geom,0)) AS weight {{else}}{{if .PointWithWeight}} 
+({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}{{if .PointWithWeight}} 
 {{.WeightColumns}} AS weight {{else}}1.0 as weight{{end}} {{end}} {{end}}
 	FROM {{.ShapefileSchema}}."{{.SrgTbl}}" a
 {{if .WeightOrFilter}}WHERE {{end}}{{if .WithWeight}}({{.WeightColumns}})!=0.{{end}}{{if .WeightAndFilter}} AND {{end}}{{if .UseFilter}}{{.FilterString}}{{end}};
@@ -1132,9 +1132,9 @@ func NewSurrogateFilter() (srgflt *SurrogateFilter) {
 }
 
 func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
-	grid *GridDef) (srg *matrix.SparseMatrix, err error) {
+	grid *GridDef) (srg *sparse.SparseArray, err error) {
 
-	srg = matrix.ZerosSparse(grid.Ny, grid.Nx)
+	srg = sparse.ZerosSparse(grid.Ny, grid.Nx)
 
 	cmd := fmt.Sprintf("SELECT row,col,shapeFraction,coveredByGrid "+
 		"FROM %v.%v_%v WHERE inputID='%v';", strings.ToLower(schema),
@@ -1150,7 +1150,7 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 		var row, col int
 		var fraction float64
 		rows.Scan(&row, &col, &fraction, &coveredByGrid)
-		srg.Set(row-1, col-1, fraction)
+		srg.Set(fraction, row-1, col-1)
 	}
 	rows.Close()
 	// If this input shape is completely within the boundaries of the grid,
@@ -1159,17 +1159,8 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 	// In cases where part of the input shape is outside of the grid boundary,
 	// the sum of the surrogate should be less than 1.
 	if coveredByGrid {
-		sum := MatrixSum(srg)
+		sum := srg.Sum()
 		srg.Scale(1. / sum)
-	}
-	return
-}
-
-func MatrixSum(mat *matrix.SparseMatrix) (sum float64) {
-	for j := 0; j < mat.Rows(); j++ {
-		for i := 0; i < mat.Cols(); i++ {
-			sum += mat.Get(j, i)
-		}
 	}
 	return
 }
@@ -1211,7 +1202,7 @@ func (pg *PostGis) MakeRasterTable(schema, name string) {
 }
 
 func (pg *PostGis) AddDataRowToRasterTable(schema, tableName, rasterRowName string,
-	grid *GridDef, data *matrix.SparseMatrix) {
+	grid *GridDef, data *sparse.SparseArray) {
 	var err error
 
 	type holder struct {
@@ -1250,17 +1241,15 @@ COMMIT;`
 	}
 
 	var val float64
-	for j := 0; j < grid.Ny; j++ {
-		for i := 0; i < grid.Nx; i++ {
-			val = data.Get(j, i)
-			if val != 0 {
-				cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%v)"+
-					"where name='%v';", schema, tableName, i+1, j+1, val, rasterRowName)
-				_, err = pg.db.Exec(cmd)
-				if err != nil {
-					panic(err)
-				}
-			}
+	for _, i := range data.Nonzero() {
+		val = data.Get1d(i)
+		index := data.IndexNd(i)
+		cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%v)"+
+			"where name='%v';", schema, tableName, index[1]+1, index[0]+1,
+			val, rasterRowName)
+		_, err = pg.db.Exec(cmd)
+		if err != nil {
+			panic(err)
 		}
 	}
 }

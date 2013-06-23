@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/skelterjohn/go.matrix"
+	"bitbucket.org/ctessum/aep/sparse"
 	"io"
 	"os"
 	"strconv"
@@ -85,7 +85,7 @@ type ParsedRecord struct {
 type specValUnits struct {
 	Val     float64
 	Units   string
-	gridded []*matrix.SparseMatrix
+	gridded []*sparse.SparseArray
 }
 
 func (c RunData) newParsedRecord() (rec *ParsedRecord) {

@@ -2,7 +2,7 @@ package main
 
 import (
 	"bitbucket.org/ctessum/aep/gis"
-	"github.com/skelterjohn/go.matrix"
+	"bitbucket.org/ctessum/aep/sparse"
 	"math"
 	"os"
 	"path/filepath"
@@ -21,6 +21,7 @@ var (
 func TestModelRun(t *testing.T) {
 	gopath := os.Getenv("GOPATH")
 	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep", "test", "Minneapolis2005.json")
+	//config := "/media/chris/data/2005_nei_data/2005_nei.json"
 	os.Args = append(os.Args, "-config="+config, "-testmode=true") //, "-sectors=ptipm")
 	main()
 }
@@ -75,14 +76,14 @@ func TestGriddingSurrogates(t *testing.T) {
 		for tableName, status := range Status.Surrogates {
 			if status == "Ready" {
 				splitSrg := strings.Split(tableName, "_")
-				var srg *matrix.SparseMatrix
+				var srg *sparse.SparseArray
 				for _, grid := range grids {
 					if grid.Name == splitSrg[0] {
 						srg = Report.Config.retrieveSurrogate(splitSrg[1],
 							FIPS, grid, pg, make([]string, 0))
 					}
 				}
-				sum := MatrixSum(srg)
+				sum := srg.Sum()
 				difference := diff(sum, 1.0)
 				if difference > Tolerance || math.IsNaN(difference) {
 					t.Fail()
