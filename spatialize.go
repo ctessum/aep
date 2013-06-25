@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -20,6 +21,8 @@ var (
 	grids                  = make([]*gis.GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]string)
 	SurrogateGeneratorChan = make(chan *SrgGenData)
+	srgCacheStart          sync.Once
+	srgCacheRequestChan    = make(chan *srgCacheRequest)
 )
 
 func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
@@ -160,8 +163,8 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 						grid.Dx)
 					if row > 0 && row < grid.Ny &&
 						col > 0 && col < grid.Nx {
-						data.gridded[i].Set(data.Val,row, col)
-						TotalGrid[grid][pol].AddVal(data.Val,row, col)
+						data.gridded[i].Set(data.Val, row, col)
+						TotalGrid[grid][pol].AddVal(data.Val, row, col)
 					}
 					totals.Add(pol, grid.Name, data, i)
 				}
@@ -244,10 +247,55 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	return
 }
 
+func srgCacher() {
+	srgCache := make(map[string]map[string]map[string]*sparse.SparseArray)
+	for r := range srgCacheRequestChan {
+		switch {
+		case r.srg == nil && r.returnChan != nil: // retrieve from cache
+			srg, ok := srgCache[r.grid][r.srgNum][r.FIPS]
+			if ok {
+				r.returnChan <- srg
+			} else {
+				r.returnChan <- nil
+			}
+		case r.srg != nil && r.returnChan == nil: // add to cache
+			if _, ok := srgCache[r.grid]; !ok {
+				srgCache[r.grid] = make(map[string]map[string]*sparse.SparseArray)
+			}
+			if _, ok := srgCache[r.grid][r.srgNum]; !ok {
+				srgCache[r.grid][r.srgNum] = make(map[string]*sparse.SparseArray)
+			}
+			srgCache[r.grid][r.srgNum][r.FIPS] = r.srg
+		}
+	}
+}
+
+type srgCacheRequest struct {
+	grid       string
+	srgNum     string
+	FIPS       string
+	srg        *sparse.SparseArray
+	returnChan chan *sparse.SparseArray
+}
+
 func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
-	pg *gis.PostGis, upstreamSrgs []string) (srg *sparse.SparseArray) {
+	pg *gis.PostGis, upstreamSrgs []string) *sparse.SparseArray {
+
+	// Start the surrogate cacher, but only start it once.
+	go srgCacheStart.Do(srgCacher)
 
 	var err error
+
+	// Check if surrogate is already in the cache.
+	srgRequest := srgCacheRequest{grid.Name, srgNum, FIPS, nil,
+		make(chan *sparse.SparseArray)}
+	srgCacheRequestChan <- &srgRequest
+	srg := <-srgRequest.returnChan
+	if srg != nil {
+		// send copy so original is not altered.
+		return srg.Copy()
+	}
+
 	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
 	tertiarySrg := srgSpec[srgNum].TERTIARYSURROGATE
 	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
@@ -271,7 +319,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 							append(upstreamSrgs, newSrgNum))
 					}
 				}
-				if srg.Sum() != 0 {
+				if srg.Sum() > 0. {
 					break
 				}
 			}
@@ -296,7 +344,10 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		err = fmt.Errorf("Sum for surrogate !<= 1.0: %v", srgSum)
 		panic(err)
 	}
-	return
+	// store surrogate in cache for faster access.
+	srgSendRequest := srgCacheRequest{grid.Name, srgNum, FIPS, srg, nil}
+	srgCacheRequestChan <- &srgSendRequest
+	return srg.Copy()
 }
 
 type SrgGenData struct {

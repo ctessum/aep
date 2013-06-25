@@ -782,7 +782,7 @@ COMMIT;`
 
 	pg.DropTable(grid.Schema, "tempsrg")
 	cmd = fmt.Sprintf("CREATE TABLE %v.tempsrg (row int, col int, "+
-		"inputID text, shapeFraction double precision, geom geometry, "+
+		"inputID char(5), shapeFraction double precision, geom geometry, "+
 		"coveredByGrid boolean);",
 		grid.Schema)
 	Log(cmd, 3)
@@ -1158,8 +1158,8 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 	// but sometimes there are GIS problems that cause the sum != 1.
 	// In cases where part of the input shape is outside of the grid boundary,
 	// the sum of the surrogate should be less than 1.
-	if coveredByGrid {
-		sum := srg.Sum()
+	sum := srg.Sum()
+	if coveredByGrid && sum > 0. {
 		srg.Scale(1. / sum)
 	}
 	return

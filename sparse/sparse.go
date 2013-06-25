@@ -30,6 +30,19 @@ func ZerosSparse(dims ...int) *SparseArray {
 	return A
 }
 
+// Copy an array
+func (A *SparseArray) Copy() *SparseArray {
+	B := new(SparseArray)
+	B.ndims = A.ndims
+	B.dims = A.dims
+	B.arrsize = A.arrsize
+	B.elements = make(map[int]float64)
+	for i, e := range A.elements {
+		B.elements[i] = e
+	}
+	return B
+}
+
 // Make sure index is within array dimensions
 func (A *SparseArray) checkIndex(index []int) error {
 	if BoundsCheck {
