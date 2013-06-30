@@ -1084,7 +1084,7 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 				frac = gridCellSrgWeight / singleShapeSrgWeight
 				cmd = fmt.Sprintf("INSERT INTO %v.tempsrg "+
 					"(row, col, inputID, shapeFraction, geom, coveredByGrid) "+
-					"VALUES (%v,%v,%v,%v,ST_GeomFromEWKT('%v'),%v);",
+					"VALUES (%v,%v,'%v',%v,ST_GeomFromEWKT('%v'),%v);",
 					data.Grid.Schema, row, col, data.InputID, frac, geom,
 					coveredByGrid)
 				Log(cmd, 4)

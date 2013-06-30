@@ -117,6 +117,7 @@ type RunData struct {
 	PostGISpassword                string  // should have been chosen when setting up PostGIS
 	OtherLibpqConnectionParameters string  // Other parameters for connecting to the database. See: https://github.com/bmizerany/pq
 	ShapefileSchema                string  // PostGIS schema where surrogate shapefiles are stored
+	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
 	WpsNamelist                    string
 	wpsData                        *WPSnamelistData // Path to WPS namelist file
 	SRID                           int              // PostGIS projection ID number. It should be a number not currently being used by PostGIS, unless the output projection is the same as the projection in any of the input shapefiles, in which case the SRID should be the same as the SRID in the matching input data (using more than one SRID for the same projection will cause errors).
@@ -169,6 +170,10 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.PostGISpassword = d.PostGISpassword
 	c.OtherLibpqConnectionParameters = d.OtherLibpqConnectionParameters
 	c.ShapefileSchema = d.ShapefileSchema
+	if d.SrgCacheExpirationTime == 0 {
+		d.SrgCacheExpirationTime = 5
+	}
+	c.SrgCacheExpirationTime = d.SrgCacheExpirationTime
 	c.testMode = d.testMode
 	if c.SccDesc == "" {
 		c.SccDesc = d.SccDesc

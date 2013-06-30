@@ -6,13 +6,14 @@ import (
 	"bufio"
 	"encoding/csv"
 	"fmt"
+	"github.com/pmylund/go-cache"
 	"io"
 	"log"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
+	"time"
 )
 
 var (
@@ -21,8 +22,9 @@ var (
 	grids                  = make([]*gis.GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]string)
 	SurrogateGeneratorChan = make(chan *SrgGenData)
-	srgCacheStart          sync.Once
-	srgCacheRequestChan    = make(chan *srgCacheRequest)
+	//	srgCacheStart          sync.Once
+	//	srgCacheRequestChan    = make(chan *srgCacheRequest)
+	srgCache *cache.Cache
 )
 
 func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
@@ -82,6 +84,8 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 		}
 		grids = append(grids, grid)
 	}
+	t := c.SrgCacheExpirationTime
+	srgCache = cache.New(t*time.Minute, t*time.Minute)
 	return
 }
 
@@ -247,55 +251,58 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	return
 }
 
-func srgCacher() {
-	srgCache := make(map[string]map[string]map[string]*sparse.SparseArray)
-	for r := range srgCacheRequestChan {
-		switch {
-		case r.srg == nil && r.returnChan != nil: // retrieve from cache
-			srg, ok := srgCache[r.grid][r.srgNum][r.FIPS]
-			if ok {
-				r.returnChan <- srg
-			} else {
-				r.returnChan <- nil
-			}
-		case r.srg != nil && r.returnChan == nil: // add to cache
-			if _, ok := srgCache[r.grid]; !ok {
-				srgCache[r.grid] = make(map[string]map[string]*sparse.SparseArray)
-			}
-			if _, ok := srgCache[r.grid][r.srgNum]; !ok {
-				srgCache[r.grid][r.srgNum] = make(map[string]*sparse.SparseArray)
-			}
-			srgCache[r.grid][r.srgNum][r.FIPS] = r.srg
-		}
-	}
-}
-
-type srgCacheRequest struct {
-	grid       string
-	srgNum     string
-	FIPS       string
-	srg        *sparse.SparseArray
-	returnChan chan *sparse.SparseArray
-}
+//func srgCacher() {
+//	srgCache := make(map[string]map[string]map[string]*sparse.SparseArray)
+//	for r := range srgCacheRequestChan {
+//		switch {
+//		case r.srg == nil && r.returnChan != nil: // retrieve from cache
+//			srg, ok := srgCache[r.grid][r.srgNum][r.FIPS]
+//			if ok {
+//				r.returnChan <- srg
+//			} else {
+//				r.returnChan <- nil
+//			}
+//		case r.srg != nil && r.returnChan == nil: // add to cache
+//			if _, ok := srgCache[r.grid]; !ok {
+//				srgCache[r.grid] = make(map[string]map[string]*sparse.SparseArray)
+//			}
+//			if _, ok := srgCache[r.grid][r.srgNum]; !ok {
+//				srgCache[r.grid][r.srgNum] = make(map[string]*sparse.SparseArray)
+//			}
+//			srgCache[r.grid][r.srgNum][r.FIPS] = r.srg
+//		}
+//	}
+//}
+//
+//type srgCacheRequest struct {
+//	grid       string
+//	srgNum     string
+//	FIPS       string
+//	srg        *sparse.SparseArray
+//	returnChan chan *sparse.SparseArray
+//}
 
 func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	pg *gis.PostGis, upstreamSrgs []string) *sparse.SparseArray {
 
 	// Start the surrogate cacher, but only start it once.
-	go srgCacheStart.Do(srgCacher)
+	//go srgCacheStart.Do(srgCacher)
 
 	var err error
+	cacheKey := grid.Name + srgNum + FIPS
 
 	// Check if surrogate is already in the cache.
-	srgRequest := srgCacheRequest{grid.Name, srgNum, FIPS, nil,
-		make(chan *sparse.SparseArray)}
-	srgCacheRequestChan <- &srgRequest
-	srg := <-srgRequest.returnChan
-	if srg != nil {
+	if srg, found := srgCache.Get(cacheKey); found {
 		// send copy so original is not altered.
-		return srg.Copy()
+		return srg.(*sparse.SparseArray).Copy()
 	}
+	//srgRequest := srgCacheRequest{grid.Name, srgNum, FIPS, nil,
+	//	make(chan *sparse.SparseArray)}
+	//srgCacheRequestChan <- &srgRequest
+	//srg := <-srgRequest.returnChan
+	//if srg != nil {
 
+	var srg *sparse.SparseArray
 	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
 	tertiarySrg := srgSpec[srgNum].TERTIARYSURROGATE
 	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
@@ -345,8 +352,9 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		panic(err)
 	}
 	// store surrogate in cache for faster access.
-	srgSendRequest := srgCacheRequest{grid.Name, srgNum, FIPS, srg, nil}
-	srgCacheRequestChan <- &srgSendRequest
+	srgCache.Set(cacheKey, srg, 0)
+	//srgSendRequest := srgCacheRequest{grid.Name, srgNum, FIPS, srg, nil}
+	//srgCacheRequestChan <- &srgSendRequest
 	return srg.Copy()
 }
 
