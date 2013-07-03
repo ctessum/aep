@@ -74,7 +74,7 @@ func main() {
 	// track status of all of the running sectors
 	Status = NewStatus()
 
-	// Start server for html report (go to localhost:8080 in web browser to view report)
+	// Start server for html report (go to localhost:6060 in web browser to view report)
 	// Here, we run the report server in the background while the rest of the program is running.
 	go ReportServer()
 
@@ -88,32 +88,42 @@ func main() {
 		go DiscardRecords(runChan)
 	}
 
-	// Start server for retrieving profiles from the 
+	// Start server for retrieving profiles from the
 	// SPECIATE database
 	go ConfigAll.DefaultSettings.SpecProfiles(e)
-
 
 	// Set up spatial environment
 	if ConfigAll.DefaultSettings.Spatialize {
 		ConfigAll.DefaultSettings.SpatialSetup(e)
-		err := ConfigAll.DefaultSettings.SurrogateSpecification()
-		e.Add(err)
-		err = ConfigAll.DefaultSettings.GridRef()
-		e.Add(err)
-		go ConfigAll.DefaultSettings.SurrogateGenerator()
+	}
+
+	// Set up temporal environment
+	if ConfigAll.DefaultSettings.RunTemporal {
+		ConfigAll.DefaultSettings.TemporalSetup(e)
 	}
 
 	e.Report() // Print errors, if any
 
-	// run subroutines
-	n := 0
+	// run sector subroutines
+	var n, numAnnualSectors, numMonthlySectors int
 	for sector, c := range ConfigAll.Sectors {
 		if sectors[0] == "all" || IsStringInArray(sectors, sector) {
 			Report.SectorResults[sector] = make(map[string]*Results)
 			go c.Run(runChan)
+			switch c.InventoryFreq {
+			case "annual":
+				numAnnualSectors++
+			case "monthly":
+				numMonthlySectors++
+			}
 			n++
 		}
 	}
+	// run temporal subroutine
+	if ConfigAll.DefaultSettings.RunTemporal {
+		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors)
+	}
+
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
 		message := <-runChan
@@ -158,17 +168,17 @@ func (c RunData) Run(runChan chan string) {
 	if c.InventoryFreq == "annual" {
 		Report.SectorResults[c.Sector]["annual"] = new(Results)
 		c.RunPeriod("annual")
-	}
-	for c.currentTime.Before(c.endDate) {
-		month := c.CurrentMonth()
-		if c.InventoryFreq == "monthly" && month != c.inventoryMonth {
-			Report.SectorResults[c.Sector][month] = new(Results)
-			c.RunPeriod(month)
-			c.inventoryMonth = month
+	} else {
+		for c.currentTime.Before(c.endDate) {
+			month := c.CurrentMonth()
+			if c.InventoryFreq == "monthly" && month != c.inventoryMonth {
+				Report.SectorResults[c.Sector][month] = new(Results)
+				c.RunPeriod(month)
+				c.inventoryMonth = month
+			}
+			// either advance to next date or end loop
+			c.nextTime()
 		}
-		// either advance to next date or end loop
-		//fmt.Println(c.currentTime.Format("Mon Jan 2 15:04:05 2006"))
-		c.nextTime()
 	}
 
 	if Status.Sectors[c.Sector] != "Failed!" {
@@ -203,14 +213,28 @@ func (c RunData) RunPeriod(period string) {
 		go c.inventory(ChanFromInventory, period)
 		SpecSpatialChan := make(chan *ParsedRecord, 1)
 		go c.speciate(ChanFromInventory, SpecSpatialChan, period)
-		go c.spatialize(SpecSpatialChan, TotalReportChan, period)
+		if c.RunTemporal { // only run temporal if spatializing
+			SpatialTemporalChan := make(chan *ParsedRecord, 1)
+			go c.spatialize(SpecSpatialChan, SpatialTemporalChan, period)
+			go c.SectorTemporal(SpatialTemporalChan, TotalReportChan, period)
+			n++
+		} else {
+			go c.spatialize(SpecSpatialChan, TotalReportChan, period)
+		}
 		n += 3
 	}
 	// spatialize but don't speciate
 	if c.Speciate == false && c.Spatialize == true {
 		ChanFromInventory := make(chan *ParsedRecord, 1)
 		go c.inventory(ChanFromInventory, period)
-		go c.spatialize(ChanFromInventory, TotalReportChan, period)
+		if c.RunTemporal { // only run temporal if spatializing
+			SpatialTemporalChan := make(chan *ParsedRecord, 1)
+			go c.spatialize(ChanFromInventory, SpatialTemporalChan, period)
+			go c.SectorTemporal(SpatialTemporalChan, TotalReportChan, period)
+			n++
+		} else {
+			go c.spatialize(ChanFromInventory, TotalReportChan, period)
+		}
 		n += 2
 	}
 

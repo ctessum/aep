@@ -38,10 +38,7 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	gis.DebugLevel = c.DebugLevel
 	pg, err := c.PGconnect()
 	defer pg.Disconnect()
-	if err != nil {
-		e.Add(err)
-		return
-	}
+	e.Add(err)
 	x := c.wpsData
 	var proj string
 	switch x.map_proj {
@@ -64,11 +61,7 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	projInfo.To_meter = 1.
 	msg := fmt.Sprintf("Output projection is:\n%v", projInfo.ToString())
 	c.Log(msg, 0)
-	err = pg.NewProjection(projInfo)
-	if err != nil {
-		e.Add(err)
-		return
-	}
+	e.Add(pg.NewProjection(projInfo))
 	if c.RegenerateSpatialData {
 		pg.DropSchema(c.SimulationName)
 	}
@@ -79,13 +72,15 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 			x.dx[i], x.dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
 
 		if !pg.TableExists(c.SimulationName, grid.Name) {
-			err = pg.CreateGrid(grid)
-			e.Add(err)
+			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
 		}
 		grids = append(grids, grid)
 	}
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
+	e.Add(c.SurrogateSpecification())
+	e.Add(c.GridRef())
+	go c.SurrogateGenerator()
 	return
 }
 

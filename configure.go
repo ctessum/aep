@@ -82,6 +82,7 @@ type RunData struct {
 	sectorLogs                     string // Directory for log files for current sector
 	Speciate                       bool   // Whether to speciate data
 	Spatialize                     bool   // Whether to spatialize data
+	RunTemporal                    bool   // Whether to temporalize data
 	StartDate                      string
 	startDate                      time.Time
 	EndDate                        string
@@ -103,6 +104,8 @@ type RunData struct {
 	GridRefFile                    string
 	SrgSpecFile                    string
 	TemporalRefFile                string
+	TemporalProFile                string
+	HolidayFile                    string
 	CaseName                       string
 	InventoryFreq                  string
 	MatchFullSCC                   bool
@@ -111,12 +114,12 @@ type RunData struct {
 	InputUnits                     string
 	InputConv                      float64
 	InvFileNames                   []string
-	EarthRadius                    float64 // in meters
-	PostGISuser                    string  // should have been chosen when setting up PostGIS
-	PostGISdatabase                string  // should have been previously created as a PostgreSQL database with the PostGIS additions
-	PostGISpassword                string  // should have been chosen when setting up PostGIS
-	OtherLibpqConnectionParameters string  // Other parameters for connecting to the database. See: https://github.com/bmizerany/pq
-	ShapefileSchema                string  // PostGIS schema where surrogate shapefiles are stored
+	EarthRadius                    float64       // in meters
+	PostGISuser                    string        // should have been chosen when setting up PostGIS
+	PostGISdatabase                string        // should have been previously created as a PostgreSQL database with the PostGIS additions
+	PostGISpassword                string        // should have been chosen when setting up PostGIS
+	OtherLibpqConnectionParameters string        // Other parameters for connecting to the database. See: https://github.com/bmizerany/pq
+	ShapefileSchema                string        // PostGIS schema where surrogate shapefiles are stored
 	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
 	WpsNamelist                    string
 	wpsData                        *WPSnamelistData // Path to WPS namelist file
@@ -156,10 +159,14 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c := *p
 	c.Speciate = d.Speciate
 	c.Spatialize = d.Spatialize
+	c.RunTemporal = d.RunTemporal
 	c.StartDate = d.StartDate
 	c.EndDate = d.EndDate
 	c.Tstep = d.Tstep
 	c.OutputType = d.OutputType
+	c.TemporalRefFile = d.TemporalRefFile
+	c.TemporalProFile = d.TemporalProFile
+	c.HolidayFile = d.HolidayFile
 	c.EarthRadius = d.EarthRadius
 	c.WpsNamelist = d.WpsNamelist
 	c.SRID = d.SRID
@@ -210,9 +217,6 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	}
 	if c.SrgSpecFile == "" {
 		c.SrgSpecFile = d.SrgSpecFile
-	}
-	if c.TemporalRefFile == "" {
-		c.TemporalRefFile = d.TemporalRefFile
 	}
 	if c.InputUnits == "" {
 		c.InputUnits = d.InputUnits
@@ -286,11 +290,13 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 	paths := []*string{&d.Home, &d.Input, &d.Ancilliary,
 		&c.SpecRefFile, &c.SpecRefComboFile, &c.SpecProFile,
 		&c.SccDesc, &c.SicDesc, &c.NaicsDesc,
-		&c.GridRefFile, &c.TemporalRefFile, &c.SrgSpecFile, &c.WpsNamelist}
+		&c.GridRefFile, &c.TemporalRefFile, &c.TemporalProFile,
+		&c.HolidayFile, &c.SrgSpecFile, &c.WpsNamelist}
 	varnames := []string{"Home", "Input", "Ancilliary",
 		"SpecRefFile", "SpecRefComboFile", "SpecProFile",
 		"SccDesc", "SicDesc", "NaicsDesc",
-		"GridRefFile", "TemporalRefFile", "SrgSpecFile", "WpsNamelist"}
+		"GridRefFile", "TemporalRefFile", "TemporalProFile", "HolidayFile",
+		"SrgSpecFile", "WpsNamelist"}
 
 	for i, path := range paths {
 		*path = strings.Replace(*path, "[Home]", d.Home, -1)
@@ -438,14 +444,15 @@ func (p *RunData) ParseWPSnamelist(e *ErrCat) {
 	c.wpsData.ny[0] = c.wpsData.e_sn[0] - 1
 	c.wpsData.domainName = make([]string, c.wpsData.max_dom)
 	for i := 0; i < c.wpsData.max_dom; i++ {
+		parentID := c.wpsData.parent_id[i] - 1
 		c.wpsData.domainName[i] = fmt.Sprintf("d%02v", i+1)
-		c.wpsData.S[i] = c.wpsData.S[c.wpsData.parent_id[i]-1] +
-			float64(c.wpsData.j_parent_start[i]-1)*c.wpsData.dy0
-		c.wpsData.W[i] = c.wpsData.W[c.wpsData.parent_id[i]-1] +
-			float64(c.wpsData.i_parent_start[i]-1)*c.wpsData.dx0
-		c.wpsData.dx[i] = c.wpsData.dx[c.wpsData.parent_id[i]-1] /
+		c.wpsData.S[i] = c.wpsData.S[parentID] +
+			float64(c.wpsData.j_parent_start[i]-1)*c.wpsData.dy[parentID]
+		c.wpsData.W[i] = c.wpsData.W[parentID] +
+			float64(c.wpsData.i_parent_start[i]-1)*c.wpsData.dx[parentID]
+		c.wpsData.dx[i] = c.wpsData.dx[parentID] /
 			c.wpsData.parent_grid_ratio[i]
-		c.wpsData.dy[i] = c.wpsData.dy[c.wpsData.parent_id[i]-1] /
+		c.wpsData.dy[i] = c.wpsData.dy[parentID] /
 			c.wpsData.parent_grid_ratio[i]
 		c.wpsData.nx[i] = c.wpsData.e_we[i] - 1
 		c.wpsData.ny[i] = c.wpsData.e_sn[i] - 1

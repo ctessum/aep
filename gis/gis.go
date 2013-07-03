@@ -140,15 +140,16 @@ func (pg *PostGis) NewProjection(p *ParsedProj4) (err error) {
 }
 
 type GridDef struct {
-	Name   string
-	Nx     int
-	Ny     int
-	Dx     float64
-	Dy     float64
-	X0     float64
-	Y0     float64
-	SRID   int    // PostGIS projection type (Spatial reference ID)
-	Schema string // name of the Postgres schema it will be saved in
+	Name      string
+	Nx        int
+	Ny        int
+	Dx        float64
+	Dy        float64
+	X0        float64
+	Y0        float64
+	SRID      int    // PostGIS projection type (Spatial reference ID)
+	Schema    string // name of the Postgres schema it will be saved in
+	TimeZones map[int]*sparse.SparseArray
 }
 
 func NewGrid(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
@@ -164,10 +165,11 @@ func NewGrid(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	grid.Y0 = Y0
 	grid.SRID = srid
 	grid.Schema = schema
+	grid.TimeZones = make(map[int]*sparse.SparseArray)
 	return
 }
 
-func (pg *PostGis) CreateGrid(grid *GridDef) error {
+func (pg *PostGis) CreateGrid(grid *GridDef, timeZoneSchema string) error {
 
 	const t = `
 CREATE TABLE {{.Schema}}.{{.Name}}  AS
@@ -192,7 +194,51 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 	pg.AddGid(grid.Schema, grid.Name)
 	pg.AddGix(grid.Schema, grid.Name)
 	pg.UpdateSRID(grid.Schema, grid.Name, grid.SRID)
+
+	// Add timezone info
+	if !pg.TableExists(timeZoneSchema, "timezone") {
+		return fmt.Errorf("Shapefile \"timezone\" is not loaded in PostGIS "+
+			"schema \"%v\". See file test/loadshp2.sh for an example of how to "+
+			"get and load this file.", timeZoneSchema)
+	}
+	tzSRID := pg.GetSRID(timeZoneSchema, "timezone")
+	cmd = fmt.Sprintf(
+		"ALTER TABLE %v.%v ADD timezone double precision;\n"+
+			"UPDATE %v.%v set timezone=(SELECT b.zone FROM %v.%v a\n"+
+			"LEFT JOIN %v.timezone b\n"+
+			"ON ST_Within(ST_PointOnSurface("+
+			"ST_Transform(a.geom,%v)),b.geom));",
+		grid.Schema, grid.Name, grid.Schema, grid.Name, grid.Schema, grid.Name,
+		timeZoneSchema, tzSRID)
+	Log(cmd, 3)
+	_, err = pg.db.Exec(cmd)
+	if err != nil {
+		return err
+	}
+
 	pg.VacuumAnalyze(grid.Schema, grid.Name)
+
+	// Store time zones
+	gridQuery := fmt.Sprintf("SELECT row,col,timezone FROM %v.%v;",
+		grid.Schema, grid.Name)
+	Log(gridQuery, 3)
+	gridRows, err := pg.db.Query(gridQuery)
+	if err != nil {
+		return err
+	}
+	for gridRows.Next() {
+		var tz float64
+		var row, col int
+		err = gridRows.Scan(&row, &col, &tz)
+		if err != nil {
+			return err
+		}
+		tzSeconds := int(tz * 3600.)
+		if _, ok := grid.TimeZones[tzSeconds]; !ok {
+			grid.TimeZones[tzSeconds] = sparse.ZerosSparse(grid.Ny, grid.Nx)
+		}
+		grid.TimeZones[tzSeconds].Set(1., row-1, col-1)
+	}
 	return err
 }
 

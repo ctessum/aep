@@ -109,6 +109,7 @@ type ReportHolder struct {
 	SectorResults map[string]map[string]*Results // map[sector][period]Results
 	ReportOnly    bool                           // whether main program is running at the same time
 	GridNames     []string                       // names of the grids
+	TemporalResults *TemporalReport
 }
 
 type Results struct {

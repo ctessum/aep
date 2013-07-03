@@ -17,7 +17,15 @@ type SparseArray struct {
 	arrsize  int // Maximum number of elements in array
 }
 
-// Initialize a new array
+// Dense array with an arbitrary number of dimensions
+type DenseArray struct {
+	elements []float64
+	ndims    int
+	dims     []int
+	arrsize  int // Maximum number of elements in array
+}
+
+// Initialize a new sparse array
 func ZerosSparse(dims ...int) *SparseArray {
 	A := new(SparseArray)
 	A.elements = make(map[int]float64)
@@ -27,6 +35,19 @@ func ZerosSparse(dims ...int) *SparseArray {
 	for _, i := range A.dims {
 		A.arrsize *= i
 	}
+	return A
+}
+
+// Initialize a new dense array
+func ZerosDense(dims ...int) *DenseArray {
+	A := new(DenseArray)
+	A.ndims = len(dims)
+	A.dims = dims
+	A.arrsize = 1
+	for _, i := range A.dims {
+		A.arrsize *= i
+	}
+	A.elements = make([]float64, A.arrsize)
 	return A
 }
 
@@ -45,6 +66,26 @@ func (A *SparseArray) Copy() *SparseArray {
 
 // Make sure index is within array dimensions
 func (A *SparseArray) checkIndex(index []int) error {
+	if BoundsCheck {
+		if len(index) != A.ndims {
+			err := fmt.Errorf("Index number of dimensions (%v) does not match "+
+				"array number of dimensions.", len(index), A.ndims)
+			return err
+		}
+		for i, dim := range A.dims {
+			if index[i] >= dim {
+				err := fmt.Errorf(
+					"Index %v of dimension %v is greater than dimension "+
+						"size %v.", index[i], i, A.dims[i])
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Make sure index is within array dimensions
+func (A *DenseArray) checkIndex(index []int) error {
 	if BoundsCheck {
 		if len(index) != A.ndims {
 			err := fmt.Errorf("Index number of dimensions (%v) does not match "+
@@ -83,8 +124,43 @@ func (A *SparseArray) checkArray(B *SparseArray) error {
 	return nil
 }
 
+// Make sure arrays are the same size
+func (A *DenseArray) checkArray(B *DenseArray) error {
+	if BoundsCheck {
+		if B.ndims != A.ndims {
+			err := fmt.Errorf("Number of dimensions in array A (%v) does "+
+				"not match number of dimensions in array B (%v).", A.ndims, B.ndims)
+			return err
+		}
+		for i, dim := range A.dims {
+			if B.dims[i] != dim {
+				err := fmt.Errorf(
+					"Dimension %v is different in arrays A (%v) and B (%v).",
+					i, A.dims[i], B.dims[i])
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Convert n-dimensional index to one-dimensional index
 func (A *SparseArray) Index1d(index []int) (index1d int) {
+	if err := A.checkIndex(index); err != nil {
+		panic(err)
+	}
+	for i := 0; i < len(index); i++ {
+		mul := 1
+		for j := i + 1; j < len(index); j++ {
+			mul = mul * A.dims[j]
+		}
+		index1d = index1d + index[i]*mul
+	}
+	return index1d
+}
+
+// Convert n-dimensional index to one-dimensional index
+func (A *DenseArray) Index1d(index []int) (index1d int) {
 	if err := A.checkIndex(index); err != nil {
 		panic(err)
 	}
@@ -117,8 +193,42 @@ func (A *SparseArray) IndexNd(index1d int) (indexNd []int) {
 	return
 }
 
+// Convert a 1-dimensional index to an n-dimensional index
+func (A *DenseArray) IndexNd(index1d int) (indexNd []int) {
+	leftover := index1d
+	indexNd = make([]int, A.ndims)
+	for i := 0; i < A.ndims; i++ {
+		stride := 1
+		for j := i + 1; j < A.ndims; j++ {
+			stride *= A.dims[j]
+		}
+		indexNd[i] = leftover / stride
+		if leftover >= stride {
+			leftover = leftover % (indexNd[i] * stride)
+		} else {
+			leftover = 0
+		}
+	}
+	return
+}
+
 // Set index to val.
 func (A *SparseArray) Set(val float64, index ...int) {
+	if val == 0. {
+		return
+	}
+	if err := A.checkIndex(index); err != nil {
+		panic(err)
+	}
+	index1d := A.Index1d(index)
+	A.elements[index1d] = val
+}
+
+// Set index to val.
+func (A *DenseArray) Set(val float64, index ...int) {
+	if val == 0. {
+		return
+	}
 	if err := A.checkIndex(index); err != nil {
 		panic(err)
 	}
@@ -138,6 +248,15 @@ func (A *SparseArray) Get(index ...int) float64 {
 	} else {
 		return 0.
 	}
+}
+
+// Get array value at index
+func (A *DenseArray) Get(index ...int) float64 {
+	if err := A.checkIndex(index); err != nil {
+		panic(err)
+	}
+	index1d := A.Index1d(index)
+	return A.elements[index1d]
 }
 
 // Get array value at one-dimensional index
@@ -224,6 +343,21 @@ func (A *SparseArray) ScaleCopy(val float64) *SparseArray {
 	return out
 }
 
+func ArrayMultiply(A, B *SparseArray) *SparseArray {
+	if err := A.checkArray(B); err != nil {
+		panic(err)
+	}
+	out := A.Copy()
+	for i,_ := range out.elements {
+		if _,ok := B.elements[i]; ok {
+			out.elements[i] *= B.elements[i]
+		} else {
+			out.elements[i] = 0.
+		}
+	}
+	return out
+}
+
 // Sum calculates the array sum.
 func (A *SparseArray) Sum() float64 {
 	sum := 0.
@@ -244,7 +378,7 @@ func (A *SparseArray) Nonzero() []int {
 	return index
 }
 
-func (A *SparseArray) ToArray() []float64 {
+func (A *SparseArray) ToDense() []float64 {
 	out := make([]float64, A.arrsize)
 	for i, val := range A.elements {
 		out[i] = val
