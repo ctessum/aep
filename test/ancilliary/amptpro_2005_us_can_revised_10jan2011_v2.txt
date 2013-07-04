@@ -1,5 +1,5 @@
 #Created from export of amptpro_2005_us_can, v1 (dated 03apr2008)
-Added new Canadian temporal profiles provided by Canada based on their 2006 inventory.  Original data available at: /orchid/share/em_v4/inputs/from_Canada/temporal and compiled in /orchid/share/em_v4/inputs/from_Canada/work
+#Added new Canadian temporal profiles provided by Canada based on their 2006 inventory.  Original data available at: /orchid/share/em_v4/inputs/from_Canada/temporal and compiled in /orchid/share/em_v4/inputs/from_Canada/work
 #EXPORT_DATE=Mon Jan 10 10:40:03 EST 2011
 #EXPORT_VERSION_NAME=fix CENRAP ag burning
 #EXPORT_VERSION_NUMBER=2

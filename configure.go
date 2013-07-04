@@ -141,6 +141,10 @@ type PolHolder struct {
 
 func (p *configInput) setup(e *ErrCat) {
 	c := *p
+	if c.DefaultSettings.InventoryFreq == "" {
+		c.DefaultSettings.InventoryFreq = "annual"
+	}
+	c.DefaultSettings.setup(e)
 	c.DefaultSettings.catPaths(c.Dirs, e)
 	c.DefaultSettings.ParseWPSnamelist(e)
 	if c.DefaultSettings.testMode {

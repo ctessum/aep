@@ -12,7 +12,7 @@
         "OutputType": "CAMx",
         "SpecType": "mol",
         "InputUnits": "tons/year",
-        "MatchFullSCC": true,
+        "MatchFullSCC": false,
         "WpsNamelist": "[Ancilliary]/namelist.wps",
 		"SRID":500001,
         "EarthRadius": 6370000,
@@ -32,6 +32,7 @@
         "Ncpus": 8,
         "Speciate": true,
         "Spatialize": true,
+		"RunTemporal":true,
 		"CreateTotalInventoryReport": false,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
@@ -72,6 +73,8 @@
 		"NaicsDesc": "[Ancilliary]/naicsdesc_02jan2008_v0.txt",
 		"GridRefFile":"[Ancilliary]/amgref_us_can_allmex3_28sep2010_v13.txt",
 		"TemporalRefFile":"[Ancilliary]/amptref_v3_3_revised_10jan2011_v11.txt",
+		"TemporalProFile":"[Ancilliary]/amptpro_2005_us_can_revised_10jan2011_v2.txt",
+		"HolidayFile":"[Ancilliary]/holidays_04may2006_v0.txt",
 		"SrgSpecFile":"[Ancilliary]/surrogate_specification_2002.csv"
     },
     "Sectors": {

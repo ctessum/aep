@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	temporalRef         = make(map[string]map[string][3]string)
+	temporalRef         = make(map[string]map[string]interface{})
 	MonthlyTemporalChan = make(chan *temporalAggregator)
 	AnnualTemporalChan  = make(chan *temporalAggregator)
 	monthlyTpro         = make(map[string][]float64) // map[code]vals
@@ -63,7 +63,7 @@ func (c *RunData) temporalRef() (err error) {
 			record = record[0:i]
 		}
 
-		if record[0] != '#' && record[0] != '\n' {
+		if record[0] != '#' && record[0] != '\n' && record[0] != '/' {
 			splitLine := strings.Split(record, ";")
 			SCC := splitLine[0]
 			if len(SCC) == 0 {
@@ -74,15 +74,18 @@ func (c *RunData) temporalRef() (err error) {
 			monthCode := splitLine[1]
 			weekCode := splitLine[2]
 			diurnalCode := splitLine[3]
-			FIPS := splitLine[5][1:]
+			FIPS := splitLine[5]
 			if len(FIPS) == 0 {
 				FIPS = "00000"
 			} else if len(FIPS) == 6 {
 				FIPS = FIPS[1:]
+			} else if len(FIPS) != 5 {
+				return fmt.Errorf("in TemporalRef, record %v FIPS %v has "+
+					"wrong number of digits", record, FIPS)
 			}
 
 			if _, ok := temporalRef[SCC]; !ok {
-				temporalRef[SCC] = make(map[string][3]string)
+				temporalRef[SCC] = make(map[string]interface{})
 			}
 			temporalRef[SCC][FIPS] = [3]string{
 				monthCode, weekCode, diurnalCode}
@@ -108,12 +111,13 @@ func (c *RunData) holidays() error {
 	scanner := bufio.NewScanner(fid)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line[0] == '#' || len(line) < 19 {
+		if len(line) < 19 || line[0] == '#' {
 			continue
 		}
-		holiday, err := time.Parse("01 02 2006", line[9:19])
+		holiday, err := time.Parse("01 02 2006", line[8:18])
 		if err != nil {
-			return err
+			return fmt.Errorf("Holidays: %v \nFile= %v",
+				err.Error(), c.HolidayFile)
 		}
 		if holiday.After(c.startDate) && holiday.Before(c.endDate) {
 			holidays[holiday.Format(holidayFormat)] = ""
@@ -189,35 +193,35 @@ func parseTproLine(line string, n int) (code string, pro []float64, err error) {
 	pro = make([]float64, n)
 	j := 0
 	total := 0.
-	for i := 6; i < 4*n+6; i += 4 {
-		if pro[j], err = strconv.ParseFloat(line[i:i+4], 64); err != nil {
+	for i := 5; i < 4*n+5; i += 4 {
+		pro[j], err = strconv.ParseFloat(strings.TrimSpace(line[i:i+4]), 64)
+		if err != nil {
 			return
 		}
-		j++
 		total += pro[j]
+		j++
 	}
 	for i := 0; i < n; i++ {
-		pro[j] /= total
+		pro[i] /= total
 	}
 	return
 }
 
 func (c *RunData) GetTemporalCodes(SCC, FIPS string) [3]string {
-	var matchedSCC string
+	var codes interface{}
 	var err error
 	if !c.MatchFullSCC {
-		matchedSCC, err = MatchCode4(SCC, temporalRef)
-		if err != nil {
-			panic(err)
-		}
+		_, _, codes, err =
+			MatchCodeDouble(SCC, FIPS, temporalRef)
 	} else {
-		matchedSCC = SCC
+		_, codes, err = MatchCode(FIPS, temporalRef[SCC])
 	}
-	matchedFIPS, err := MatchCode5(FIPS, temporalRef[matchedSCC])
 	if err != nil {
+		err = fmt.Errorf("In temperal reference file: %v. (SCC=%v, FIPS=%v).",
+			err.Error(), SCC, FIPS)
 		panic(err)
 	}
-	return temporalRef[matchedSCC][matchedFIPS]
+	return codes.([3]string)
 }
 
 // combine together multiple temporal aggregators
@@ -285,6 +289,7 @@ func (t *temporalAggregator) AggregateArea(record *ParsedRecord) {
 	}
 	// Add data from record into matricies.
 	t.AreaLock.Lock()
+	defer t.AreaLock.Unlock()
 	for pol, vals := range record.ANN_EMIS {
 		if _, ok := t.AreaData[temporalCodes][pol]; !ok {
 			t.AreaData[temporalCodes][pol] =
@@ -298,7 +303,6 @@ func (t *temporalAggregator) AggregateArea(record *ParsedRecord) {
 			t.AreaData[temporalCodes][pol][i].AddSparse(vals.gridded[i])
 		}
 	}
-	t.AreaLock.Unlock()
 }
 
 type PointRecord struct {
@@ -327,12 +331,12 @@ func (t *temporalAggregator) AggregatePoint(record *ParsedRecord) {
 
 	// Create point arrays if they don't exist
 	t.PointLock.Lock()
+	defer t.PointLock.Unlock()
 	if _, ok := t.PointData[temporalCodes]; !ok {
 		t.PointData[temporalCodes] = make([]*PointRecord, 0, 10000)
 	}
 	t.PointData[temporalCodes] = append(t.PointData[temporalCodes],
 		newPointRecord(record))
-	t.PointLock.Unlock()
 }
 
 func getTemporalFactor(monthlyCode, weeklyCode, diurnalCode string,
@@ -456,14 +460,18 @@ func (ta *temporalAggregator) calcTimestep(t time.Time) *timeStep {
 
 func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
+	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Aggregating by temporal profile "+period+" "+c.Sector+"...", 0)
 	var temporalAgg *temporalAggregator
 	switch c.InventoryFreq {
 	case "annual":
-		temporalAgg = <-MonthlyTemporalChan
-	case "monthly":
 		temporalAgg = <-AnnualTemporalChan
+		fmt.Println("qqqqqqqqqqqqqqqqqqqqqqqqqq Got annual Aggregateor", c.Sector)
+	case "monthly":
+		temporalAgg = <-MonthlyTemporalChan
+		fmt.Println("qqqqqqqqqqqqqqqqqqqqqqqqqq Got monthly Aggregateor", c.Sector)
 	}
+	defer temporalAgg.WaitGroup.Done()
 	switch c.SectorType {
 	case "point":
 		for record := range InputChan {
@@ -482,7 +490,6 @@ func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 	if OutputChan != TotalReportChan {
 		close(OutputChan)
 	}
-	temporalAgg.WaitGroup.Done()
 	c.msgchan <- "Finished temporalizing " + period + " " + c.Sector
 	return
 }
@@ -500,19 +507,28 @@ func (c *RunData) Temporal(numAnnualSectors,
 		MonthlyTemporalChan <- monthData
 	}
 	annualData.WaitGroup.Wait() // wait for sectors to finish
-	monthData.WaitGroup.Wait()  // wait for sectors to finish
+	fmt.Println("Annual Finished")
+	monthData.WaitGroup.Wait() // wait for sectors to finish
+	fmt.Println("Monthly Finished")
 	Tdata := c.temporalCombine(annualData, monthData)
+	fmt.Println("temporal combined")
+	fmt.Println(c.currentTime,c.endDate)
 	for c.currentTime.Before(c.endDate) {
+		fmt.Println("beginning of bool")
 		month := c.CurrentMonth()
 		if month != temporalMonth {
+			fmt.Println("New month calc")
 			temporalMonth = month
 			monthData = c.newTemporalAggregator(numMonthlySectors)
 			for i := 0; i < numMonthlySectors; i++ {
 				MonthlyTemporalChan <- monthData
 			}
+			fmt.Println("finished sending chans")
 			monthData.WaitGroup.Wait() // wait for sectors to finish
+			fmt.Println("Monthly Finished")
 			Tdata = c.temporalCombine(annualData, monthData)
 		}
+		fmt.Println("xxxxxxxxxxxxxxxx", c.currentTime)
 		Tstep := Tdata.calcTimestep(c.currentTime)
 		tReport.addTstep(Tstep)
 		c.nextTime()
@@ -537,19 +553,19 @@ func newTemporalReport(begin, end time.Time) *TemporalReport {
 
 func (t *TemporalReport) addTstep(Tstep *timeStep) {
 	area, point := Tstep.Sum()
-	for pol,vals := range area {
-		if _,ok := t.Area[pol]; !ok {
-			t.Area[pol] = make([]float64,len(vals))
+	for pol, vals := range area {
+		if _, ok := t.Area[pol]; !ok {
+			t.Area[pol] = make([]float64, len(vals))
 		}
-		for i,val := range vals {
+		for i, val := range vals {
 			t.Area[pol][i] += val
 		}
 	}
-	for pol,vals := range point {
-		if _,ok := t.Point[pol]; !ok {
-			t.Point[pol] = make([]float64,len(vals))
+	for pol, vals := range point {
+		if _, ok := t.Point[pol]; !ok {
+			t.Point[pol] = make([]float64, len(vals))
 		}
-		for i,val := range vals {
+		for i, val := range vals {
 			t.Point[pol][i] += val
 		}
 	}

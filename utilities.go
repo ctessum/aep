@@ -11,6 +11,41 @@ import (
 // {"10000":"xxx","10100":"yyyy"}, "10100" will be returned as the
 // closest match to the input code. Returns an error if there is
 // no match.
+func MatchCode(code string, matchmap map[string]interface{}) (
+	matchedCode string, matchVal interface{}, err error) {
+	var ok bool
+	l := len(code)
+	for i := l - 1; i >= -1; i-- {
+		matchedCode = code[0:i+1] + strings.Repeat("0", l-i-1)
+		matchVal, ok = matchmap[matchedCode]
+		if ok {
+			return
+		}
+	}
+	err = fmt.Errorf("No matching code for %v", code)
+	return
+}
+func MatchCodeDouble(code1, code2 string,
+	matchmap map[string]map[string]interface{}) (
+	matchedCode1, matchedCode2 string, matchVal interface{}, err error) {
+	l1 := len(code1)
+	l2 := len(code2)
+	for i := l1 - 1; i >= -1; i-- {
+		matchedCode1 = code1[0:i+1] + strings.Repeat("0", l1-i-1)
+		match1, ok := matchmap[matchedCode1]
+		if ok {
+			for i := l2 - 1; i >= -1; i-- {
+				matchedCode2 = code2[0:i+1] + strings.Repeat("0", l2-i-1)
+				matchVal, ok = match1[matchedCode2]
+				if ok {
+					return
+				}
+			}
+		}
+	}
+	err = fmt.Errorf("No matching codes for %v, %v", code1, code2)
+	return
+}
 func MatchCode2(code string, matchmap map[string]map[string]string) (
 	matchedCode string, err error) {
 	l := len(code)

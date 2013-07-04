@@ -204,10 +204,10 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 	tzSRID := pg.GetSRID(timeZoneSchema, "timezone")
 	cmd = fmt.Sprintf(
 		"ALTER TABLE %v.%v ADD timezone double precision;\n"+
-			"UPDATE %v.%v set timezone=(SELECT b.zone FROM %v.%v a\n"+
+			"UPDATE %v.%v set timezone=b.zone FROM %v.%v a\n"+
 			"LEFT JOIN %v.timezone b\n"+
 			"ON ST_Within(ST_PointOnSurface("+
-			"ST_Transform(a.geom,%v)),b.geom));",
+			"ST_Transform(a.geom,%v)),b.geom);",
 		grid.Schema, grid.Name, grid.Schema, grid.Name, grid.Schema, grid.Name,
 		timeZoneSchema, tzSRID)
 	Log(cmd, 3)
