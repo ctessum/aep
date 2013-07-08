@@ -336,7 +336,7 @@ func (A *SparseArray) Scale(val float64) {
 
 // ScaleCopy returns a copy of the array  multiplied by val
 func (A *SparseArray) ScaleCopy(val float64) *SparseArray {
-	out := A
+	out := A.Copy()
 	for i, _ := range A.elements {
 		out.elements[i] *= val
 	}
@@ -352,7 +352,7 @@ func ArrayMultiply(A, B *SparseArray) *SparseArray {
 		if _,ok := B.elements[i]; ok {
 			out.elements[i] *= B.elements[i]
 		} else {
-			out.elements[i] = 0.
+			delete(out.elements,i)
 		}
 	}
 	return out

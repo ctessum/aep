@@ -173,7 +173,7 @@ func (pg *PostGis) CreateGrid(grid *GridDef, timeZoneSchema string) error {
 
 	const t = `
 CREATE TABLE {{.Schema}}.{{.Name}}  AS
-SELECT i + 1 AS row, j + 1 AS col,
+SELECT i AS row, j AS col,
 ST_Translate(cell, j * {{.Dx}} + {{.X0}}, i * {{.Dy}} + {{.Y0}}) AS geom
 FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 (SELECT ('POLYGON((0 0, 0 {{.Dy}}, {{.Dx}} {{.Dy}}, {{.Dx}} 0,0 0))')::geometry AS cell) AS foo;`
@@ -218,6 +218,12 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 
 	pg.VacuumAnalyze(grid.Schema, grid.Name)
 
+	return err
+}
+
+// Store timezones from PostGIS table into memory.
+func (pg *PostGis) GridAddTimeZones(gridIn *GridDef, timeZoneSchema string) error {
+	grid := *gridIn
 	// Store time zones
 	gridQuery := fmt.Sprintf("SELECT row,col,timezone FROM %v.%v;",
 		grid.Schema, grid.Name)
@@ -231,14 +237,14 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 		var row, col int
 		err = gridRows.Scan(&row, &col, &tz)
 		if err != nil {
-			return err
 		}
 		tzSeconds := int(tz * 3600.)
 		if _, ok := grid.TimeZones[tzSeconds]; !ok {
 			grid.TimeZones[tzSeconds] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
-		grid.TimeZones[tzSeconds].Set(1., row-1, col-1)
+		grid.TimeZones[tzSeconds].Set(1., row, col)
 	}
+	*gridIn = grid
 	return err
 }
 
@@ -1196,7 +1202,7 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 		var row, col int
 		var fraction float64
 		rows.Scan(&row, &col, &fraction, &coveredByGrid)
-		srg.Set(fraction, row-1, col-1)
+		srg.Set(fraction, row, col)
 	}
 	rows.Close()
 	// If this input shape is completely within the boundaries of the grid,

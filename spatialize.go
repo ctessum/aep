@@ -74,6 +74,7 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 		if !pg.TableExists(c.SimulationName, grid.Name) {
 			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
 		}
+		e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema))
 		grids = append(grids, grid)
 	}
 	t := c.SrgCacheExpirationTime

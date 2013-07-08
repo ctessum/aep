@@ -121,7 +121,8 @@ func main() {
 	}
 	// run temporal subroutine
 	if ConfigAll.DefaultSettings.RunTemporal {
-		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors)
+		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors,runChan)
+		n++
 	}
 
 	// wait for calculations to complete

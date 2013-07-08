@@ -60,7 +60,7 @@ func TestSparse(t *testing.T) {
 	if diff(b, 12000.) {
 		t.Fail()
 	}
-	c := a.ToArray()
+	c := a.ToDense()
 	csum := 0.
 	for _, val := range c {
 		csum += val
@@ -81,6 +81,23 @@ func TestSparse(t *testing.T) {
 	t.Log(2, 3, 0, 0, indexNd)
 	if indexNd[0] != 2 || indexNd[1] != 3 || indexNd[2] != 0 ||
 		indexNd[3] != 0 {
+		t.Fail()
+	}
+}
+
+func TestMultiply(t *testing.T) {
+	a := ZerosSparse(2, 2)
+	b := ZerosSparse(2, 2)
+	a.Set(1, 0, 0)
+	b.Set(2, 0, 0)
+	c := ArrayMultiply(a, b)
+	if c.Sum() != 2 {
+		t.Log("Fail on first try")
+		t.Fail()
+	}
+	c = ArrayMultiply(a, b)
+	if c.Sum() != 2 {
+		t.Log("Fail on second try")
 		t.Fail()
 	}
 }

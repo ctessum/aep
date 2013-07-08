@@ -362,7 +362,7 @@ func getTemporalFactor(monthlyCode, weeklyCode, diurnalCode string,
 	} else {
 		dFac = weekendTpro[diurnalCode][hour]
 	}
-	return 1. / mFac / weeksinmonth / wFac / dFac
+	return 1. * mFac / weeksinmonth * wFac * dFac
 }
 
 func griddedTemporalFactors(codes [3]string, outputTime time.Time) (
@@ -371,7 +371,7 @@ func griddedTemporalFactors(codes [3]string, outputTime time.Time) (
 	for i, grid := range grids {
 		out[i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for tz, cells := range grid.TimeZones {
-			location := time.FixedZone("", tz)
+			location := time.FixedZone("tz", tz)
 			localTime := outputTime.In(location)
 			fac := getTemporalFactor(codes[0], codes[1], codes[2], localTime)
 			out[i].AddSparse(cells.ScaleCopy(fac))
@@ -388,7 +388,7 @@ type timeStep struct {
 func newTimeStep() *timeStep {
 	t := new(timeStep)
 	t.area = make(map[string][]*sparse.SparseArray)
-	t.point = make([]*PointRecord, 350000)
+	t.point = make([]*PointRecord, 0, 350000)
 	return t
 }
 
@@ -405,11 +405,11 @@ func (t *timeStep) Sum() (area, point map[string][]float64) {
 	}
 	for _, record := range t.point {
 		for pol, vals := range record.ANN_EMIS {
-			if _, ok := area[pol]; !ok {
+			if _, ok := point[pol]; !ok {
 				point[pol] = make([]float64, len(vals.gridded))
 			}
 			for i, val := range vals.gridded {
-				area[pol][i] += val.Sum()
+				point[pol][i] += val.Sum()
 			}
 		}
 	}
@@ -480,7 +480,7 @@ func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 		}
 	case "area", "mobile":
 		for record := range InputChan {
-			temporalAgg.AggregatePoint(record)
+			temporalAgg.AggregateArea(record)
 			OutputChan <- record
 		}
 	default:
@@ -495,7 +495,7 @@ func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 }
 
 func (c *RunData) Temporal(numAnnualSectors,
-	numMonthlySectors int) {
+	numMonthlySectors int, msgChan chan string) {
 	tReport := newTemporalReport(c.startDate, c.endDate)
 	temporalMonth := c.CurrentMonth()
 	annualData := c.newTemporalAggregator(numAnnualSectors)
@@ -512,9 +512,8 @@ func (c *RunData) Temporal(numAnnualSectors,
 	fmt.Println("Monthly Finished")
 	Tdata := c.temporalCombine(annualData, monthData)
 	fmt.Println("temporal combined")
-	fmt.Println(c.currentTime,c.endDate)
+	fmt.Println(c.currentTime, c.endDate)
 	for c.currentTime.Before(c.endDate) {
-		fmt.Println("beginning of bool")
 		month := c.CurrentMonth()
 		if month != temporalMonth {
 			fmt.Println("New month calc")
@@ -534,6 +533,7 @@ func (c *RunData) Temporal(numAnnualSectors,
 		c.nextTime()
 	}
 	Report.TemporalResults = tReport
+	msgChan <- "Temporal allocation complete"
 }
 
 type TemporalReport struct {
