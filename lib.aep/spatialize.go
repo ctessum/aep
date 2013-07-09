@@ -1,4 +1,4 @@
-package main
+package aep
 
 import (
 	"bitbucket.org/ctessum/aep/gis"
@@ -39,23 +39,23 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	pg, err := c.PGconnect()
 	defer pg.Disconnect()
 	e.Add(err)
-	x := c.wpsData
+	x := c.wrfData
 	var proj string
-	switch x.map_proj {
+	switch x.Map_proj {
 	case "lambert":
 		proj = "lcc"
 	default:
 		log.Fatalln("ERROR: \"lambert\" is the only map projection" +
 			" that is currently supported (your projection is " +
-			x.map_proj + ").")
+			x.Map_proj + ").")
 	}
 	projInfo := new(gis.ParsedProj4)
 	projInfo.SRID = c.SRID
 	projInfo.Proj = proj
-	projInfo.Lat_1 = x.truelat1
-	projInfo.Lat_2 = x.truelat2
-	projInfo.Lat_0 = x.ref_lat
-	projInfo.Lon_0 = x.ref_lon
+	projInfo.Lat_1 = x.Truelat1
+	projInfo.Lat_2 = x.Truelat2
+	projInfo.Lat_0 = x.Ref_lat
+	projInfo.Lon_0 = x.Ref_lon
 	projInfo.EarthRadius_a = c.EarthRadius
 	projInfo.EarthRadius_b = c.EarthRadius
 	projInfo.To_meter = 1.
@@ -67,9 +67,9 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	}
 	pg.CreateSchema(c.SimulationName)
 
-	for i := 0; i < x.max_dom; i++ {
-		grid := gis.NewGrid(x.domainName[i], x.nx[i], x.ny[i],
-			x.dx[i], x.dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
+	for i := 0; i < x.Max_dom; i++ {
+		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
+			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
 
 		if !pg.TableExists(c.SimulationName, grid.Name) {
 			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
@@ -121,7 +121,7 @@ func (h *SpatialTotals) Add(pol, grid string, data *specValUnits, i int) {
 	*h = t
 }
 
-func (c *RunData) spatialize(InputChan chan *ParsedRecord,
+func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
 	var err error
@@ -213,9 +213,7 @@ func (c *RunData) spatialize(InputChan chan *ParsedRecord,
 		err = fmt.Errorf("Unknown sectorType %v", c.SectorType)
 		panic(err)
 	}
-	if OutputChan != TotalReportChan {
-		close(OutputChan)
-	}
+	close(OutputChan)
 	Report.SectorResults[c.Sector][period].SpatialResults = totals
 	c.ResultMaps(TotalGrid, period, pg)
 	c.msgchan <- "Finished spatializing " + period + " " + c.Sector

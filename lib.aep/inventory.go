@@ -1,9 +1,9 @@
-package main
+package aep
 
 import (
+	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
 	"fmt"
-	"bitbucket.org/ctessum/aep/sparse"
 	"io"
 	"os"
 	"strconv"
@@ -455,8 +455,14 @@ func (c RunData) parseRecordMobileIDA(record string, fInfo *FileInfo) *ParsedRec
 	return fields
 }
 
-func (config *RunData) inventory(OutputChan chan *ParsedRecord, period string) {
+func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 	defer config.ErrorRecover()
+	if _, ok := Report.SectorResults[config.Sector]; !ok {
+		Report.SectorResults[config.Sector] = make(map[string]*Results)
+	}
+	if _, ok := Report.SectorResults[config.Sector][period]; !ok {
+		Report.SectorResults[config.Sector][period] = new(Results)
+	}
 
 	// make a list of species that can possibly be double counted.
 	doubleCountablePols := make([]string, 0)
@@ -547,10 +553,7 @@ func (config *RunData) inventory(OutputChan chan *ParsedRecord, period string) {
 	}
 	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
-	// unless the output is going to the TotalReportChan
-	if OutputChan != TotalReportChan {
-		close(OutputChan)
-	}
+	close(OutputChan)
 }
 
 func (config *RunData) OpenFile(file string) (fInfo *FileInfo) {

@@ -213,6 +213,7 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 	Log(cmd, 3)
 	_, err = pg.db.Exec(cmd)
 	if err != nil {
+		pg.DropTable(grid.Schema, grid.Name)
 		return err
 	}
 

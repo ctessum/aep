@@ -1,4 +1,4 @@
-package main
+package aep
 
 import (
 	"bitbucket.org/ctessum/aep/gis"
@@ -9,10 +9,12 @@ import (
 	"go/build"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"encoding/json"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
@@ -104,11 +106,24 @@ func (c *RunData) ErrorReport(errmesg interface{}) {
 	return
 }
 
+var (
+	Report = new(ReportHolder)
+	Status *StatusHolder
+)
+
+func init() {
+	Report.SectorResults = make(map[string]map[string]*Results)
+	// track status of all of the running sectors
+	Status = NewStatus()
+	// Start server for html report (go to localhost:6060 in web browser to view report)
+	// Here, we run the report server in the background while the rest of the program is running.
+}
+
 type ReportHolder struct {
-	Config        *RunData
-	SectorResults map[string]map[string]*Results // map[sector][period]Results
-	ReportOnly    bool                           // whether main program is running at the same time
-	GridNames     []string                       // names of the grids
+	Config          *RunData
+	SectorResults   map[string]map[string]*Results // map[sector][period]Results
+	ReportOnly      bool                           // whether main program is running at the same time
+	GridNames       []string                       // names of the grids
 	TemporalResults *TemporalReport
 }
 
@@ -168,7 +183,7 @@ func (c *RunData) ResultMaps(
 		for pol, data := range d1 {
 			pg.AddDataRowToRasterTable(c.SimulationName, tableName, pol,
 				grid, data)
-			dir := filepath.Join(c.sectorLogs, pol+"_maps")
+			dir := filepath.Join(c.outputDir, pol+"_maps")
 			err := os.MkdirAll(dir, os.ModePerm)
 			if err != nil {
 				panic(err)
@@ -177,136 +192,6 @@ func (c *RunData) ResultMaps(
 			pg.WriteOutRaster(c.SimulationName, tableName, pol, filename)
 		}
 	}
-}
-
-type summaryRecord struct {
-	NAICS string
-	SIC   string
-	SCC   string
-	emis  map[string]float64
-}
-type summary struct {
-	data       []*summaryRecord
-	emisTotals map[string]float64
-}
-
-func (s summary) Len() int      { return len(s.data) }
-func (s summary) Swap(i, j int) { s.data[i], s.data[j] = s.data[j], s.data[i] }
-func (s summary) Less(i, j int) bool {
-	isum := 0.
-	for pol, val := range s.data[i].emis {
-		isum += val / s.emisTotals[pol]
-	}
-	jsum := 0.
-	for pol, val := range s.data[j].emis {
-		jsum += val / s.emisTotals[pol]
-	}
-	return isum > jsum
-}
-
-// Summarize emissions by NAICS, SIC, and SCC codes
-func (c RunData) TotalInventoryReport(msgChan chan string) {
-	// Get descriptions of different codes
-	sccDesc, err := c.SCCdesc()
-	if err != nil {
-		msgChan <- err.Error()
-	}
-	sicDesc, err := c.SICdesc()
-	if err != nil {
-		msgChan <- err.Error()
-	}
-	naicsDesc, err := c.NAICSdesc()
-	if err != nil {
-		msgChan <- err.Error()
-	}
-
-	// First aggregate all of the data.
-	records := make(map[string]map[string]map[string]map[string]float64)
-	for record := range TotalReportChan {
-		if _, ok := records[record.NAICS]; !ok {
-			records[record.NAICS] =
-				make(map[string]map[string]map[string]float64)
-		}
-		if _, ok := records[record.NAICS][record.SIC]; !ok {
-			records[record.NAICS][record.SIC] =
-				make(map[string]map[string]float64)
-		}
-		if _, ok := records[record.NAICS][record.SIC][record.SCC]; !ok {
-			records[record.NAICS][record.SIC][record.SCC] =
-				make(map[string]float64)
-		}
-		for pol, emis := range record.ANN_EMIS {
-			if record.InventoryFreq == "monthly" {
-				records[record.NAICS][record.SIC][record.SCC][pol] +=
-					emis.Val / 12.
-			} else {
-				records[record.NAICS][record.SIC][record.SCC][pol] += emis.Val
-			}
-		}
-	}
-	// Then, sort data in descending order by normalized emissions
-	outData := new(summary)
-	outData.data = make([]*summaryRecord, 0)
-	outData.emisTotals = make(map[string]float64)
-	for NAICS, val := range records {
-		for SIC, val2 := range val {
-			for SCC, val3 := range val2 {
-				x := new(summaryRecord)
-				x.emis = make(map[string]float64)
-				x.NAICS = NAICS
-				x.SIC = SIC
-				x.SCC = SCC
-				x.emis = val3
-				outData.data = append(outData.data, x)
-				for pol, emis := range val3 {
-					outData.emisTotals[pol] += emis
-				}
-			}
-		}
-	}
-	sort.Sort(outData)
-	// Write to log file
-	dir := filepath.Join(c.sectorLogs, "total")
-	err = os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	path := filepath.Join(dir, "inventory.csv")
-	rep, err := os.Create(path)
-	defer rep.Close()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Fprint(rep, "NAICS,NAICS desc.,SIC,SIC desc.,SCC,SCC desc.,")
-	polNames := make([]string, 0)
-	for pol, _ := range outData.emisTotals {
-		polNames = append(polNames, pol)
-	}
-	sort.Strings(polNames)
-	for _, pol := range polNames {
-		fmt.Fprintf(rep, "%s,", pol)
-	}
-	fmt.Fprint(rep, "\n")
-	for _, x := range outData.data {
-		nd, ok := naicsDesc[x.NAICS]
-		if !ok {
-			nd = "-"
-		}
-		sid, ok := sicDesc[x.SIC]
-		if !ok {
-			sid = "-"
-		}
-		scd, ok := sccDesc[x.SCC]
-		if !ok {
-			scd = "-"
-		}
-		fmt.Fprintf(rep, "%s,%s,%s,%s,%s,%s,", x.NAICS, nd, x.SIC, sid, x.SCC, scd)
-		for _, pol := range polNames {
-			fmt.Fprintf(rep, "%g,", x.emis[pol])
-		}
-		fmt.Fprint(rep, "\n")
-	}
-	msgChan <- "Finished total inventory report."
 }
 
 // SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
@@ -766,7 +651,45 @@ func DrawTable(format string, includeTotals bool, sectors, pols []string,
 	fmt.Fprint(w, "</tbody></table>\n")
 }
 
-func ReportServer() {
+func (c *RunData) ReportServer(reportOnly bool) {
+	// read in the report
+	if reportOnly {
+		file := filepath.Join(c.outputDir, "Report.json")
+		f, err := os.Open(file)
+		if err != nil {
+			panic(err)
+		}
+		reader := bufio.NewReader(f)
+		bytes, err := ioutil.ReadAll(reader)
+		if err != nil {
+			panic(err)
+		}
+		err = json.Unmarshal(bytes, Report)
+		if err != nil {
+			panic(err)
+		}
+		Report.ReportOnly = reportOnly
+
+	}
+	Report.ReportOnly = reportOnly
+	Report.Config = c
+	// Write out the report
+	defer func() {
+		b, err := json.MarshalIndent(Report, "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		f, err := os.Create(filepath.Join(
+			c.outputDir, "Report.json"))
+		if err != nil {
+			panic(err)
+		}
+		_, err = f.Write(b)
+		if err != nil {
+			panic(err)
+		}
+		f.Close()
+	}()
 	http.Handle("/css/", http.FileServer(http.Dir(reportfiles)))
 	http.Handle("/js/", http.FileServer(http.Dir(reportfiles)))
 	http.HandleFunc("/inventory", inventoryHandler)
@@ -776,4 +699,5 @@ func ReportServer() {
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/", rootHandler)
 	http.ListenAndServe(":6060", nil)
+
 }

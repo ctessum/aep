@@ -1,22 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
+	"bitbucket.org/ctessum/aep/lib.aep"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
-)
-
-var (
-	TotalReportChan = make(chan *ParsedRecord)
-	Report          = new(ReportHolder)
-	Status          *StatusHolder
 )
 
 func main() {
@@ -39,61 +29,35 @@ func main() {
 		fmt.Println("For more information try typing `aep --help'")
 		return
 	}
-	e := new(ErrCat) // error report
+	e := new(aep.ErrCat) // error report
 
 	// create list of sectors
 	sectors := strings.Split(*sectorFlag, " ")
 
 	// parse configuration file
-	ConfigAll := ReadConfigFile(configFile, testmode, e)
+	ConfigAll := aep.ReadConfigFile(configFile, testmode, e)
 
+	// go to localhost:6060 in web browser to view report
 	if *reportOnly {
-		// The reportServer function will run forever (go to localhost:8080 in web browser to view report).
-		file := filepath.Join(ConfigAll.Dirs.Logs, "Report.json")
-		f, err := os.Open(file)
-		if err != nil {
-			panic(err)
-		}
-		reader := bufio.NewReader(f)
-		bytes, err := ioutil.ReadAll(reader)
-		if err != nil {
-			panic(err)
-		}
-		err = json.Unmarshal(bytes, Report)
-		if err != nil {
-			panic(err)
-		}
-		Report.ReportOnly = *reportOnly
-		ReportServer()
+		// The reportServer function will run forever.
+		ConfigAll.DefaultSettings.ReportServer(*reportOnly)
+	} else {
+		// The reportServer function will run until the program is finished.
+		go ConfigAll.DefaultSettings.ReportServer(*reportOnly)
 	}
-
-	Report.ReportOnly = *reportOnly
-	Report.Config = ConfigAll.DefaultSettings
-	Report.SectorResults = make(map[string]map[string]*Results)
-
-	// track status of all of the running sectors
-	Status = NewStatus()
-
-	// Start server for html report (go to localhost:6060 in web browser to view report)
-	// Here, we run the report server in the background while the rest of the program is running.
-	go ReportServer()
 
 	runChan := make(chan string, 1)
 
 	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
-	if ConfigAll.DefaultSettings.CreateTotalInventoryReport {
-		// set up TotalInventoryReport subroutine
-		go ConfigAll.DefaultSettings.TotalInventoryReport(runChan)
-	} else {
-		go DiscardRecords(runChan)
-	}
 
 	// Start server for retrieving profiles from the
 	// SPECIATE database
-	go ConfigAll.DefaultSettings.SpecProfiles(e)
+	if ConfigAll.DefaultSettings.RunSpeciate {
+		go ConfigAll.DefaultSettings.SpecProfiles(e)
+	}
 
 	// Set up spatial environment
-	if ConfigAll.DefaultSettings.Spatialize {
+	if ConfigAll.DefaultSettings.RunSpatialize {
 		ConfigAll.DefaultSettings.SpatialSetup(e)
 	}
 
@@ -107,9 +71,8 @@ func main() {
 	// run sector subroutines
 	var n, numAnnualSectors, numMonthlySectors int
 	for sector, c := range ConfigAll.Sectors {
-		if sectors[0] == "all" || IsStringInArray(sectors, sector) {
-			Report.SectorResults[sector] = make(map[string]*Results)
-			go c.Run(runChan)
+		if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
+			go Run(c, runChan)
 			switch c.InventoryFreq {
 			case "annual":
 				numAnnualSectors++
@@ -121,7 +84,7 @@ func main() {
 	}
 	// run temporal subroutine
 	if ConfigAll.DefaultSettings.RunTemporal {
-		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors,runChan)
+		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors, runChan)
 		n++
 	}
 
@@ -130,25 +93,8 @@ func main() {
 		message := <-runChan
 		log.Println(message)
 	}
-	close(TotalReportChan)
 	message := <-runChan
 	log.Println(message)
-
-	// Write out the report
-	b, err := json.MarshalIndent(Report, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	f, err := os.Create(filepath.Join(
-		ConfigAll.Dirs.Logs, "Report.json"))
-	if err != nil {
-		panic(err)
-	}
-	_, err = f.Write(b)
-	if err != nil {
-		panic(err)
-	}
-	f.Close()
 
 	log.Println("\n",
 		"------------------------------------\n",
@@ -157,100 +103,96 @@ func main() {
 		"------------------------------------\n")
 }
 
-func (c *RunData) nextTime() {
-	c.currentTime = c.currentTime.Add(c.tStep)
-}
-func (c *RunData) CurrentMonth() (month string) {
-	month = strings.ToLower(c.currentTime.Format("Jan"))
-	return
-}
-
-func (c RunData) Run(runChan chan string) {
+func Run(c *aep.RunData, runChan chan string) {
 	if c.InventoryFreq == "annual" {
-		Report.SectorResults[c.Sector]["annual"] = new(Results)
-		c.RunPeriod("annual")
+		RunPeriod(c, "annual")
 	} else {
-		for c.currentTime.Before(c.endDate) {
+		var inventoryMonth string
+		for {
 			month := c.CurrentMonth()
-			if c.InventoryFreq == "monthly" && month != c.inventoryMonth {
-				Report.SectorResults[c.Sector][month] = new(Results)
-				c.RunPeriod(month)
-				c.inventoryMonth = month
+			if c.InventoryFreq == "monthly" && month != inventoryMonth {
+				RunPeriod(c, month)
+				inventoryMonth = month
 			}
 			// either advance to next date or end loop
-			c.nextTime()
+			keepGoing := c.NextTime()
+			if !keepGoing {
+				break
+			}
 		}
 	}
 
-	if Status.Sectors[c.Sector] != "Failed!" {
-		Status.Sectors[c.Sector] = "Finished"
+	if aep.Status.Sectors[c.Sector] != "Failed!" {
+		aep.Status.Sectors[c.Sector] = "Finished"
 	}
 	runChan <- "Finished processing " + c.Sector
 }
 
 // Set up the correct subroutines to run for each sector and period
-func (c RunData) RunPeriod(period string) {
-	Status.Sectors[c.Sector] = "Running " + period
-	c.msgchan = make(chan string, 1)
+func RunPeriod(c *aep.RunData, period string) {
+	aep.Status.Sectors[c.Sector] = "Running " + period
+	msgchan := c.MessageChan()
 	n := 0 // number of subroutines that we need to wait to finish
 
+	discardChan := make(chan *aep.ParsedRecord)
+	go DiscardRecords(discardChan)
+
 	// only run inventory
-	if c.Speciate == false && c.Spatialize == false {
-		go c.inventory(TotalReportChan, period)
+	if c.RunSpeciate == false && c.RunSpatialize == false {
+		go c.Inventory(discardChan, period)
 		n++
 	}
 
 	// speciate but don't spatialize
-	if c.Speciate == true && c.Spatialize == false {
-		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(ChanFromInventory, period)
-		go c.speciate(ChanFromInventory, TotalReportChan, period)
+	if c.RunSpeciate == true && c.RunSpatialize == false {
+		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
+		go c.Inventory(ChanFromInventory, period)
+		go c.Speciate(ChanFromInventory, discardChan, period)
 		n += 2
 	}
 
 	// speciate and spatialize
-	if c.Speciate == true && c.Spatialize == true {
-		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(ChanFromInventory, period)
-		SpecSpatialChan := make(chan *ParsedRecord, 1)
-		go c.speciate(ChanFromInventory, SpecSpatialChan, period)
+	if c.RunSpeciate == true && c.RunSpatialize == true {
+		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
+		go c.Inventory(ChanFromInventory, period)
+		SpecSpatialChan := make(chan *aep.ParsedRecord, 1)
+		go c.Speciate(ChanFromInventory, SpecSpatialChan, period)
 		if c.RunTemporal { // only run temporal if spatializing
-			SpatialTemporalChan := make(chan *ParsedRecord, 1)
-			go c.spatialize(SpecSpatialChan, SpatialTemporalChan, period)
-			go c.SectorTemporal(SpatialTemporalChan, TotalReportChan, period)
+			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
+			go c.Spatialize(SpecSpatialChan, SpatialTemporalChan, period)
+			go c.SectorTemporal(SpatialTemporalChan, discardChan, period)
 			n++
 		} else {
-			go c.spatialize(SpecSpatialChan, TotalReportChan, period)
+			go c.Spatialize(SpecSpatialChan, discardChan, period)
 		}
 		n += 3
 	}
 	// spatialize but don't speciate
-	if c.Speciate == false && c.Spatialize == true {
-		ChanFromInventory := make(chan *ParsedRecord, 1)
-		go c.inventory(ChanFromInventory, period)
+	if c.RunSpeciate == false && c.RunSpatialize == true {
+		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
+		go c.Inventory(ChanFromInventory, period)
 		if c.RunTemporal { // only run temporal if spatializing
-			SpatialTemporalChan := make(chan *ParsedRecord, 1)
-			go c.spatialize(ChanFromInventory, SpatialTemporalChan, period)
-			go c.SectorTemporal(SpatialTemporalChan, TotalReportChan, period)
+			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
+			go c.Spatialize(ChanFromInventory, SpatialTemporalChan, period)
+			go c.SectorTemporal(SpatialTemporalChan, discardChan, period)
 			n++
 		} else {
-			go c.spatialize(ChanFromInventory, TotalReportChan, period)
+			go c.Spatialize(ChanFromInventory, discardChan, period)
 		}
 		n += 2
 	}
 
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
-		message := <-c.msgchan
+		message := <-msgchan
 		c.Log(message, 0)
 	}
 
 	return
 }
 
-func DiscardRecords(msgChan chan string) {
-	for _ = range TotalReportChan {
+func DiscardRecords(inputChan chan *aep.ParsedRecord) {
+	for _ = range inputChan {
 		continue
 	}
-	msgChan <- "Finished processing all records."
 }

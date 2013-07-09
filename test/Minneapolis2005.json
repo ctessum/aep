@@ -3,17 +3,18 @@
         "Home": "${GOPATH}/src/bitbucket.org/ctessum/aep/test",
         "Input": "[Home]/Minneapolis2005",
         "Ancilliary": "[Home]/ancilliary",
-        "Logs": "[Home]/logs"
+        "Output": "[Home]/output"
     },
     "DefaultSettings": {
 		"StartDate": "2005/01/01",
 		"EndDate": "2005/02/28",
 		"Tstep":"1h",
-        "OutputType": "CAMx",
+        "OutputType": "WRF",
         "SpecType": "mol",
         "InputUnits": "tons/year",
         "MatchFullSCC": false,
-        "WpsNamelist": "[Ancilliary]/namelist.wps",
+        "WPSnamelist": "[Ancilliary]/namelist.wps",
+        "WRFnamelist": "[Ancilliary]/namelist.input",
 		"SRID":500001,
         "EarthRadius": 6370000,
 		"PostGISuser":"chris",
@@ -30,8 +31,8 @@
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 8,
-        "Speciate": true,
-        "Spatialize": true,
+        "RunSpeciate": true,
+        "RunSpatialize": true,
 		"RunTemporal":true,
 		"CreateTotalInventoryReport": false,
         "PolsToKeep": {

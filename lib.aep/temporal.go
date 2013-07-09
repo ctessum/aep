@@ -1,4 +1,4 @@
-package main
+package aep
 
 import (
 	"bitbucket.org/ctessum/aep/sparse"
@@ -189,7 +189,7 @@ func (c *RunData) temporalPro() error {
 }
 
 func parseTproLine(line string, n int) (code string, pro []float64, err error) {
-	code = strings.TrimSpace(line[0:6])
+	code = strings.TrimSpace(line[0:5])
 	pro = make([]float64, n)
 	j := 0
 	total := 0.
@@ -380,19 +380,21 @@ func griddedTemporalFactors(codes [3]string, outputTime time.Time) (
 	return
 }
 
-type timeStep struct {
+type TimeStep struct {
 	area  map[string][]*sparse.SparseArray
 	point []*PointRecord
+	Time  time.Time
 }
 
-func newTimeStep() *timeStep {
-	t := new(timeStep)
+func newTimeStep(tTime time.Time) *TimeStep {
+	t := new(TimeStep)
 	t.area = make(map[string][]*sparse.SparseArray)
 	t.point = make([]*PointRecord, 0, 350000)
+	t.Time = tTime
 	return t
 }
 
-func (t *timeStep) Sum() (area, point map[string][]float64) {
+func (t *TimeStep) Sum() (area, point map[string][]float64) {
 	area = make(map[string][]float64)
 	point = make(map[string][]float64)
 	for pol, vals := range t.area {
@@ -416,8 +418,8 @@ func (t *timeStep) Sum() (area, point map[string][]float64) {
 	return
 }
 
-func (ta *temporalAggregator) calcTimestep(t time.Time) *timeStep {
-	Tstep := newTimeStep()
+func (ta *temporalAggregator) calcTimestep(t time.Time) *TimeStep {
+	Tstep := newTimeStep(t)
 	for temporalCodes, data := range ta.AreaData {
 		tFactors := griddedTemporalFactors(temporalCodes, t)
 		for pol, gridData := range data {
@@ -487,16 +489,34 @@ func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 		err := fmt.Errorf("Unknown sectorType %v", c.SectorType)
 		panic(err)
 	}
-	if OutputChan != TotalReportChan {
-		close(OutputChan)
-	}
+	close(OutputChan)
 	c.msgchan <- "Finished temporalizing " + period + " " + c.Sector
+	return
+}
+
+func (c *RunData) NextTime() (keepGoing bool) {
+	c.currentTime = c.currentTime.Add(c.tStep)
+	keepGoing = c.currentTime.Before(c.endDate)
+	return
+}
+
+func (c *RunData) CurrentTime() time.Time {
+	return c.currentTime
+}
+
+func (c *RunData) CurrentMonth() (month string) {
+	month = strings.ToLower(c.currentTime.Format("Jan"))
 	return
 }
 
 func (c *RunData) Temporal(numAnnualSectors,
 	numMonthlySectors int, msgChan chan string) {
 	tReport := newTemporalReport(c.startDate, c.endDate)
+
+	// Setup output goroutine.
+	outchan := make(chan *outputDataChan)
+	go c.Output(outchan)
+
 	temporalMonth := c.CurrentMonth()
 	annualData := c.newTemporalAggregator(numAnnualSectors)
 	monthData := c.newTemporalAggregator(numMonthlySectors)
@@ -511,9 +531,17 @@ func (c *RunData) Temporal(numAnnualSectors,
 	monthData.WaitGroup.Wait() // wait for sectors to finish
 	fmt.Println("Monthly Finished")
 	Tdata := c.temporalCombine(annualData, monthData)
+	// get all of the pollutants we will be outputting, and their units
+	_, _, polsAndUnits, _ := Report.PrepDataReport("Spatialization", "d01")
 	fmt.Println("temporal combined")
-	fmt.Println(c.currentTime, c.endDate)
+	tstepsInFile := 0
+	tstepChan := make(chan *TimeStep)
 	for c.currentTime.Before(c.endDate) {
+		if tstepsInFile == 0 {
+			close(tstepChan)
+			tstepChan = make(chan *TimeStep)
+			outchan <- &outputDataChan{tstepChan, c.currentTime, polsAndUnits}
+		}
 		month := c.CurrentMonth()
 		if month != temporalMonth {
 			fmt.Println("New month calc")
@@ -526,11 +554,23 @@ func (c *RunData) Temporal(numAnnualSectors,
 			monthData.WaitGroup.Wait() // wait for sectors to finish
 			fmt.Println("Monthly Finished")
 			Tdata = c.temporalCombine(annualData, monthData)
+			// get all of the pollutants we will be outputting, and their units
+			_, _, polsAndUnits, _ = Report.PrepDataReport(
+				"Spatialization", "d01")
 		}
 		fmt.Println("xxxxxxxxxxxxxxxx", c.currentTime)
 		Tstep := Tdata.calcTimestep(c.currentTime)
+		tstepChan <- Tstep
+		tstepsInFile++
+		if tstepsInFile == 24 {
+			tstepsInFile = 0
+		}
 		tReport.addTstep(Tstep)
-		c.nextTime()
+		// either advance to next date or end loop
+		keepGoing := c.NextTime()
+		if !keepGoing {
+			break
+		}
 	}
 	Report.TemporalResults = tReport
 	msgChan <- "Temporal allocation complete"
@@ -551,7 +591,7 @@ func newTemporalReport(begin, end time.Time) *TemporalReport {
 	return t
 }
 
-func (t *TemporalReport) addTstep(Tstep *timeStep) {
+func (t *TemporalReport) addTstep(Tstep *TimeStep) {
 	area, point := Tstep.Sum()
 	for pol, vals := range area {
 		if _, ok := t.Area[pol]; !ok {

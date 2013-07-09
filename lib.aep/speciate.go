@@ -1,4 +1,4 @@
-package main
+package aep
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
 
 var (
-	SpecProfChan = make(chan *SpecProfRequest)
+	SpecProfChan    = make(chan *SpecProfRequest)
 	SpecRefFileLock = new(sync.Mutex)
 )
 
@@ -642,7 +642,7 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 // annual emissions by the speciation factors. Multiply all
 // speciated emissions by a conversion factor from the input
 // units to g/year.
-func (c *RunData) speciate(InputChan chan *ParsedRecord,
+func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Speciating "+period+" "+c.Sector+"...", 0)
@@ -692,7 +692,5 @@ func (c *RunData) speciate(InputChan chan *ParsedRecord,
 		SpeciationResults = totals
 
 	c.msgchan <- "Finished speciating " + period + " " + c.Sector
-	if OutputChan != TotalReportChan {
-		close(OutputChan)
-	}
+	close(OutputChan)
 }

@@ -65,8 +65,8 @@ func TestSparse(t *testing.T) {
 	for _, val := range c {
 		csum += val
 	}
-	t.Log(csum, 12000)
-	if diff(csum, 12000.) {
+	t.Log(csum, 1200)
+	if diff(csum, 1200.) {
 		t.Fail()
 	}
 	index1d := a.Index1d([]int{2, 3, 12, 7})
@@ -97,6 +97,23 @@ func TestMultiply(t *testing.T) {
 	}
 	c = ArrayMultiply(a, b)
 	if c.Sum() != 2 {
+		t.Log("Fail on second try")
+		t.Fail()
+	}
+}
+
+func TestAdd(t *testing.T) {
+	a := ZerosSparse(2, 2)
+	b := ZerosSparse(2, 2)
+	a.Set(1, 0, 0)
+	b.Set(2, 0, 0)
+	a.AddSparse(b)
+	if a.Sum() != 3 {
+		t.Log("Fail on first try")
+		t.Fail()
+	}
+	a.AddSparse(b)
+	if a.Sum() != 5 {
 		t.Log("Fail on second try")
 		t.Fail()
 	}

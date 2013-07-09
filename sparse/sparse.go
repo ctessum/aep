@@ -289,12 +289,7 @@ func (A *SparseArray) AddSparse(B *SparseArray) {
 		panic(err)
 	}
 	for i, val := range B.elements {
-		_, ok := A.elements[i]
-		if ok {
-			A.elements[i] += val
-		} else {
-			A.elements[i] = val
-		}
+		A.elements[i] += val
 	}
 }
 
@@ -304,12 +299,7 @@ func (A *SparseArray) SubtractSparse(B *SparseArray) {
 		panic(err)
 	}
 	for i, val := range B.elements {
-		_, ok := A.elements[i]
-		if ok {
-			A.elements[i] -= val
-		} else {
-			A.elements[i] = -1 * val
-		}
+		A.elements[i] -= val
 	}
 }
 
@@ -319,12 +309,7 @@ func (A *SparseArray) SubtractVal(val float64, index ...int) {
 		panic(err)
 	}
 	index1d := A.Index1d(index)
-	_, ok := A.elements[index1d]
-	if ok {
-		A.elements[index1d] -= val
-	} else {
-		A.elements[index1d] = -1 * val
-	}
+	A.elements[index1d] -= val
 }
 
 // Scale Multiplies entire array by val
@@ -348,11 +333,11 @@ func ArrayMultiply(A, B *SparseArray) *SparseArray {
 		panic(err)
 	}
 	out := A.Copy()
-	for i,_ := range out.elements {
-		if _,ok := B.elements[i]; ok {
+	for i, _ := range out.elements {
+		if _, ok := B.elements[i]; ok {
 			out.elements[i] *= B.elements[i]
 		} else {
-			delete(out.elements,i)
+			delete(out.elements, i)
 		}
 	}
 	return out
@@ -382,6 +367,14 @@ func (A *SparseArray) ToDense() []float64 {
 	out := make([]float64, A.arrsize)
 	for i, val := range A.elements {
 		out[i] = val
+	}
+	return out
+}
+
+func (A *SparseArray) ToDense32() []float32 {
+	out := make([]float32, A.arrsize)
+	for i, val := range A.elements {
+		out[i] = float32(val)
 	}
 	return out
 }
