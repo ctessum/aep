@@ -45,7 +45,7 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	case "lambert":
 		proj = "lcc"
 	default:
-		log.Fatalln("ERROR: \"lambert\" is the only map projection" +
+		e.Add("ERROR: \"lambert\" is the only map projection" +
 			" that is currently supported (your projection is " +
 			x.Map_proj + ").")
 	}
