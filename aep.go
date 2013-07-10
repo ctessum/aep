@@ -82,10 +82,13 @@ func main() {
 			n++
 		}
 	}
-	// run temporal subroutine
+	// run temporal and output subroutines
 	if ConfigAll.DefaultSettings.RunTemporal {
-		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors, runChan)
-		n++
+		outchan := make(chan *aep.OutputDataChan)
+		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors,
+			outchan, runChan)
+		go ConfigAll.DefaultSettings.Output(outchan, runChan)
+		n+=2
 	}
 
 	// wait for calculations to complete
@@ -93,8 +96,6 @@ func main() {
 		message := <-runChan
 		log.Println(message)
 	}
-	message := <-runChan
-	log.Println(message)
 
 	log.Println("\n",
 		"------------------------------------\n",

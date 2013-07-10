@@ -120,6 +120,7 @@ type RunData struct {
 	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
 	WPSnamelist                    string        // Path to WPS namelist file
 	WRFnamelist                    string        // Path to WPS namelist file
+	OldWRFout                      string        // Path to old WRF output files for plume rise calculations. [DOMAIN] and [DATE] can be used as wildcards.
 	wrfData                        *WRFconfigData
 	SRID                           int    // PostGIS projection ID number. It should be a number not currently being used by PostGIS, unless the output projection is the same as the projection in any of the input shapefiles, in which case the SRID should be the same as the SRID in the matching input data (using more than one SRID for the same projection will cause errors).
 	LineMap                        string // Name of map containing lines to be overlayed on output maps. Should be in the "PERMANENT" mapset of the "SpatialDataLoc" location
@@ -127,7 +128,6 @@ type RunData struct {
 	SimulationName                 string // Name for the simulation: user choice
 	currentTime                    time.Time
 	ErrorFlag                      bool // whether this sector has already encountered an error
-	CreateTotalInventoryReport     bool // whether to create a report that summarizes emissions by source code (memory intensive)
 	testMode                       bool // testMode is set by a command line flag and is used for testing the program. In ensures that SpecType is set to "mass" and turns off the conversion from VOCs to TOGs so that speciated emissions totals can be compared to total emissions in the inventory
 	msgchan                        chan string
 }
@@ -179,6 +179,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.EarthRadius = d.EarthRadius
 	c.WPSnamelist = d.WPSnamelist
 	c.WRFnamelist = d.WRFnamelist
+	c.OldWRFout = d.OldWRFout
 	c.SRID = d.SRID
 	c.wrfData = d.wrfData
 	c.SimulationName = d.SimulationName
@@ -311,12 +312,13 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 		&c.SpecRefFile, &c.SpecRefComboFile, &c.SpecProFile,
 		&c.SccDesc, &c.SicDesc, &c.NaicsDesc,
 		&c.GridRefFile, &c.TemporalRefFile, &c.TemporalProFile,
-		&c.HolidayFile, &c.SrgSpecFile, &c.WPSnamelist, &c.WRFnamelist}
+		&c.HolidayFile, &c.SrgSpecFile, &c.WPSnamelist, &c.WRFnamelist,
+		&c.OldWRFout}
 	varnames := []string{"Home", "Input", "Ancilliary",
 		"SpecRefFile", "SpecRefComboFile", "SpecProFile",
 		"SccDesc", "SicDesc", "NaicsDesc",
 		"GridRefFile", "TemporalRefFile", "TemporalProFile", "HolidayFile",
-		"SrgSpecFile", "WPSnamelist", "WRFnamelist"}
+		"SrgSpecFile", "WPSnamelist", "WRFnamelist", "OldWRFout"}
 
 	for i, path := range paths {
 		*path = strings.Replace(*path, "[Home]", d.Home, -1)
@@ -324,7 +326,10 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 		*path = strings.Replace(*path, "[input]", d.Input, -1)
 		*path = strings.Replace(*path, "[Ancilliary]", d.Ancilliary, -1)
 		*path = os.ExpandEnv(*path)
-		e.statOS(*path, varnames[i])
+		if strings.Index(*path, "[DOMAIN]") == -1 &&
+			strings.Index(*path, "[DATE]") == -1 {
+			e.statOS(*path, varnames[i])
+		}
 	}
 	if c.Sector != "" {
 		sectorPath := filepath.Join(d.Input, c.CaseName, c.Sector)

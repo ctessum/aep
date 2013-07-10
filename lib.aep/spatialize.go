@@ -144,6 +144,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 				panic(err)
 			}
 
+			emisInRecord := false
 			for pol, data := range record.ANN_EMIS {
 				data.gridded = make([]*sparse.SparseArray, len(grids))
 				for i, grid := range grids {
@@ -163,13 +164,18 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 						grid.Dx)
 					if row > 0 && row < grid.Ny &&
 						col > 0 && col < grid.Nx {
+						if data.Val != 0. {
+							emisInRecord = true
+						}
 						data.gridded[i].Set(data.Val, row, col)
 						TotalGrid[grid][pol].AddVal(data.Val, row, col)
 					}
 					totals.Add(pol, grid.Name, data, i)
 				}
 			}
-			OutputChan <- record
+			if emisInRecord {
+				OutputChan <- record
+			}
 		}
 	case "area", "mobile":
 		for record := range InputChan {

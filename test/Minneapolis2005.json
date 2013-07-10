@@ -34,7 +34,6 @@
         "RunSpeciate": true,
         "RunSpatialize": true,
 		"RunTemporal":true,
-		"CreateTotalInventoryReport": false,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"EVP__VOC":{"SpecType":"VOC"},

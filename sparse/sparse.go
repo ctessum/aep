@@ -13,7 +13,7 @@ var BoundsCheck = true // Whether to check array bounds every time
 type SparseArray struct {
 	elements map[int]float64
 	ndims    int
-	dims     []int
+	Shape     []int
 	arrsize  int // Maximum number of elements in array
 }
 
@@ -21,7 +21,7 @@ type SparseArray struct {
 type DenseArray struct {
 	elements []float64
 	ndims    int
-	dims     []int
+	Shape     []int
 	arrsize  int // Maximum number of elements in array
 }
 
@@ -30,9 +30,9 @@ func ZerosSparse(dims ...int) *SparseArray {
 	A := new(SparseArray)
 	A.elements = make(map[int]float64)
 	A.ndims = len(dims)
-	A.dims = dims
+	A.Shape = dims
 	A.arrsize = 1
-	for _, i := range A.dims {
+	for _, i := range A.Shape {
 		A.arrsize *= i
 	}
 	return A
@@ -42,9 +42,9 @@ func ZerosSparse(dims ...int) *SparseArray {
 func ZerosDense(dims ...int) *DenseArray {
 	A := new(DenseArray)
 	A.ndims = len(dims)
-	A.dims = dims
+	A.Shape = dims
 	A.arrsize = 1
-	for _, i := range A.dims {
+	for _, i := range A.Shape {
 		A.arrsize *= i
 	}
 	A.elements = make([]float64, A.arrsize)
@@ -55,7 +55,7 @@ func ZerosDense(dims ...int) *DenseArray {
 func (A *SparseArray) Copy() *SparseArray {
 	B := new(SparseArray)
 	B.ndims = A.ndims
-	B.dims = A.dims
+	B.Shape = A.Shape
 	B.arrsize = A.arrsize
 	B.elements = make(map[int]float64)
 	for i, e := range A.elements {
@@ -72,11 +72,11 @@ func (A *SparseArray) checkIndex(index []int) error {
 				"array number of dimensions.", len(index), A.ndims)
 			return err
 		}
-		for i, dim := range A.dims {
+		for i, dim := range A.Shape {
 			if index[i] >= dim {
 				err := fmt.Errorf(
 					"Index %v of dimension %v is greater than dimension "+
-						"size %v.", index[i], i, A.dims[i])
+						"size %v.", index[i], i, A.Shape[i])
 				return err
 			}
 		}
@@ -92,11 +92,11 @@ func (A *DenseArray) checkIndex(index []int) error {
 				"array number of dimensions.", len(index), A.ndims)
 			return err
 		}
-		for i, dim := range A.dims {
+		for i, dim := range A.Shape {
 			if index[i] >= dim {
 				err := fmt.Errorf(
 					"Index %v of dimension %v is greater than dimension "+
-						"size %v.", index[i], i, A.dims[i])
+						"size %v.", index[i], i, A.Shape[i])
 				return err
 			}
 		}
@@ -112,11 +112,11 @@ func (A *SparseArray) checkArray(B *SparseArray) error {
 				"not match number of dimensions in array B (%v).", A.ndims, B.ndims)
 			return err
 		}
-		for i, dim := range A.dims {
-			if B.dims[i] != dim {
+		for i, dim := range A.Shape {
+			if B.Shape[i] != dim {
 				err := fmt.Errorf(
 					"Dimension %v is different in arrays A (%v) and B (%v).",
-					i, A.dims[i], B.dims[i])
+					i, A.Shape[i], B.Shape[i])
 				return err
 			}
 		}
@@ -132,11 +132,11 @@ func (A *DenseArray) checkArray(B *DenseArray) error {
 				"not match number of dimensions in array B (%v).", A.ndims, B.ndims)
 			return err
 		}
-		for i, dim := range A.dims {
-			if B.dims[i] != dim {
+		for i, dim := range A.Shape {
+			if B.Shape[i] != dim {
 				err := fmt.Errorf(
 					"Dimension %v is different in arrays A (%v) and B (%v).",
-					i, A.dims[i], B.dims[i])
+					i, A.Shape[i], B.Shape[i])
 				return err
 			}
 		}
@@ -152,7 +152,7 @@ func (A *SparseArray) Index1d(index []int) (index1d int) {
 	for i := 0; i < len(index); i++ {
 		mul := 1
 		for j := i + 1; j < len(index); j++ {
-			mul = mul * A.dims[j]
+			mul = mul * A.Shape[j]
 		}
 		index1d = index1d + index[i]*mul
 	}
@@ -167,7 +167,7 @@ func (A *DenseArray) Index1d(index []int) (index1d int) {
 	for i := 0; i < len(index); i++ {
 		mul := 1
 		for j := i + 1; j < len(index); j++ {
-			mul = mul * A.dims[j]
+			mul = mul * A.Shape[j]
 		}
 		index1d = index1d + index[i]*mul
 	}
@@ -181,7 +181,7 @@ func (A *SparseArray) IndexNd(index1d int) (indexNd []int) {
 	for i := 0; i < A.ndims; i++ {
 		stride := 1
 		for j := i + 1; j < A.ndims; j++ {
-			stride *= A.dims[j]
+			stride *= A.Shape[j]
 		}
 		indexNd[i] = leftover / stride
 		if leftover >= stride {
@@ -200,7 +200,7 @@ func (A *DenseArray) IndexNd(index1d int) (indexNd []int) {
 	for i := 0; i < A.ndims; i++ {
 		stride := 1
 		for j := i + 1; j < A.ndims; j++ {
-			stride *= A.dims[j]
+			stride *= A.Shape[j]
 		}
 		indexNd[i] = leftover / stride
 		if leftover >= stride {

@@ -217,7 +217,7 @@ func (c *RunData) GetTemporalCodes(SCC, FIPS string) [3]string {
 		_, codes, err = MatchCode(FIPS, temporalRef[SCC])
 	}
 	if err != nil {
-		err = fmt.Errorf("In temperal reference file: %v. (SCC=%v, FIPS=%v).",
+		err = fmt.Errorf("In temporal reference file: %v. (SCC=%v, FIPS=%v).",
 			err.Error(), SCC, FIPS)
 		panic(err)
 	}
@@ -311,6 +311,8 @@ type PointRecord struct {
 	STKTEMP  float64                  //	Stack Gas Exit Temperature (°F) (required)
 	STKFLOW  float64                  //	Stack Gas Flow Rate (ft3/sec) (optional, automatically calculated by Smkinven from velocity and diameter if not given in file)
 	STKVEL   float64                  //	Stack Gas Exit Velocity (ft/sec) (required)
+	Row      []int                    // grid row number
+	Col      []int                    // grid column number
 	ANN_EMIS map[string]*specValUnits // Annual Emissions (tons/year) (required)
 }
 
@@ -321,6 +323,14 @@ func newPointRecord(r *ParsedRecord) *PointRecord {
 	out.STKTEMP = r.STKTEMP
 	out.STKFLOW = r.STKFLOW
 	out.STKVEL = r.STKVEL
+	out.Row = make([]int, len(grids))
+	out.Col = make([]int, len(grids))
+	for i, grid := range grids {
+		out.Row[i] = int((r.PointYcoord - grid.Y0) /
+			grid.Dy)
+		out.Col[i] = int((r.PointXcoord - grid.X0) /
+			grid.Dx)
+	}
 	out.ANN_EMIS = r.ANN_EMIS
 	return out
 }
@@ -444,6 +454,8 @@ func (ta *temporalAggregator) calcTimestep(t time.Time) *TimeStep {
 			point.STKTEMP = record.STKTEMP
 			point.STKFLOW = record.STKFLOW
 			point.STKVEL = record.STKVEL
+			point.Row = record.Row
+			point.Col = record.Col
 			point.ANN_EMIS = make(map[string]*specValUnits)
 			for pol, emis := range record.ANN_EMIS {
 				point.ANN_EMIS[pol] = new(specValUnits)
@@ -510,12 +522,8 @@ func (c *RunData) CurrentMonth() (month string) {
 }
 
 func (c *RunData) Temporal(numAnnualSectors,
-	numMonthlySectors int, msgChan chan string) {
+	numMonthlySectors int, outchan chan *OutputDataChan, msgChan chan string) {
 	tReport := newTemporalReport(c.startDate, c.endDate)
-
-	// Setup output goroutine.
-	outchan := make(chan *outputDataChan)
-	go c.Output(outchan)
 
 	temporalMonth := c.CurrentMonth()
 	annualData := c.newTemporalAggregator(numAnnualSectors)
@@ -540,7 +548,7 @@ func (c *RunData) Temporal(numAnnualSectors,
 		if tstepsInFile == 0 {
 			close(tstepChan)
 			tstepChan = make(chan *TimeStep)
-			outchan <- &outputDataChan{tstepChan, c.currentTime, polsAndUnits}
+			outchan <- &OutputDataChan{tstepChan, c.currentTime, polsAndUnits}
 		}
 		month := c.CurrentMonth()
 		if month != temporalMonth {
@@ -572,6 +580,8 @@ func (c *RunData) Temporal(numAnnualSectors,
 			break
 		}
 	}
+	close(tstepChan)
+	close(outchan)
 	Report.TemporalResults = tReport
 	msgChan <- "Temporal allocation complete"
 }
