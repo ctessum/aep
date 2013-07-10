@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/pmylund/go-cache"
 	"io"
-	"log"
 	"math"
 	"os"
 	"strconv"
@@ -45,9 +44,10 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	case "lambert":
 		proj = "lcc"
 	default:
-		e.Add("ERROR: \"lambert\" is the only map projection" +
-			" that is currently supported (your projection is " +
-			x.Map_proj + ").")
+		e.Add(fmt.Errorf("ERROR: \"lambert\" is the only map projection"+
+			" that is currently supported (your projection is %v).",
+			x.Map_proj))
+		return
 	}
 	projInfo := new(gis.ParsedProj4)
 	projInfo.SRID = c.SRID
