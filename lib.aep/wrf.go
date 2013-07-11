@@ -297,8 +297,14 @@ func parseWPSnamelist(filename string, d *WRFconfigData, e *errCat) {
 	}
 	d.S = make([]float64, d.Max_dom)
 	d.W = make([]float64, d.Max_dom)
-	d.S[0] = 0 - (d.Ref_y-0.5)*d.Dy0
-	d.W[0] = 0 - (d.Ref_x-0.5)*d.Dx0
+	switch d.Map_proj {
+	case "lat-lon":
+		d.S[0] = d.Ref_lat - (d.Ref_y-0.5)*d.Dy0
+		d.W[0] = d.Ref_lon - (d.Ref_x-0.5)*d.Dx0
+	default:
+		d.S[0] = 0 - (d.Ref_y-0.5)*d.Dy0
+		d.W[0] = 0 - (d.Ref_x-0.5)*d.Dx0
+	}
 	d.Dx = make([]float64, d.Max_dom)
 	d.Dy = make([]float64, d.Max_dom)
 	d.Dx[0] = d.Dx0
@@ -358,7 +364,7 @@ func parseWRFnamelist(filename string, d *WRFconfigData, e *errCat) {
 			case "e_we":
 				e.compare(d.E_we, namelistIntList(val), name)
 			case "e_sn":
-				e.compare(d.E_we, namelistIntList(val), name)
+				e.compare(d.E_sn, namelistIntList(val), name)
 			case "dx":
 				e.compare(d.Dx0, namelistFloatList(val)[0], name)
 			case "dy":
@@ -468,8 +474,8 @@ func (e *errCat) compare(val1, val2 interface{}, name string) {
 		panic("Unknown type")
 	}
 	if errFlag {
-		e.Add(fmt.Errorf("WRF variable mismatch for %v, WRF namelist=%v; "+
-			"WPS namelist=%v.", name, val1, val2))
+		e.Add(fmt.Errorf("WRF variable mismatch for %v, WPS namelist=%v; "+
+			"WRF namelist=%v.", name, val1, val2))
 	}
 }
 

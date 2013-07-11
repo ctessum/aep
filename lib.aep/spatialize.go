@@ -43,6 +43,8 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	switch x.Map_proj {
 	case "lambert":
 		proj = "lcc"
+	case "lat-lon":
+		proj = "longlat"
 	default:
 		e.Add(fmt.Errorf("ERROR: \"lambert\" is the only map projection"+
 			" that is currently supported (your projection is %v).",
@@ -138,10 +140,15 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 	case "point":
 		for record := range InputChan {
 			// Convert Lat/Lon to projection
-			record.PointXcoord, record.PointYcoord, err =
-				pg.ProjectPoint(record.YLOC, record.XLOC, c.SRID)
-			if err != nil {
-				panic(err)
+			if c.wrfData.Map_proj == "lat-lon" {
+				record.PointXcoord, record.PointYcoord =
+					record.XLOC, record.YLOC
+			} else {
+				record.PointXcoord, record.PointYcoord, err =
+					pg.ProjectPoint(record.YLOC, record.XLOC, c.SRID)
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			emisInRecord := false
