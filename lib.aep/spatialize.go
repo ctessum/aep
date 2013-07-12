@@ -39,6 +39,7 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	defer pg.Disconnect()
 	e.Add(err)
 	x := c.wrfData
+	Report.GridNames = x.DomainNames
 	var proj string
 	switch x.Map_proj {
 	case "lambert":
