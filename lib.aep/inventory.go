@@ -501,7 +501,7 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 					if _, ok := recordsThatDoubleCount[key]; !ok {
 						recordsThatDoubleCount[key] = make([]string, 0)
 					}
-					for _, specName := range config.PolsToKeep[pol].SpecNames {
+					for _, specName := range config.PolsToKeep[cleanPol(pol)].SpecNames {
 						if !IsStringInArray(recordsThatDoubleCount[key], specName) {
 							recordsThatDoubleCount[key] = append(
 								recordsThatDoubleCount[key], specName)
@@ -536,7 +536,7 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 			}
 			// add emissions to totals for report
 			for pol, emis := range record.ANN_EMIS {
-				if _, ok := config.PolsToKeep[pol]; ok {
+				if _, ok := config.PolsToKeep[cleanPol(pol)]; ok {
 					fInfo.Totals[pol] += emis.Val
 				} else {
 					// delete value if we don't want to keep it
@@ -554,6 +554,16 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
 	close(OutputChan)
+}
+
+// Also include EVP__xxx etc. pollutants
+func cleanPol(pol string) (cleanedPol string) {
+	if strings.Index(pol, "__") != -1 {
+		cleanedPol = strings.Split(pol, "__")[1]
+	} else {
+		cleanedPol = pol
+	}
+	return
 }
 
 func (config *RunData) OpenFile(file string) (fInfo *FileInfo) {

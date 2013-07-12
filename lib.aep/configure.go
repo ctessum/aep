@@ -96,7 +96,7 @@ type RunData struct {
 	SpecProFile                    string
 	SpecType                       string // Type of speciation to perform. Either "mol" or "mass".
 	SpeciesGroupName               string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
-	specFrac                       map[string]map[string]map[string]specHolder
+	specFrac                       map[string]map[string]map[string]SpecHolder
 	PolsToKeep                     map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
 	GridRefFile                    string
 	SrgSpecFile                    string
@@ -132,9 +132,12 @@ type RunData struct {
 	msgchan                        chan string
 }
 
+// PolHolder allows the configuration of chemical speciation settings for individual pollutants.
+// Only on of the fields below should be used for each pollutant.
 type PolHolder struct {
 	SpecType  string   // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
 	SpecNames []string // Names of pollutants in the SPECIATE database which are equivalent to this pollutant. For records containing this pollutant, the pollutants included in "SpecNames" will be left out of any speciation that occurs to avoid double counting.
+	SpecProf map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
 }
 
 func (p *configInput) setup(e *ErrCat) {
