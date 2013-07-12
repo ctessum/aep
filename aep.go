@@ -45,6 +45,7 @@ func main() {
 		// The reportServer function will run until the program is finished.
 		go ConfigAll.DefaultSettings.ReportServer(*reportOnly)
 	}
+	defer ConfigAll.DefaultSettings.WriteReport()
 
 	runChan := make(chan string, 1)
 
@@ -88,7 +89,7 @@ func main() {
 		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors,
 			outchan, runChan)
 		go ConfigAll.DefaultSettings.Output(outchan, runChan)
-		n+=2
+		n += 2
 	}
 
 	// wait for calculations to complete

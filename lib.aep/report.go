@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/ctessum/aep/gis"
 	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/build"
@@ -14,7 +15,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"encoding/json"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
@@ -673,23 +673,6 @@ func (c *RunData) ReportServer(reportOnly bool) {
 	}
 	Report.ReportOnly = reportOnly
 	Report.Config = c
-	// Write out the report
-	defer func() {
-		b, err := json.MarshalIndent(Report, "", "  ")
-		if err != nil {
-			panic(err)
-		}
-		f, err := os.Create(filepath.Join(
-			c.outputDir, "Report.json"))
-		if err != nil {
-			panic(err)
-		}
-		_, err = f.Write(b)
-		if err != nil {
-			panic(err)
-		}
-		f.Close()
-	}()
 	http.Handle("/css/", http.FileServer(http.Dir(reportfiles)))
 	http.Handle("/js/", http.FileServer(http.Dir(reportfiles)))
 	http.HandleFunc("/inventory", inventoryHandler)
@@ -700,4 +683,22 @@ func (c *RunData) ReportServer(reportOnly bool) {
 	http.HandleFunc("/", rootHandler)
 	http.ListenAndServe(":6060", nil)
 
+}
+
+// Write out the report
+func (c *RunData) WriteReport() {
+	b, err := json.MarshalIndent(Report, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	f, err := os.Create(filepath.Join(
+		c.outputDir, "Report.json"))
+	if err != nil {
+		panic(err)
+	}
+	_, err = f.Write(b)
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
 }

@@ -110,6 +110,7 @@ type RunData struct {
 	Ncpus                          int // Number of processors available for use
 	InputUnits                     string
 	InputConv                      float64
+	ForceWesternHemisphere         bool // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
 	InvFileNames                   []string
 	EarthRadius                    float64       // in meters
 	PostGISuser                    string        // should have been chosen when setting up PostGIS
@@ -135,9 +136,9 @@ type RunData struct {
 // PolHolder allows the configuration of chemical speciation settings for individual pollutants.
 // Only on of the fields below should be used for each pollutant.
 type PolHolder struct {
-	SpecType  string   // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
-	SpecNames []string // Names of pollutants in the SPECIATE database which are equivalent to this pollutant. For records containing this pollutant, the pollutants included in "SpecNames" will be left out of any speciation that occurs to avoid double counting.
-	SpecProf map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
+	SpecType  string                 // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
+	SpecNames []string               // Names of pollutants in the SPECIATE database which are equivalent to this pollutant. For records containing this pollutant, the pollutants included in "SpecNames" will be left out of any speciation that occurs to avoid double counting.
+	SpecProf  map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
 }
 
 func (p *configInput) setup(e *ErrCat) {
@@ -191,6 +192,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.PostGISpassword = d.PostGISpassword
 	c.OtherLibpqConnectionParameters = d.OtherLibpqConnectionParameters
 	c.ShapefileSchema = d.ShapefileSchema
+	c.ForceWesternHemisphere = d.ForceWesternHemisphere
 	if d.SrgCacheExpirationTime == 0 {
 		d.SrgCacheExpirationTime = 5
 	}

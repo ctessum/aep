@@ -2,8 +2,8 @@ package aep
 
 import (
 	"fmt"
-	"time"
 	"path/filepath"
+	"time"
 )
 
 type Outputter interface {
@@ -17,7 +17,7 @@ func (c *RunData) NewOutputter(startTime time.Time,
 	case "wrf":
 		filebase := filepath.Join(c.outputDir, c.OutputType,
 			"wrfchemi_[DOMAIN]_[DATE]")
-		o = c.NewWRFoutput(filebase,polsAndUnits,startTime)
+		o = c.NewWRFoutput(filebase, polsAndUnits, startTime)
 	default:
 		panic(fmt.Errorf("Output type `%v' not yet supported.", c.OutputType))
 	}
@@ -41,5 +41,5 @@ func (c *RunData) Output(outputChanChan chan *OutputDataChan, msgChan chan strin
 			writer.WriteTimesteps(out.tstepChan)
 		}
 	}
-	msgChan <- fmt.Sprintf("File output of type `%v' completed.",c.OutputType)
+	msgChan <- fmt.Sprintf("File output of type `%v' completed.", c.OutputType)
 }
