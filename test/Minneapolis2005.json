@@ -9,9 +9,9 @@
 		"StartDate": "2005/01/01",
 		"EndDate": "2005/02/28",
 		"Tstep":"1h",
-        "OutputType": "none",
+        "OutputType": "WRF",
 		"OldWRFout":"[Home]/[DATE]",
-		"ForceWesternHemisphere",true,
+		"ForceWesternHemisphere": true,
         "SpecType": "mol",
         "InputUnits": "tons/year",
         "MatchFullSCC": false,
@@ -28,14 +28,14 @@
 		"OtherLibpqConnectionParameters":"sslmode=disable",
 		"ShapefileSchema":"aepshp",
         "LineMap": "CoastAndPolitical",
-		"SpeciesGroupName":"AROMATICS_ONLY",
+		"SpeciesGroupName":"RADM2",
 		"RegenerateSpatialData": false,
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 8,
         "RunSpeciate": true,
-        "RunSpatialize": false,
-		"RunTemporal":false,
+        "RunSpatialize": true,
+		"RunTemporal":true,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"PM2_5":{"SpecType":"PM2.5"},
@@ -80,7 +80,6 @@
             "CaseName": "2005ah_tox_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_ag_cmaq_cb05_tx_2005ah_tox_05b_05b.txt",
             "InvFileNames": [
                 "arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
             ]

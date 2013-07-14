@@ -276,11 +276,11 @@ func (p *RunData) setup(e *ErrCat) {
 	}
 	// Fill in information about ending time (varies by output file format)
 	if c.OutputType == "camx" || c.OutputType == "wrf" {
-		d, err := time.ParseDuration("23h")
+		d, err := time.ParseDuration("24h")
 		e.Add(err)
 		c.endDate = c.endDate.Add(d)
 	} else if c.OutputType == "cmaq" {
-		d, err := time.ParseDuration("24h")
+		d, err := time.ParseDuration("25h")
 		e.Add(err)
 		c.endDate = c.endDate.Add(d)
 	} else if c.OutputType != "none" {

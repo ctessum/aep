@@ -132,6 +132,7 @@ func Run(c *aep.RunData, runChan chan string) {
 
 // Set up the correct subroutines to run for each sector and period
 func RunPeriod(c *aep.RunData, period string) {
+	log.Println("Running " + c.Sector + " " + period + "...")
 	aep.Status.Sectors[c.Sector] = "Running " + period
 	msgchan := c.MessageChan()
 	n := 0 // number of subroutines that we need to wait to finish
@@ -187,7 +188,7 @@ func RunPeriod(c *aep.RunData, period string) {
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
 		message := <-msgchan
-		c.Log(message, 0)
+		c.Log(message, 1)
 	}
 
 	return

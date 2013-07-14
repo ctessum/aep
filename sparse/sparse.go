@@ -13,7 +13,7 @@ var BoundsCheck = true // Whether to check array bounds every time
 type SparseArray struct {
 	elements map[int]float64
 	ndims    int
-	Shape     []int
+	Shape    []int
 	arrsize  int // Maximum number of elements in array
 }
 
@@ -21,7 +21,7 @@ type SparseArray struct {
 type DenseArray struct {
 	elements []float64
 	ndims    int
-	Shape     []int
+	Shape    []int
 	arrsize  int // Maximum number of elements in array
 }
 
@@ -54,9 +54,10 @@ func ZerosDense(dims ...int) *DenseArray {
 // Copy an array
 func (A *SparseArray) Copy() *SparseArray {
 	B := new(SparseArray)
-	B.ndims = A.ndims
-	B.Shape = A.Shape
-	B.arrsize = A.arrsize
+	ndims, shape, arrsize := A.ndims, A.Shape, A.arrsize
+	B.ndims = ndims
+	B.Shape = shape
+	B.arrsize = arrsize
 	B.elements = make(map[int]float64)
 	for i, e := range A.elements {
 		B.elements[i] = e
@@ -343,9 +344,17 @@ func ArrayMultiply(A, B *SparseArray) *SparseArray {
 	return out
 }
 
+// IsNil returns whether the array has been allocated or not
+func (A *SparseArray) IsNil() bool {
+	return len(A.elements) == 0
+}
+
 // Sum calculates the array sum.
 func (A *SparseArray) Sum() float64 {
 	sum := 0.
+	if len(A.elements) == 0 {
+		return 0.
+	}
 	for _, e := range A.elements {
 		sum += e
 	}

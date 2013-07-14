@@ -19,7 +19,7 @@ var (
 	srgSpec                = make(map[string]*srgSpecHolder)
 	srgCodes               = make(map[string]string)
 	grids                  = make([]*gis.GridDef, 0)
-	gridRef                = make(map[string]map[string]map[string]string)
+	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
 	//	srgCacheStart          sync.Once
 	//	srgCacheRequestChan    = make(chan *srgCacheRequest)
@@ -129,7 +129,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 	defer c.ErrorRecoverCloseChan(InputChan)
 	var err error
 
-	c.Log("Spatializing "+period+" "+c.Sector+"...", 0)
+	c.Log("Spatializing "+period+" "+c.Sector+"...", 1)
 
 	totals := newSpatialTotalHolder()
 	TotalGrid := make(map[*gis.GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
@@ -187,21 +187,20 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 		}
 	case "area", "mobile":
 		for record := range InputChan {
-			var matchedSCC string
+			var matchedVal interface{}
 			if !c.MatchFullSCC {
-				matchedSCC, err = MatchCode2(record.SCC, gridRef[record.Country])
-				if err != nil {
-					panic(err)
-				}
+				_, _, matchedVal, err = matchCodeDouble(
+					record.SCC, record.FIPS, gridRef[record.Country])
 			} else {
-				matchedSCC = record.SCC
+				_, matchedVal, err = matchCode(record.FIPS,
+					gridRef[record.Country][record.SCC])
 			}
-			matchedFIPS, err := MatchCode3(record.FIPS,
-				gridRef[record.Country][matchedSCC])
 			if err != nil {
+				err = fmt.Errorf("In spatial reference file: %v. (SCC=%v, FIPS=%v).",
+					err.Error(), record.SCC, record.FIPS)
 				panic(err)
 			}
-			srgNum := gridRef[record.Country][matchedSCC][matchedFIPS]
+			srgNum := matchedVal.(string)
 
 			for pol, val := range record.ANN_EMIS {
 				val.gridded = make([]*sparse.SparseArray,
@@ -628,15 +627,15 @@ func (c *RunData) GridRef() (err error) {
 			if len(SCC) == 8 {
 				SCC = "00" + SCC
 			}
-			country := GetCountryName(splitLine[0][0:1])
+			country := getCountryName(splitLine[0][0:1])
 			FIPS := splitLine[0][1:]
 			srg := strings.Trim(splitLine[2], "\"\n")
 
 			if _, ok := gridRef[country]; !ok {
-				gridRef[country] = make(map[string]map[string]string)
+				gridRef[country] = make(map[string]map[string]interface{})
 			}
 			if _, ok := gridRef[country][SCC]; !ok {
-				gridRef[country][SCC] = make(map[string]string)
+				gridRef[country][SCC] = make(map[string]interface{})
 			}
 			gridRef[country][SCC][FIPS] = country + srg
 		}

@@ -1075,7 +1075,7 @@ COMMIT;`
 	for _, i := range data.Nonzero() {
 		val = data.Get1d(i)
 		index := data.IndexNd(i)
-		cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%v)"+
+		cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%.10g)"+
 			"where name='%v';", schema, tableName, index[1]+1, index[0]+1,
 			val, rasterRowName)
 		_, err = pg.db.Exec(cmd)

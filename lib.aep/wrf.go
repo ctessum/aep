@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -86,11 +87,12 @@ func createVar(h *cdf.Header, name, unitsIn string) {
 	dims := []string{"Time", "emissions_zdim", "south_north", "west_east"}
 	h.AddVariable(name, dims, []float32{0.})
 	var units string
-	if unitsIn == "mol/year" {
+	switch unitsIn {
+	case "mol/year":
 		units = "mol km^-2 hr^-1"
-	} else if unitsIn == "g/year" {
+	case "g/year", "gram/year":
 		units = "ug/m3 m/s"
-	} else {
+	default:
 		panic(fmt.Errorf("Unknown units: %v", unitsIn))
 	}
 	h.AddAttribute(name, "FieldType", []int32{104})
@@ -101,68 +103,65 @@ func createVar(h *cdf.Header, name, unitsIn string) {
 	h.AddAttribute(name, "coordinates", "XLONG XLAT")
 }
 
-func (w *WrfFiles) WriteTimesteps(tstepchan chan *TimeStep) {
-	var err error
-	var met *MetData
-	ihr := 0
+func (w *WrfFiles) WriteTimesteps(tstepchan chan timeStep) {
+	outchanchan := make(chan chan map[string][]*sparse.SparseArray,
+		runtime.GOMAXPROCS(-1))
+	timeChan := make(chan time.Time, runtime.GOMAXPROCS(-1))
+	writeFinishedChan := make(chan int)
+	go w.writeoutput(outchanchan, timeChan, writeFinishedChan)
+	calchr := 0
 	for tstep := range tstepchan {
+		outchan := make(chan map[string][]*sparse.SparseArray)
+		go w.timeStepOutput(tstep, outchan, calchr)
+		outchanchan <- outchan
+		timeChan <- tstep.Time
+		calchr++
+	}
+	close(outchanchan)
+	close(timeChan)
+	<-writeFinishedChan
+	for i, _ := range w.fids {
+		err := cdf.UpdateNumRecs(w.fidsToClose[i])
+		if err != nil {
+			panic(err)
+		}
+		w.fidsToClose[i].Close()
+	}
+}
+
+func (w *WrfFiles) writeoutput(
+	outchanchan chan chan map[string][]*sparse.SparseArray,
+	timeChan chan time.Time, finishedChan chan int) {
+
+	var err error
+	ihr := 0
+	for outchan := range outchanchan {
+		outData := <-outchan
+		time := <-timeChan
 		// Write out time
 		for _, f := range w.fids {
 			start := []int{ihr, 0}
 			end := []int{ihr + 1, 19}
 			r := f.Writer("Times", start, end)
-			_, err = r.Write(tstep.Time.Format("2006-01-02_15:04:05"))
+			_, err = r.Write(time.Format("2006-01-02_15:04:05"))
 			if err != nil {
 				panic(err)
 			}
 		}
-		// prepare plume rise calculator
-		if w.config.Kemit > 1 {
-			met = w.NewMetData(tstep.Time, ihr)
-		}
-
-		// Write out data.
 		for pol, units := range w.polsAndUnits {
 			for i, f := range w.fids {
-				outData := sparse.ZerosSparse(w.config.Nx[i],
-					w.config.Ny[i], w.config.Kemit)
-				// add area data
-				if areaDat, ok := tstep.area[pol]; ok {
-					dat := areaDat[i]
-					for _, ix := range dat.Nonzero() {
-						val := dat.Get1d(ix)
-						index := dat.IndexNd(ix)
-						outData.AddVal(val, index[1], index[0], 0) // transpose
-					}
-				}
-				// add point data
-				for _, point := range tstep.point {
-					k := 0
-					if w.config.Kemit > 1 {
-						k = met.PlumeRise(i, point)
-					}
-					if vals, ok := point.ANN_EMIS[pol]; ok {
-						dat := vals.gridded[i]
-						for _, ix := range dat.Nonzero() {
-							val := dat.Get1d(ix)
-							index := dat.IndexNd(ix)
-							outData.AddVal(val, index[1], index[0], k) // transpose
-						}
-					}
-				}
-
 				// convert units
 				switch units {
 				case "mol/year":
 					// gas conversion mole/hr --> mole/km(2)/hr
 					gasconv := float64(1. / (1.e-3 * w.config.Dx[i] *
 						1.e-3 * w.config.Dy[i]))
-					outData.Scale(gasconv)
-				case "g/year":
+					outData[pol][i].Scale(gasconv)
+				case "g/year", "gram/year":
 					// aerosol conversion g/hr --> microgram/m(2)/sec
 					partconv := float64(1.e6 / w.config.Dx[i] /
 						w.config.Dy[i] / 3600.)
-					outData.Scale(partconv)
+					outData[pol][i].Scale(partconv)
 				default:
 					panic(fmt.Errorf("Can't handle units `%v'.", units))
 				}
@@ -170,21 +169,78 @@ func (w *WrfFiles) WriteTimesteps(tstepchan chan *TimeStep) {
 				start := []int{ihr, 0, 0, 0}
 				end := []int{ihr + 1, 0, 0, 0}
 				r := f.Writer(pol, start, end)
-				if _, err = r.Write(outData.ToDense32()); err != nil {
+				if _, err = r.Write(outData[pol][i].ToDense32()); err != nil {
 					panic(err)
 				}
 			}
 		}
-		met.Close()
 		ihr++
 	}
-	for i, _ := range w.fids {
-		err = cdf.UpdateNumRecs(w.fidsToClose[i])
-		if err != nil {
-			panic(err)
-		}
-		w.fidsToClose[i].Close()
+	finishedChan <- 0
+}
+
+func (w *WrfFiles) timeStepOutput(tstep timeStep,
+	outchan chan map[string][]*sparse.SparseArray, ihr int) {
+	tstep.ta.overallLock.RLock()
+	var met *MetData
+	// prepare plume rise calculator
+	if w.config.Kemit > 1 {
+		met = w.NewMetData(tstep.Time, ihr)
 	}
+
+	// prepare output
+	outData := make(map[string][]*sparse.SparseArray) // map[pol][grid]array
+	for pol, _ := range w.polsAndUnits {
+		outData[pol] = make([]*sparse.SparseArray, len(w.fids))
+		for i, _ := range w.fids {
+			outData[pol][i] = sparse.ZerosSparse(w.config.Nx[i],
+				w.config.Ny[i], w.config.Kemit)
+		}
+	}
+
+	// add area data.
+	for temporalCodes, data := range tstep.ta.AreaData {
+		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
+		for pol, gridData := range data {
+			for i, g := range gridData {
+				dat := sparse.ArrayMultiply(g, tFactors[i])
+				for _, ix := range dat.Nonzero() {
+					val := dat.Get1d(ix)
+					index := dat.IndexNd(ix)
+					outData[pol][i].
+						AddVal(val, index[1], index[0], 0) // transpose
+				}
+			}
+		}
+	}
+
+	// add point data
+	for temporalCodes, data := range tstep.ta.PointData {
+		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
+		for _, record := range data {
+			for pol, emis := range record.ANN_EMIS {
+				for i, gridVal := range emis.gridded {
+					k := 0
+					if w.config.Kemit > 1 {
+						k = met.PlumeRise(i, record)
+					}
+					// multiply by temporal factor to get time step
+					dat := sparse.ArrayMultiply(tFactors[i], gridVal)
+					for _, ix := range dat.Nonzero() {
+						val := dat.Get1d(ix)
+						index := dat.IndexNd(ix)
+						outData[pol][i].
+							AddVal(val, index[1], index[0], k) // transpose
+					}
+				}
+			}
+		}
+	}
+	tstep.ta.overallLock.RUnlock()
+	if w.config.Kemit > 1 {
+		met.Close()
+	}
+	outchan <- outData
 }
 
 type WRFconfigData struct {

@@ -212,9 +212,9 @@ func (c *RunData) GetTemporalCodes(SCC, FIPS string) [3]string {
 	var err error
 	if !c.MatchFullSCC {
 		_, _, codes, err =
-			MatchCodeDouble(SCC, FIPS, temporalRef)
+			matchCodeDouble(SCC, FIPS, temporalRef)
 	} else {
-		_, codes, err = MatchCode(FIPS, temporalRef[SCC])
+		_, codes, err = matchCode(FIPS, temporalRef[SCC])
 	}
 	if err != nil {
 		err = fmt.Errorf("In temporal reference file: %v. (SCC=%v, FIPS=%v).",
@@ -225,40 +225,43 @@ func (c *RunData) GetTemporalCodes(SCC, FIPS string) [3]string {
 }
 
 // combine together multiple temporal aggregators
-func (c *RunData) temporalCombine(a ...*temporalAggregator) *temporalAggregator {
-	out := c.newTemporalAggregator(0)
+func (ta *temporalAggregator) Combine(a ...*temporalAggregator) {
+	// zero data
+	ta.overallLock.Lock()
+	defer ta.overallLock.Unlock()
+	ta.PointData = make(map[[3]string][]*PointRecord)
+	ta.AreaData = make(map[[3]string]map[string][]*sparse.SparseArray)
 	for _, t := range a {
 		for temporalCodes, data := range t.AreaData {
-			if _, ok := out.AreaData[temporalCodes]; !ok {
-				out.AreaData[temporalCodes] =
+			if _, ok := ta.AreaData[temporalCodes]; !ok {
+				ta.AreaData[temporalCodes] =
 					make(map[string][]*sparse.SparseArray)
 			}
 			for pol, gridData := range data {
-				if _, ok := out.AreaData[temporalCodes][pol]; !ok {
-					out.AreaData[temporalCodes][pol] =
+				if _, ok := ta.AreaData[temporalCodes][pol]; !ok {
+					ta.AreaData[temporalCodes][pol] =
 						make([]*sparse.SparseArray, len(grids))
 					for i, grid := range grids {
-						out.AreaData[temporalCodes][pol][i] =
+						ta.AreaData[temporalCodes][pol][i] =
 							sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 				}
 				for i, g := range gridData {
-					out.AreaData[temporalCodes][pol][i].AddSparse(g)
+					ta.AreaData[temporalCodes][pol][i].AddSparse(g)
 				}
 			}
 		}
 		for temporalCodes, data := range t.PointData {
-			if _, ok := out.PointData[temporalCodes]; !ok {
-				out.PointData[temporalCodes] =
+			if _, ok := ta.PointData[temporalCodes]; !ok {
+				ta.PointData[temporalCodes] =
 					make([]*PointRecord, 0, 10000)
 			}
 			for _, val := range data {
-				out.PointData[temporalCodes] = append(
-					out.PointData[temporalCodes], val)
+				ta.PointData[temporalCodes] = append(
+					ta.PointData[temporalCodes], val)
 			}
 		}
 	}
-	return out
 }
 
 type temporalAggregator struct {
@@ -268,6 +271,7 @@ type temporalAggregator struct {
 	AreaLock  sync.Mutex
 	config    *RunData
 	WaitGroup sync.WaitGroup
+	overallLock sync.RWMutex
 }
 
 func (c *RunData) newTemporalAggregator(numSectors int) *temporalAggregator {
@@ -345,8 +349,10 @@ func (t *temporalAggregator) AggregatePoint(record *ParsedRecord) {
 	if _, ok := t.PointData[temporalCodes]; !ok {
 		t.PointData[temporalCodes] = make([]*PointRecord, 0, 10000)
 	}
-	t.PointData[temporalCodes] = append(t.PointData[temporalCodes],
-		newPointRecord(record))
+	if len(record.ANN_EMIS) != 0 {
+		t.PointData[temporalCodes] = append(t.PointData[temporalCodes],
+			newPointRecord(record))
+	}
 }
 
 func getTemporalFactor(monthlyCode, weeklyCode, diurnalCode string,
@@ -390,100 +396,18 @@ func griddedTemporalFactors(codes [3]string, outputTime time.Time) (
 	return
 }
 
-type TimeStep struct {
-	area  map[string][]*sparse.SparseArray
-	point []*PointRecord
-	Time  time.Time
-}
-
-func newTimeStep(tTime time.Time) *TimeStep {
-	t := new(TimeStep)
-	t.area = make(map[string][]*sparse.SparseArray)
-	t.point = make([]*PointRecord, 0, 350000)
-	t.Time = tTime
-	return t
-}
-
-func (t *TimeStep) Sum() (area, point map[string][]float64) {
-	area = make(map[string][]float64)
-	point = make(map[string][]float64)
-	for pol, vals := range t.area {
-		if _, ok := area[pol]; !ok {
-			area[pol] = make([]float64, len(vals))
-		}
-		for i, val := range vals {
-			area[pol][i] += val.Sum()
-		}
-	}
-	for _, record := range t.point {
-		for pol, vals := range record.ANN_EMIS {
-			if _, ok := point[pol]; !ok {
-				point[pol] = make([]float64, len(vals.gridded))
-			}
-			for i, val := range vals.gridded {
-				point[pol][i] += val.Sum()
-			}
-		}
-	}
-	return
-}
-
-func (ta *temporalAggregator) calcTimestep(t time.Time) *TimeStep {
-	Tstep := newTimeStep(t)
-	for temporalCodes, data := range ta.AreaData {
-		tFactors := griddedTemporalFactors(temporalCodes, t)
-		for pol, gridData := range data {
-			if _, ok := Tstep.area[pol]; !ok {
-				Tstep.area[pol] = make([]*sparse.SparseArray, len(grids))
-				for i, grid := range grids {
-					Tstep.area[pol][i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-				}
-			}
-			for i, g := range gridData {
-				Tstep.area[pol][i].AddSparse(sparse.ArrayMultiply(
-					tFactors[i], g))
-			}
-		}
-	}
-	for temporalCodes, data := range ta.PointData {
-		tFactors := griddedTemporalFactors(temporalCodes, t)
-		for _, record := range data {
-			point := new(PointRecord)
-			point.STKHGT = record.STKHGT
-			point.STKDIAM = record.STKDIAM
-			point.STKTEMP = record.STKTEMP
-			point.STKFLOW = record.STKFLOW
-			point.STKVEL = record.STKVEL
-			point.Row = record.Row
-			point.Col = record.Col
-			point.ANN_EMIS = make(map[string]*specValUnits)
-			for pol, emis := range record.ANN_EMIS {
-				point.ANN_EMIS[pol] = new(specValUnits)
-				point.ANN_EMIS[pol].gridded =
-					make([]*sparse.SparseArray, len(grids))
-				for i, val := range emis.gridded {
-					point.ANN_EMIS[pol].gridded[i] = sparse.ArrayMultiply(
-						tFactors[i], val)
-				}
-			}
-			Tstep.point = append(Tstep.point, point)
-		}
-	}
-	return Tstep
-}
-
 func (c *RunData) SectorTemporal(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
-	c.Log("Aggregating by temporal profile "+period+" "+c.Sector+"...", 0)
+	c.Log("Aggregating by temporal profile "+period+" "+c.Sector+"...", 1)
 	var temporalAgg *temporalAggregator
 	switch c.InventoryFreq {
 	case "annual":
 		temporalAgg = <-AnnualTemporalChan
-		fmt.Println("qqqqqqqqqqqqqqqqqqqqqqqqqq Got annual Aggregateor", c.Sector)
+		c.Log(c.Sector+" got annual aggregator", 1)
 	case "monthly":
 		temporalAgg = <-MonthlyTemporalChan
-		fmt.Println("qqqqqqqqqqqqqqqqqqqqqqqqqq Got monthly Aggregateor", c.Sector)
+		c.Log(c.Sector+" got monthly aggregator", 1)
 	}
 	defer temporalAgg.WaitGroup.Done()
 	switch c.SectorType {
@@ -521,6 +445,11 @@ func (c *RunData) CurrentMonth() (month string) {
 	return
 }
 
+type timeStep struct {
+	ta   *temporalAggregator
+	Time time.Time
+}
+
 func (c *RunData) Temporal(numAnnualSectors,
 	numMonthlySectors int, outchan chan *OutputDataChan, msgChan chan string) {
 	tReport := newTemporalReport(c.startDate, c.endDate)
@@ -535,45 +464,43 @@ func (c *RunData) Temporal(numAnnualSectors,
 		MonthlyTemporalChan <- monthData
 	}
 	annualData.WaitGroup.Wait() // wait for sectors to finish
-	fmt.Println("Annual Finished")
+	c.Log("Annual temporal aggregation finished", 1)
 	monthData.WaitGroup.Wait() // wait for sectors to finish
-	fmt.Println("Monthly Finished")
-	Tdata := c.temporalCombine(annualData, monthData)
+	c.Log("Monthly temporal aggregation finished", 1)
+	Tdata := c.newTemporalAggregator(0)
+	Tdata.Combine(annualData, monthData)
 	// get all of the pollutants we will be outputting, and their units
-	_, _, polsAndUnits, _ := Report.PrepDataReport("Spatialization", "d01")
-	fmt.Println("temporal combined")
+	dr := Report.PrepDataReport("Spatialization", "d01")
+	polsAndUnits := dr.units
 	tstepsInFile := 0
-	tstepChan := make(chan *TimeStep)
+	tstepChan := make(chan timeStep)
+	// iterate through time steps
 	for c.currentTime.Before(c.endDate) {
 		if tstepsInFile == 0 {
 			close(tstepChan)
-			tstepChan = make(chan *TimeStep)
+			tstepChan = make(chan timeStep)
 			outchan <- &OutputDataChan{tstepChan, c.currentTime, polsAndUnits}
 		}
 		month := c.CurrentMonth()
 		if month != temporalMonth {
-			fmt.Println("New month calc")
 			temporalMonth = month
 			monthData = c.newTemporalAggregator(numMonthlySectors)
 			for i := 0; i < numMonthlySectors; i++ {
 				MonthlyTemporalChan <- monthData
 			}
-			fmt.Println("finished sending chans")
 			monthData.WaitGroup.Wait() // wait for sectors to finish
-			fmt.Println("Monthly Finished")
-			Tdata = c.temporalCombine(annualData, monthData)
+			c.Log("Monthly temporal aggregation finished", 1)
+			Tdata.Combine(annualData, monthData)
 			// get all of the pollutants we will be outputting, and their units
-			_, _, polsAndUnits, _ = Report.PrepDataReport(
-				"Spatialization", "d01")
+			dr := Report.PrepDataReport("Spatialization", "d01")
+			polsAndUnits = dr.units
 		}
-		fmt.Println("xxxxxxxxxxxxxxxx", c.currentTime)
-		Tstep := Tdata.calcTimestep(c.currentTime)
-		tstepChan <- Tstep
+		c.Log(c.currentTime, 0)
+		tstepChan <- timeStep{Tdata, c.currentTime}
 		tstepsInFile++
 		if tstepsInFile == 24 {
 			tstepsInFile = 0
 		}
-		tReport.addTstep(Tstep)
 		// either advance to next date or end loop
 		keepGoing := c.NextTime()
 		if !keepGoing {
@@ -599,25 +526,4 @@ func newTemporalReport(begin, end time.Time) *TemporalReport {
 	t.Point = make(map[string][]float64)
 	t.NumTsteps = int(end.Sub(begin).Hours() + 0.5)
 	return t
-}
-
-func (t *TemporalReport) addTstep(Tstep *TimeStep) {
-	area, point := Tstep.Sum()
-	for pol, vals := range area {
-		if _, ok := t.Area[pol]; !ok {
-			t.Area[pol] = make([]float64, len(vals))
-		}
-		for i, val := range vals {
-			t.Area[pol][i] += val
-		}
-	}
-	for pol, vals := range point {
-		if _, ok := t.Point[pol]; !ok {
-			t.Point[pol] = make([]float64, len(vals))
-		}
-		for i, val := range vals {
-			t.Point[pol][i] += val
-		}
-	}
-	t.i++
 }

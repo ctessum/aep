@@ -20,8 +20,8 @@ var (
 )
 
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
-	specRef = make(map[string]map[string]string)
+func (c *RunData) SpecRef() (specRef map[string]interface{}, err error) {
+	specRef = make(map[string]interface{})
 	// map[SCC][pol]code
 	var record string
 	fid, err := os.Open(c.SpecRefFile)
@@ -65,7 +65,7 @@ func (c *RunData) SpecRef() (specRef map[string]map[string]string, err error) {
 			if _, ok := specRef[SCC]; !ok {
 				specRef[SCC] = make(map[string]string)
 			}
-			specRef[SCC][pol] = code
+			specRef[SCC].(map[string]string)[pol] = code
 		}
 	}
 	return
@@ -220,7 +220,7 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 				rows.Close()
 				request.ProfileChan <- profile
 				VOCprofiles[request.PolNameOrProfNumber] = profile
-				if c.testMode && AbsBias(totalWeight, total) > tolerance {
+				if c.testMode && absBias(totalWeight, total) > tolerance {
 					err := fmt.Errorf("For Gas speciation profile %v, "+
 						"sum of species weights (%v) is not equal to total (%v)",
 						request.PolNameOrProfNumber, totalWeight, total)
@@ -275,7 +275,7 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 				rows.Close()
 				request.ProfileChan <- profile
 				NOxprofiles[request.PolNameOrProfNumber] = profile
-				if c.testMode && AbsBias(totalWeight, total) > tolerance {
+				if c.testMode && absBias(totalWeight, total) > tolerance {
 					err := fmt.Errorf("For NOx speciation profile %v, "+
 						"sum of species weights (%v) is not equal to total (%v)",
 						request.PolNameOrProfNumber, totalWeight, total)
@@ -316,7 +316,7 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 				rows.Close()
 				request.ProfileChan <- profile
 				PM25profiles[request.PolNameOrProfNumber] = profile
-				if c.testMode && AbsBias(totalWeight, total) > tolerance {
+				if c.testMode && absBias(totalWeight, total) > tolerance {
 					err := fmt.Errorf("For PM2.5 speciation profile %v, "+
 						"sum of species weights (%v) is not equal to total (%v)",
 						request.PolNameOrProfNumber, totalWeight, total)
@@ -477,7 +477,7 @@ func (c *RunData) handleGroupString(specName string, groupString sql.NullString)
 }
 
 type SpecRef struct {
-	sRef      map[string]map[string]string             // map[SCC][pol]code
+	sRef      map[string]interface{}                   // map[SCC][pol]code
 	sRefCombo map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
 }
 
@@ -583,29 +583,28 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	period string) (
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*SpecHolder) {
-	var ok bool
 	var err error
 	var ref map[string]string
+	var matchedVal interface{}
+	var ok bool
 	SCC := record.SCC
 	if c.MatchFullSCC {
-		var matchedSCC string
-		matchedSCC, err = MatchCode2(SCC, sp.sRef)
+		matchedVal, ok = sp.sRef[SCC]
+		if !ok {
+			err = fmt.Errorf("In Speciate, SCC code " + SCC +
+				" is not in specRef file. Setting matchFullSCC to " +
+				"'false' will allow a default value to be used.")
+			panic(err)
+		}
+	} else {
+		_, matchedVal, err = matchCode(SCC, sp.sRef)
 		if err != nil {
 			err = fmt.Errorf("In Speciate, SCC code " + SCC +
 				" is not in specRef file and there is no default.")
 			panic(err)
-		} else {
-			ref = sp.sRef[matchedSCC]
-		}
-	} else {
-		ref, ok = sp.sRef[SCC]
-		if !ok {
-			err = fmt.Errorf("In Speciate, SCC code " + SCC +
-				" is not in specRef file. Setting matchFullSCC to " +
-				"to 'false' will allow a default value to be used.")
-			panic(err)
 		}
 	}
+	ref = matchedVal.(map[string]string)
 
 	if c.PolsToKeep[cleanPol(pol)].SpecProf != nil {
 		specFactors = c.PolsToKeep[cleanPol(pol)].SpecProf
@@ -628,7 +627,7 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 							return
 						}
 					}
-					countryCode := GetCountryCode(record.Country)
+					countryCode := getCountryCode(record.Country)
 					codes := sp.sRefCombo[pol][countryCode+record.FIPS]
 					specFactors = make(map[string]*SpecHolder)
 					doubleCountSpecFactors = make(map[string]*SpecHolder)
@@ -717,7 +716,7 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 		for _, data := range ungroupedSpecFactors {
 			fracSum += data.Factor
 		}
-		if AbsBias(fracSum, 1.0) > tolerance {
+		if absBias(fracSum, 1.0) > tolerance {
 			err = fmt.Errorf("Sum of speciation fractions (%v) for pollutant %v "+
 				"is not equal to 1.", fracSum, pol)
 			panic(err)
@@ -747,8 +746,8 @@ func (h *SpecTotals) AddKept(pol string, data *specValUnits) {
 		t.Kept[pol].Units = data.Units
 	} else {
 		if t.Kept[pol].Units != data.Units {
-			err := fmt.Errorf("Units problem: %v! = %v",
-				t.Kept[pol].Units, data.Units)
+			err := fmt.Errorf("Units problem for pol %v: %v! = %v",
+				pol, t.Kept[pol].Units, data.Units)
 			panic(err)
 		}
 	}
@@ -800,7 +799,7 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
-	c.Log("Speciating "+period+" "+c.Sector+"...", 0)
+	c.Log("Speciating "+period+" "+c.Sector+"...", 1)
 
 	sp, err := c.NewSpecRef()
 	if err != nil {

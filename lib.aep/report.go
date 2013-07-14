@@ -367,8 +367,8 @@ func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 			<h5>Kept pollutants</h5>
 			<p>These are the emissions that go on to the next modeling step, as specified in the PolsToKeep setting in the configuration file.</p>`
 	fmt.Fprint(w, body1)
-	sectors, pols, units, data := Report.PrepDataReport("Inventory", "Totals")
-	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	dr := Report.PrepDataReport("Inventory", "Totals")
+	DrawTable("%.4g", true, dr, w)
 	const body2 = `
 		</div>
 	</div>
@@ -377,8 +377,8 @@ func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 			<h5>Dropped pollutants</h5>
 			<p>These are the pollutants that are not specified in the PolsToKeep setting in the configuration file.</p>`
 	fmt.Fprint(w, body2)
-	sectors, pols, units, data = Report.PrepDataReport("Inventory", "DroppedTotals")
-	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	dr = Report.PrepDataReport("Inventory", "DroppedTotals")
+	DrawTable("%.4g", true, dr, w)
 	const body3 = `
 		</div>
 	</div>
@@ -402,8 +402,8 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 			<h5>Kept pollutants</h5>
 			<p>These are the emissions that go on to the next modeling step.</p>`
 	fmt.Fprint(w, body1)
-	sectors, pols, units, data := Report.PrepDataReport("Speciation", "Kept")
-	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	dr := Report.PrepDataReport("Speciation", "Kept")
+	DrawTable("%.4g", true, dr, w)
 	const body2 = `
 		</div>
 	</div>
@@ -412,8 +412,8 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 			<h5>Pollutants dropped due to double counting</h5>
 			<p>When there is a general species group (like VOCs) that is speciated into specific chemicals, but some of the specific chemicals are also explicitely tracked in the inventory, there is a possibility for double counting. So for records that include both the general species group and specific data for some of its components the specific components that are explicitly included in the inventory are dropped from the speciation of the general group.</p>`
 	fmt.Fprint(w, body2)
-	sectors, pols, units, data = Report.PrepDataReport("Speciation", "DoubleCounted")
-	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	dr = Report.PrepDataReport("Speciation", "DoubleCounted")
+	DrawTable("%.4g", true, dr, w)
 	const body3 = `
 		</div>
 	</div>
@@ -422,8 +422,8 @@ func speciateHandler(w http.ResponseWriter, r *http.Request) {
 			<h5>Pollutants dropped due to lack of a species group</h5>
 			<p>The individual chemicals are lumped into groups for representation in air quality model chemical mechanisms. These are the emissions that are speciated from general groups (such as VOCs) but do not fit into any of the specified groups.</p>`
 	fmt.Fprint(w, body3)
-	sectors, pols, units, data = Report.PrepDataReport("Speciation", "Ungrouped")
-	DrawTable("%.4g", true, sectors, pols, units, data, w)
+	dr = Report.PrepDataReport("Speciation", "Ungrouped")
+	DrawTable("%.4g", true, dr, w)
 	const body4 = `
 		</div>
 	</div>
@@ -453,8 +453,8 @@ func spatialHandler(w http.ResponseWriter, r *http.Request) {
 	for _, grid := range Report.GridNames {
 		fmt.Fprint(w, body2)
 		fmt.Fprintf(w, "<h5>Fraction of emissions within domain %v</h5>\n", grid)
-		sectors, pols, units, data := Report.PrepDataReport("Spatialization", grid)
-		DrawTable("%.3g%%", false, sectors, pols, units, data, w)
+		dr := Report.PrepDataReport("Spatialization", grid)
+		DrawTable("%.3g%%", false, dr, w)
 		fmt.Fprint(w, body3)
 	}
 	fmt.Fprint(w, "\n</div")
@@ -530,21 +530,46 @@ func renderHeaderFooter(w http.ResponseWriter, tmpl string, data *htmlData) {
 	}
 }
 
+type dataReport struct {
+	sectors, pols []string
+	units         map[string]string
+	data          map[string]map[string]float64
+	polTotals     map[string]float64
+}
+
+func (dr *dataReport) Len() int { return len(dr.pols) }
+func (dr *dataReport) Swap(i, j int) {
+	dr.pols[i], dr.pols[j] = dr.pols[j], dr.pols[i]
+}
+func (dr *dataReport) Less(i, j int) bool {
+	// descending order
+	return dr.polTotals[dr.pols[i]] > dr.polTotals[dr.pols[j]]
+}
+
+func (dr *dataReport) sortByTotals() {
+	dr.polTotals = make(map[string]float64)
+	for _, d1 := range dr.data {
+		for pol, d2 := range d1 {
+			dr.polTotals[pol] += d2
+		}
+	}
+	sort.Sort(dr)
+}
+
 // Organize data in report for making a table or plot.
 // If procType="Spatializaton", then countType is actually the domain
 // (d01, d02 etc).
-func (r *ReportHolder) PrepDataReport(procType, countType string) (
-	sectors, pols []string, units map[string]string,
-	data map[string]map[string]float64) {
+func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 
-	sectors = make([]string, 0)
-	pols = make([]string, 0)
-	units = make(map[string]string, 0)
-	data = make(map[string]map[string]float64)
+	dr := new(dataReport)
+	dr.sectors = make([]string, 0)
+	dr.pols = make([]string, 0)
+	dr.units = make(map[string]string, 0)
+	dr.data = make(map[string]map[string]float64)
 
 	for sector, sectorData := range r.SectorResults {
-		data[sector] = make(map[string]float64)
-		sectors = append(sectors, sector)
+		dr.data[sector] = make(map[string]float64)
+		dr.sectors = append(dr.sectors, sector)
 		numPeriods := float64(len(sectorData))
 		for _, periodData := range sectorData {
 			switch procType {
@@ -554,19 +579,19 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) (
 						switch countType {
 						case "Totals":
 							for pol, val := range fileData.Totals {
-								if !IsStringInArray(pols, pol) {
-									pols = append(pols, pol)
-									units[pol] = fileData.Units
+								if !IsStringInArray(dr.pols, pol) {
+									dr.pols = append(dr.pols, pol)
+									dr.units[pol] = fileData.Units
 								}
-								data[sector][pol] += val / numPeriods
+								dr.data[sector][pol] += val / numPeriods
 							}
 						case "DroppedTotals":
 							for pol, val := range fileData.DroppedTotals {
-								if !IsStringInArray(pols, pol) {
-									pols = append(pols, pol)
-									units[pol] = fileData.Units
+								if !IsStringInArray(dr.pols, pol) {
+									dr.pols = append(dr.pols, pol)
+									dr.units[pol] = fileData.Units
 								}
-								data[sector][pol] += val / numPeriods
+								dr.data[sector][pol] += val / numPeriods
 							}
 						}
 					}
@@ -575,77 +600,83 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) (
 				if periodData.SpeciationResults != nil {
 					switch countType {
 					case "Kept":
-						for pol, poldata := range periodData.SpeciationResults.Kept {
-							if !IsStringInArray(pols, pol) {
-								pols = append(pols, pol)
-								units[pol] = poldata.Units
+						for pol, poldata := range periodData.
+							SpeciationResults.Kept {
+							if !IsStringInArray(dr.pols, pol) {
+								dr.pols = append(dr.pols, pol)
+								dr.units[pol] = poldata.Units
 							}
-							data[sector][pol] += poldata.Val / numPeriods
+							dr.data[sector][pol] += poldata.Val / numPeriods
 						}
 					case "DoubleCounted":
-						for pol, poldata := range periodData.SpeciationResults.DoubleCounted {
-							if !IsStringInArray(pols, pol) {
-								pols = append(pols, pol)
-								units[pol] = poldata.Units
+						for pol, poldata := range periodData.SpeciationResults.
+							DoubleCounted {
+							if !IsStringInArray(dr.pols, pol) {
+								dr.pols = append(dr.pols, pol)
+								dr.units[pol] = poldata.Units
 							}
-							data[sector][pol] += poldata.Val / numPeriods
+							dr.data[sector][pol] += poldata.Val / numPeriods
 						}
 					case "Ungrouped":
-						for pol, poldata := range periodData.SpeciationResults.Ungrouped {
-							if !IsStringInArray(pols, pol) {
-								pols = append(pols, pol)
-								units[pol] = poldata.Units
+						for pol, poldata := range periodData.SpeciationResults.
+							Ungrouped {
+							if !IsStringInArray(dr.pols, pol) {
+								dr.pols = append(dr.pols, pol)
+								dr.units[pol] = poldata.Units
 							}
-							data[sector][pol] += poldata.Val / numPeriods
+							dr.data[sector][pol] += poldata.Val / numPeriods
 						}
 					}
 				}
 			case "Spatialization":
 				if periodData.SpatialResults != nil {
-					for pol, inData := range periodData.SpatialResults.InsideDomainTotals[countType] {
+					for pol, inData := range periodData.SpatialResults.
+						InsideDomainTotals[countType] {
 						outData := periodData.SpatialResults.
 							OutsideDomainTotals[countType][pol]
-						if !IsStringInArray(pols, pol) {
-							pols = append(pols, pol)
-							units[pol] = inData.Units
+						if !IsStringInArray(dr.pols, pol) {
+							dr.pols = append(dr.pols, pol)
+							dr.units[pol] = inData.Units
 						}
 						// Fraction inside the domain
-						data[sector][pol] += inData.Val /
+						dr.data[sector][pol] += inData.Val /
 							(inData.Val + outData.Val) * 100. / numPeriods
 					}
 				}
 			}
 		}
 	}
-	sort.Strings(pols)
-	sort.Strings(sectors)
-	return
+	sort.Strings(dr.pols)
+	sort.Strings(dr.sectors)
+	return dr
 }
 
-func DrawTable(format string, includeTotals bool, sectors, pols []string,
-	units map[string]string, data map[string]map[string]float64, w io.Writer) {
+func DrawTable(format string, includeTotals bool, dr *dataReport,
+	w io.Writer) {
+	if includeTotals {
+		dr.sortByTotals()
+	}
 	fmt.Fprint(w, "<table class=\"table table-striped\">\n<thead>\n<tr><td></td>")
-	totals := make(map[string]float64)
-	for _, pol := range pols {
+	for _, pol := range dr.pols {
 		fmt.Fprintf(w, "<td>%v</td>", pol)
 	}
 	fmt.Fprint(w, "</tr>\n<tr><td></td>")
-	for _, pol := range pols {
-		fmt.Fprintf(w, "<td>%v</td>", units[pol])
+	for _, pol := range dr.pols {
+		fmt.Fprintf(w, "<td>%v</td>", dr.units[pol])
 	}
 	fmt.Fprint(w, "</tr></thead>\n<tbody>\n")
-	for _, sector := range sectors {
+	for _, sector := range dr.sectors {
 		fmt.Fprintf(w, "<tr><td>%v</td>", sector)
-		for _, pol := range pols {
-			fmt.Fprintf(w, "<td>"+format+"</td>", data[sector][pol])
-			totals[pol] += data[sector][pol]
+		for _, pol := range dr.pols {
+			fmt.Fprintf(w, "<td>"+format+"</td>", dr.data[sector][pol])
 		}
 		fmt.Fprint(w, "</tr>\n")
 	}
 	if includeTotals {
 		fmt.Fprint(w, "<tr><td><strong>Totals</strong></td>")
-		for _, pol := range pols {
-			fmt.Fprintf(w, "<td><strong>"+format+"</strong></td>", totals[pol])
+		for _, pol := range dr.pols {
+			fmt.Fprintf(w, "<td><strong>"+format+"</strong></td>",
+				dr.polTotals[pol])
 		}
 	}
 	fmt.Fprint(w, "</tbody></table>\n")

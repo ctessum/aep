@@ -394,7 +394,7 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 	recordsThatDoubleCount := make(map[string][]string)
 
 	config.Log("Importing inventory for "+period+" "+
-		config.Sector+"...", 0)
+		config.Sector+"...", 1)
 	Report.SectorResults[config.Sector][period].
 		InventoryResults = make(map[string]*FileInfo)
 	// First, go through files to check for possible double

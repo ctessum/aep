@@ -7,7 +7,7 @@ import (
 )
 
 type Outputter interface {
-	WriteTimesteps(chan *TimeStep)
+	WriteTimesteps(chan timeStep)
 }
 
 func (c *RunData) NewOutputter(startTime time.Time,
@@ -25,7 +25,7 @@ func (c *RunData) NewOutputter(startTime time.Time,
 }
 
 type OutputDataChan struct {
-	tstepChan    chan *TimeStep
+	tstepChan    chan timeStep
 	startTime    time.Time
 	polsAndUnits map[string]string
 }
