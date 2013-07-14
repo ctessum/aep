@@ -203,12 +203,13 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
 		for pol, gridData := range data {
 			for i, g := range gridData {
-				dat := sparse.ArrayMultiply(g, tFactors[i])
-				for _, ix := range dat.Nonzero() {
-					val := dat.Get1d(ix)
-					index := dat.IndexNd(ix)
+				// multiply by temporal factor to get time step
+				for _, ix := range g.Nonzero() {
+					val := g.Get1d(ix)
+					tFactor := tFactors[i].Get1d(ix)
+					index := g.IndexNd(ix)
 					outData[pol][i].
-						AddVal(val, index[1], index[0], 0) // transpose
+						AddVal(val*tFactor, index[1], index[0], 0) // transpose
 				}
 			}
 		}
@@ -225,12 +226,12 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 						k = met.PlumeRise(i, record)
 					}
 					// multiply by temporal factor to get time step
-					dat := sparse.ArrayMultiply(tFactors[i], gridVal)
-					for _, ix := range dat.Nonzero() {
-						val := dat.Get1d(ix)
-						index := dat.IndexNd(ix)
+					for _, ix := range gridVal.Nonzero() {
+						val := gridVal.Get1d(ix)
+						tFactor := tFactors[i].Get1d(ix)
+						index := gridVal.IndexNd(ix)
 						outData[pol][i].
-							AddVal(val, index[1], index[0], k) // transpose
+							AddVal(val*tFactor, index[1], index[0], k) // transpose
 					}
 				}
 			}
