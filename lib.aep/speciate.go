@@ -522,7 +522,9 @@ func (sp *SpecRef) GetProfileSingleSpecies(pol string, c *RunData) (
 		for groupName, groupFactor := range tempProfile[pol].groupFactors {
 			// If pollutant is part of a species group, add to the group
 			if _, ok := profile[groupName]; !ok {
-				profile[groupName] = tempProfile[pol]
+				profile[groupName] = new(SpecHolder)
+				profile[groupName].Factor = tempProfile[pol].Factor
+				profile[groupName].Units = tempProfile[pol].Units
 				profile[groupName].Factor *= groupFactor
 			} else {
 				profile[groupName].Factor += tempProfile[pol].Factor * groupFactor
