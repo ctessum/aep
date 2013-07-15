@@ -28,7 +28,6 @@ func Log(msg string, debug int) {
 
 type PostGis struct {
 	db              *sql.DB
-	projectPointCmd *sql.Stmt
 }
 
 func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
@@ -44,11 +43,6 @@ func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
 		return
 	}
 	err = db.db.Ping()
-	if err != nil {
-		return
-	}
-	db.projectPointCmd, err = db.db.Prepare(
-		"SELECT ST_AsGeoJson(ST_Transform(ST_SetSRID(ST_Point($1, $2), 4030), $3))")
 	return
 }
 
@@ -1021,7 +1015,9 @@ func (pg *PostGis) ProjectPoint(lat, lon float64, SRID int) (
 	x, y float64, err error) {
 
 	var jsonout []byte
-	err = pg.projectPointCmd.QueryRow(lon, lat, SRID).Scan(&jsonout)
+	err = pg.db.QueryRow("SELECT ST_AsGeoJson(ST_Transform("+
+		"ST_SetSRID(ST_Point($1, $2), 4030), $3))",
+		lon, lat, SRID).Scan(&jsonout)
 	if err != nil {
 		return
 	}
