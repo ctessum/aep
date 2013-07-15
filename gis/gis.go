@@ -27,7 +27,8 @@ func Log(msg string, debug int) {
 }
 
 type PostGis struct {
-	db *sql.DB
+	db              *sql.DB
+	projectPointCmd *sql.Stmt
 }
 
 func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
@@ -39,6 +40,15 @@ func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
 		options += " " + OtherLibpqConnectionParameters
 	}
 	db.db, err = sql.Open("postgres", options)
+	if err != nil {
+		return
+	}
+	err = db.db.Ping()
+	if err != nil {
+		return
+	}
+	db.projectPointCmd, err = db.db.Prepare(
+		"SELECT ST_AsGeoJson(ST_Transform(ST_SetSRID(ST_Point($1, $2), 4030), $3))")
 	return
 }
 
@@ -256,6 +266,7 @@ func (pg *PostGis) GridAddTimeZones(gridIn *GridDef, timeZoneSchema string) erro
 		var row, col int
 		err = gridRows.Scan(&row, &col, &tz)
 		if err != nil {
+			return err
 		}
 		tzSeconds := int(tz * 3600.)
 		if _, ok := grid.TimeZones[tzSeconds]; !ok {
@@ -263,8 +274,9 @@ func (pg *PostGis) GridAddTimeZones(gridIn *GridDef, timeZoneSchema string) erro
 		}
 		grid.TimeZones[tzSeconds].Set(1., row, col)
 	}
+	gridRows.Close()
 	*gridIn = grid
-	return err
+	return gridRows.Err()
 }
 
 func (pg *PostGis) DropTable(schema, name string) {
@@ -657,6 +669,10 @@ COMMIT;`
 	}
 	close(inputIDchan)
 	shapeRows.Close()
+	err = shapeRows.Err()
+	if err != nil {
+		return
+	}
 	// wait for workers to finish
 	for i := 0; i < workersRunning; i++ {
 		err = <-errchan
@@ -929,6 +945,11 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 			pg.db.Exec("DROP TABLE srgsInGrid;")
 		}
 		gridRows.Close()
+		err = gridRows.Err()
+		if err != nil {
+			errchan <- handle(err, cmd)
+			return
+		}
 		pg.DropTable("public", "singleShapeSrgs_"+data.InputID)
 	}
 	errchan <- err
@@ -999,12 +1020,8 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 func (pg *PostGis) ProjectPoint(lat, lon float64, SRID int) (
 	x, y float64, err error) {
 
-	cmd := fmt.Sprintf("SELECT ST_AsGeoJson(ST_Transform(ST_SetSRID("+
-		"ST_Point(%v, %v), 4030), %v))", lon, lat, SRID)
-
-	Log(cmd, 3)
 	var jsonout []byte
-	err = pg.db.QueryRow(cmd).Scan(&jsonout)
+	err = pg.projectPointCmd.QueryRow(lon, lat, SRID).Scan(&jsonout)
 	if err != nil {
 		return
 	}
@@ -1075,10 +1092,9 @@ COMMIT;`
 	for _, i := range data.Nonzero() {
 		val = data.Get1d(i)
 		index := data.IndexNd(i)
-		cmd := fmt.Sprintf("UPDATE %v.%v SET rast=ST_SetValue(rast,%v,%v,%v)"+
-			"where name='%v';", schema, tableName, index[1]+1, index[0]+1,
-			val, rasterRowName)
-		_, err = pg.db.Exec(cmd)
+		_, err = pg.db.Exec(fmt.Sprintf("UPDATE %v.%v SET rast="+
+			"ST_SetValue(rast,%v,%v,%v) WHERE name='%v';",
+			schema, tableName, index[1]+1, index[0]+1, val, rasterRowName))
 		if err != nil {
 			panic(err)
 		}

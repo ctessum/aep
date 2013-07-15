@@ -58,6 +58,17 @@ func (c *RunData) NewWRFoutput(filebase string, polsAndUnits map[string]string,
 			"south_north", "emissions_zdim"},
 			[]int{0, 19, c.wrfData.Nx[i], c.wrfData.Ny[i], c.wrfData.Kemit})
 
+		wrfoutH.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
+			"by AEP (bitbucket.org/ctessum/aep)")
+		wrfoutH.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
+		wrfoutH.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
+		wrfoutH.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
+		wrfoutH.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
+		wrfoutH.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
+		wrfoutH.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
+		wrfoutH.AddAttribute("", "REF_X", []float64{c.wrfData.Ref_x})
+		wrfoutH.AddAttribute("", "REF_Y", []float64{c.wrfData.Ref_y})
+
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
 		for pol, units := range polsAndUnits {
@@ -193,8 +204,8 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 	for pol, _ := range w.polsAndUnits {
 		outData[pol] = make([]*sparse.SparseArray, len(w.fids))
 		for i, _ := range w.fids {
-			outData[pol][i] = sparse.ZerosSparse(w.config.Nx[i],
-				w.config.Ny[i], w.config.Kemit)
+			outData[pol][i] = sparse.ZerosSparse(w.config.Kemit, w.config.Ny[i],
+				w.config.Nx[i])
 		}
 	}
 
@@ -209,7 +220,7 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 					tFactor := tFactors[i].Get1d(ix)
 					index := g.IndexNd(ix)
 					outData[pol][i].
-						AddVal(val*tFactor, index[1], index[0], 0) // transpose
+						AddVal(val*tFactor, 0, index[0], index[1])
 				}
 			}
 		}
@@ -230,8 +241,13 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 						val := gridVal.Get1d(ix)
 						tFactor := tFactors[i].Get1d(ix)
 						index := gridVal.IndexNd(ix)
-						outData[pol][i].
-							AddVal(val*tFactor, index[1], index[0], k) // transpose
+						if k <= w.config.Kemit {
+							outData[pol][i].AddVal(val*tFactor,
+								k, index[0], index[1])
+						} else {
+							outData[pol][i].AddVal(val*tFactor,
+								k, index[0], index[1])
+						}
 					}
 				}
 			}

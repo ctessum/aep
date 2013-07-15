@@ -258,37 +258,6 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	return
 }
 
-//func srgCacher() {
-//	srgCache := make(map[string]map[string]map[string]*sparse.SparseArray)
-//	for r := range srgCacheRequestChan {
-//		switch {
-//		case r.srg == nil && r.returnChan != nil: // retrieve from cache
-//			srg, ok := srgCache[r.grid][r.srgNum][r.FIPS]
-//			if ok {
-//				r.returnChan <- srg
-//			} else {
-//				r.returnChan <- nil
-//			}
-//		case r.srg != nil && r.returnChan == nil: // add to cache
-//			if _, ok := srgCache[r.grid]; !ok {
-//				srgCache[r.grid] = make(map[string]map[string]*sparse.SparseArray)
-//			}
-//			if _, ok := srgCache[r.grid][r.srgNum]; !ok {
-//				srgCache[r.grid][r.srgNum] = make(map[string]*sparse.SparseArray)
-//			}
-//			srgCache[r.grid][r.srgNum][r.FIPS] = r.srg
-//		}
-//	}
-//}
-//
-//type srgCacheRequest struct {
-//	grid       string
-//	srgNum     string
-//	FIPS       string
-//	srg        *sparse.SparseArray
-//	returnChan chan *sparse.SparseArray
-//}
-
 func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	pg *gis.PostGis, upstreamSrgs []string) *sparse.SparseArray {
 
@@ -355,8 +324,12 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	}
 	srgSum := srg.Sum()
 	if srgSum > 1.001 || math.IsNaN(srgSum) {
-		err = fmt.Errorf("Sum for surrogate !<= 1.0: %v", srgSum)
-		panic(err)
+		if c.testMode {
+			err = fmt.Errorf("Sum for surrogate !<= 1.0: %v", srgSum)
+			panic(err)
+		} else {
+			srg.Scale(1. / srgSum)
+		}
 	}
 	// store surrogate in cache for faster access.
 	srgCache.Set(cacheKey, srg, 0)
