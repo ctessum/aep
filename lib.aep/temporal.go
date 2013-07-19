@@ -364,7 +364,6 @@ func getTemporalFactor(monthlyCode, weeklyCode, diurnalCode string,
 	if _, ok := holidays[localTime.Format(holidayFormat)]; ok {
 		// if it's a holiday, use Sunday temporal profiles.
 		// Note: this can cause the checksums to not quite add up.
-		fmt.Println("It's a Holiday BIOTCH!")
 		weekday = 6
 	} else {
 		// switch from sunday to monday for first weekday

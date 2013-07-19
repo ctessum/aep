@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ajstarks/svgo"
 	_ "github.com/bmizerany/pq"
 	"log"
 	"os"
@@ -27,7 +28,7 @@ func Log(msg string, debug int) {
 }
 
 type PostGis struct {
-	db              *sql.DB
+	db *sql.DB
 }
 
 func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
@@ -1031,6 +1032,138 @@ func (pg *PostGis) ProjectPoint(lat, lon float64, SRID int) (
 	x = xy.Coordinates[0]
 	y = xy.Coordinates[1]
 
+	return
+}
+
+type VectorShape struct {
+	schema, name, shapetype string
+	X                       []float64
+	Y                       []float64
+}
+
+func (v *VectorShape) DrawToSvg(SVG *svg.SVG, S, W, E, N float64, nx, ny int,
+	style string) {
+	// calculate grid coordinates
+	x := make([]int, len(v.X))
+	y := make([]int, len(v.Y))
+	dx := (E - W) / float64(nx)
+	dy := (N - S) / float64(ny)
+	for i := 0; i < len(v.X); i++ {
+		x[i] = int((v.X[i] - W) / dx)
+		y[i] = ny - 1 - int((v.Y[i] - S) / dy)
+	}
+	switch v.shapetype {
+	case "Point":
+		SVG.Circle(x[0], y[0], 1, style)
+	case "LineString":
+		SVG.Polyline(x, y, style)
+	case "Polygon","MultiPolygon":
+		SVG.Polygon(x, y, style)
+	default:
+		panic(fmt.Sprintf("Type %v not supported.", v.shapetype))
+	}
+}
+
+func (pg *PostGis) GetVector(schema, name string, SRID int) (
+	out []*VectorShape, err error) {
+
+	numrows := pg.GetNumPolygons(schema, name)
+	out = make([]*VectorShape, numrows)
+
+	vectorSRID := pg.GetSRID(schema, name)
+	var rows *sql.Rows
+	if vectorSRID == SRID {
+		rows, err = pg.db.Query(fmt.Sprintf(
+			"SELECT ST_AsGeoJson(geom) FROM \"%v\".\"%v\"", schema, name))
+	} else {
+		rows, err = pg.db.Query(fmt.Sprintf(
+			"SELECT ST_AsGeoJson(ST_Transform(geom,%v)) FROM \"%v\".\"%v\"",
+			SRID, schema, name))
+	}
+	if err != nil {
+		return
+	}
+
+	var jsonout []byte
+	i := 0
+	for rows.Next() {
+		err = rows.Scan(&jsonout)
+		if err != nil {
+			return
+		}
+		type holder struct {
+			Type        string
+			Coordinates []interface{}
+		}
+		var data holder
+		err = json.Unmarshal(jsonout, &data)
+		if err != nil {
+			return
+		}
+		out[i] = new(VectorShape)
+		out[i].shapetype = data.Type
+		out[i].name = name
+		out[i].schema = schema
+		switch data.Type {
+		case "Point":
+			out[i].X = make([]float64, 1)
+			out[i].X[0] = data.Coordinates[0].(float64)
+			out[i].Y = make([]float64, 1)
+			out[i].Y[0] = data.Coordinates[1].(float64)
+		case "LineString":
+			out[i].X = make([]float64, len(data.Coordinates))
+			out[i].Y = make([]float64, len(data.Coordinates))
+			for j, point := range data.Coordinates {
+				pointfloat := point.([]interface{})
+				out[i].X[j] = pointfloat[0].(float64)
+				out[i].Y[j] = pointfloat[1].(float64)
+			}
+		case "Polygon":
+			// Inner rings and holes are not supported
+			if len(data.Coordinates) > 1 {
+				fmt.Println("WARNING: Ignoring inner rings of polygon")
+			}
+			points := data.Coordinates[0].([]interface{})
+			out[i].X = make([]float64, len(points))
+			out[i].Y = make([]float64, len(points))
+			for j, point := range points {
+				pointfloat := point.([]interface{})
+				out[i].X[j] = pointfloat[0].(float64)
+				out[i].Y[j] = pointfloat[1].(float64)
+			}
+		case "MultiPolygon":
+			for j, polygon := range data.Coordinates {
+				v := new(VectorShape)
+				v.shapetype = data.Type
+				v.name = name
+				v.schema = schema
+				poly := polygon.([]interface{})
+				// Inner rings and holes are not supported
+				if len(poly) > 1 {
+					fmt.Println("WARNING: Ignoring inner rings of polygon")
+				}
+				points := poly[0].([]interface{})
+				v.X = make([]float64, len(points))
+				v.Y = make([]float64, len(points))
+				for k, point := range points {
+					pointfloat := point.([]interface{})
+					v.X[k] = pointfloat[0].(float64)
+					v.Y[k] = pointfloat[1].(float64)
+				}
+				if j == 0 {
+					out[i] = v
+				} else {
+					out = append(out, v)
+				}
+			}
+		default:
+			fmt.Println(data)
+			panic(fmt.Sprintf("Type %v not supported.", data.Type))
+		}
+		i++
+	}
+	rows.Close()
+	err = rows.Err()
 	return
 }
 
