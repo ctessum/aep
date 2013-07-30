@@ -12,7 +12,7 @@ import (
 // closest match to the input code. "10102" will never be returned,
 // even if the "10100" item didn't exist. Returns an error if there
 // is no match.
-func matchCode(code string, matchmap map[string]interface{}) (
+func MatchCode(code string, matchmap map[string]interface{}) (
 	matchedCode string, matchVal interface{}, err error) {
 	var ok bool
 	l := len(code)
@@ -26,7 +26,7 @@ func matchCode(code string, matchmap map[string]interface{}) (
 	err = fmt.Errorf("No matching code for %v", code)
 	return
 }
-func matchCodeDouble(code1, code2 string,
+func MatchCodeDouble(code1, code2 string,
 	matchmap map[string]map[string]interface{}) (
 	matchedCode1, matchedCode2 string, matchVal interface{}, err error) {
 	l1 := len(code1)

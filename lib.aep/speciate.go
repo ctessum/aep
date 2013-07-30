@@ -599,7 +599,7 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 			panic(err)
 		}
 	} else {
-		_, matchedVal, err = matchCode(SCC, sp.sRef)
+		_, matchedVal, err = MatchCode(SCC, sp.sRef)
 		if err != nil {
 			err = fmt.Errorf("In Speciate, SCC code " + SCC +
 				" is not in specRef file and there is no default.")
@@ -728,23 +728,23 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 }
 
 type SpecTotals struct {
-	Kept          map[string]*specValUnits
-	DoubleCounted map[string]*specValUnits
-	Ungrouped     map[string]*specValUnits
+	Kept          map[string]*SpecValUnits
+	DoubleCounted map[string]*SpecValUnits
+	Ungrouped     map[string]*SpecValUnits
 }
 
 func newSpeciationTotalHolder() *SpecTotals {
 	out := new(SpecTotals)
-	out.Kept = make(map[string]*specValUnits)
-	out.DoubleCounted = make(map[string]*specValUnits)
-	out.Ungrouped = make(map[string]*specValUnits)
+	out.Kept = make(map[string]*SpecValUnits)
+	out.DoubleCounted = make(map[string]*SpecValUnits)
+	out.Ungrouped = make(map[string]*SpecValUnits)
 	return out
 }
 
-func (h *SpecTotals) AddKept(pol string, data *specValUnits) {
+func (h *SpecTotals) AddKept(pol string, data *SpecValUnits) {
 	t := *h
 	if _, ok := t.Kept[pol]; !ok {
-		t.Kept[pol] = new(specValUnits)
+		t.Kept[pol] = new(SpecValUnits)
 		t.Kept[pol].Units = data.Units
 	} else {
 		if t.Kept[pol].Units != data.Units {
@@ -760,7 +760,7 @@ func (h *SpecTotals) AddKept(pol string, data *specValUnits) {
 func (h *SpecTotals) AddDoubleCounted(pol string, val float64, units string) {
 	t := *h
 	if _, ok := t.DoubleCounted[pol]; !ok {
-		t.DoubleCounted[pol] = new(specValUnits)
+		t.DoubleCounted[pol] = new(SpecValUnits)
 		t.DoubleCounted[pol].Units = units
 	} else {
 		if t.DoubleCounted[pol].Units != units {
@@ -776,7 +776,7 @@ func (h *SpecTotals) AddDoubleCounted(pol string, val float64, units string) {
 func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 	t := *h
 	if _, ok := t.Ungrouped[pol]; !ok {
-		t.Ungrouped[pol] = new(specValUnits)
+		t.Ungrouped[pol] = new(SpecValUnits)
 		t.Ungrouped[pol].Units = units
 	} else {
 		if t.Ungrouped[pol].Units != units {
@@ -813,7 +813,7 @@ func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 	doubleCountPolFracs := make(map[string]*SpecHolder)
 	ungroupedPolFracs := make(map[string]*SpecHolder)
 	for record := range InputChan {
-		newAnnEmis := make(map[string]*specValUnits)
+		newAnnEmis := make(map[string]*SpecValUnits)
 		for pol, AnnEmis := range record.ANN_EMIS {
 			polFracs, doubleCountPolFracs, ungroupedPolFracs =
 				sp.getSccFracs(record, pol, c, period)
@@ -823,7 +823,7 @@ func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 						" pollutant %v SCC %v", newpol, record.SCC)
 					panic(err)
 				}
-				newAnnEmis[newpol] = new(specValUnits)
+				newAnnEmis[newpol] = new(SpecValUnits)
 				newAnnEmis[newpol].Val = AnnEmis.Val *
 					c.InputConv * factor.Factor
 				newAnnEmis[newpol].Units = strings.Replace(

@@ -69,7 +69,7 @@ type ParsedRecord struct {
 	//  If CTYPE = L, Latitude (decimal degrees)
 	UTMZ int //	UTM zone (required if CTYPE = U)
 	//	CAS                string  // Pollutant CAS number or other code (16 characters maximum) (required, this is called the pollutant code in the NIF)
-	ANN_EMIS           map[string]*specValUnits // Annual Emissions (tons/year) (required)
+	ANN_EMIS           map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
 	CEFF               map[string]float64       //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
 	REFF               map[string]float64       //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
 	RPEN               map[string]float64       //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
@@ -83,7 +83,7 @@ type ParsedRecord struct {
 	Country            string
 }
 
-type specValUnits struct {
+type SpecValUnits struct {
 	Val     float64
 	Units   string
 	gridded []*sparse.SparseArray
@@ -91,7 +91,7 @@ type specValUnits struct {
 
 func (c RunData) newParsedRecord() (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
-	rec.ANN_EMIS = make(map[string]*specValUnits)
+	rec.ANN_EMIS = make(map[string]*SpecValUnits)
 	rec.CEFF = make(map[string]float64)
 	rec.REFF = make(map[string]float64)
 	rec.RPEN = make(map[string]float64)
@@ -134,11 +134,11 @@ func (r *ParsedRecord) parseEmisHelper(pol, ann_emis, avd_emis string) string {
 	if ann <= 0. {
 		avd := stringToFloat(avd_emis)
 		if avd >= 0. {
-			r.ANN_EMIS[pol] = new(specValUnits)
+			r.ANN_EMIS[pol] = new(SpecValUnits)
 			r.ANN_EMIS[pol].Val = avd * 365.
 		}
 	} else if ann != 0. {
-		r.ANN_EMIS[pol] = new(specValUnits)
+		r.ANN_EMIS[pol] = new(SpecValUnits)
 		r.ANN_EMIS[pol].Val = ann
 	}
 	return pol
@@ -215,6 +215,26 @@ func trimString(s string) string {
 	return strings.Trim(s, "\" ")
 }
 
+// clean up NAICS code so it either has 0 or 6 characters
+func parseNAICS(s string) string {
+	s2 := trimString(s)
+	if s2 == "" || s2 == "-9" {
+		return ""
+	} else {
+		return strings.Replace(fmt.Sprintf("%-6s", s2), " ", "0", -1)
+	}
+}
+
+// clean up SIC code so it either has 0 or 4 characters
+func parseSIC(s string) string {
+	s2 := trimString(s)
+	if s2 == "" || s2 == "-9" {
+		return ""
+	} else {
+		return strings.Replace(fmt.Sprintf("%-4s", s2), " ", "0", -1)
+	}
+}
+
 func (c *RunData) parseRecordPointORL(record string,
 	fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
@@ -234,9 +254,9 @@ func (c *RunData) parseRecordPointORL(record string,
 	fields.STKTEMP = stringToFloat(splitString[11])
 	fields.STKFLOW = stringToFloat(splitString[12])
 	fields.STKVEL = stringToFloat(splitString[13])
-	fields.SIC = trimString(splitString[14])
+	fields.SIC = parseSIC(splitString[14])
 	fields.MACT = splitString[15]
-	fields.NAICS = trimString(splitString[16])
+	fields.NAICS = parseNAICS(splitString[16])
 	err = fields.parsePointLocHelperORL(splitString[17], splitString[18],
 		splitString[19], splitString[20], c)
 	if err != nil {
@@ -258,10 +278,10 @@ func (c *RunData) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedReco
 	splitString := strings.Split(record, ",")
 	fields.FIPS = trimString(splitString[0])
 	fields.SCC = trimString(splitString[1])
-	fields.SIC = trimString(splitString[2])
+	fields.SIC = parseSIC(splitString[2])
 	fields.MACT = splitString[3]
 	fields.SRCTYPE = splitString[4]
-	fields.NAICS = trimString(splitString[5])
+	fields.NAICS = parseNAICS(splitString[5])
 	pol := fields.parseEmisHelper(splitString[6], splitString[7], splitString[8])
 	fields.CEFF[pol] = stringToFloat(splitString[9])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[10])
@@ -328,7 +348,7 @@ func (c *RunData) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRec
 	fields.STKTEMP = stringToFloat(record[129:133])
 	fields.STKFLOW = stringToFloat(record[133:143])
 	fields.STKVEL = stringToFloat(record[143:152])
-	fields.SIC = trimString(record[226:230])
+	fields.SIC = parseSIC(record[226:230])
 	err := fields.parsePointLocHelperIDA(record[239:248], record[230:239], c)
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())

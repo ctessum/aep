@@ -21,9 +21,7 @@ var (
 	grids                  = make([]*gis.GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
-	//	srgCacheStart          sync.Once
-	//	srgCacheRequestChan    = make(chan *srgCacheRequest)
-	srgCache *cache.Cache
+	srgCache               *cache.Cache
 )
 
 func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
@@ -32,11 +30,15 @@ func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
 	return
 }
 
-func (c *RunData) SpatialSetup(e *ErrCat) {
+func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 	c.Log("Setting up spatial environment...", 1)
 	gis.DebugLevel = c.DebugLevel
-	pg, err := c.PGconnect()
-	defer pg.Disconnect()
+	var err error
+	pg, err = c.PGconnect()
+	if err != nil {
+		e.Add(err)
+		return
+	}
 	e.Add(err)
 	x := c.wrfData
 	Report.GridNames = x.DomainNames
@@ -46,9 +48,12 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 		proj = "lcc"
 	case "lat-lon":
 		proj = "longlat"
+	case "merc":
+		proj = "merc"
 	default:
-		e.Add(fmt.Errorf("ERROR: \"lambert\" is the only map projection"+
-			" that is currently supported (your projection is %v).",
+		e.Add(fmt.Errorf("ERROR: `lambert', `lat-lon', and `merc' "+
+			"are the only map projections"+
+			" that are currently supported (your projection is `%v').",
 			x.Map_proj))
 		return
 	}
@@ -70,16 +75,6 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	}
 	pg.CreateSchema(c.SimulationName)
 
-	for i := 0; i < x.Max_dom; i++ {
-		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
-			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
-
-		if !pg.TableExists(c.SimulationName, grid.Name) {
-			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
-		}
-		e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema))
-		grids = append(grids, grid)
-	}
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
 	e.Add(c.SurrogateSpecification())
@@ -88,28 +83,61 @@ func (c *RunData) SpatialSetup(e *ErrCat) {
 	return
 }
 
+func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
+	pg := c.setupCommon(e)
+	defer pg.Disconnect()
+	x := c.wrfData
+	for i := 0; i < x.Max_dom; i++ {
+		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
+			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
+
+		if !pg.TableExists(c.SimulationName, grid.Name) {
+			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
+		}
+		grid.IrregularGrid = false
+		e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema))
+		grids = append(grids, grid)
+	}
+}
+
+// Use a spatial table (which needs to be already loaded into PostGIS
+// as the grid. The table to needs to have an ID column called gid
+func (c *RunData) SpatialSetupIrregularGrid(gridname string, e *ErrCat) {
+	pg := c.setupCommon(e)
+	defer pg.Disconnect()
+	x := c.wrfData
+	numRows := pg.GetNumShapes(c.ShapefileSchema,gridname)
+	grid := gis.NewGrid(gridname, 1, numRows,
+		x.Dx[0], x.Dy[0], x.W[0], x.S[0], c.SRID, c.SimulationName)
+	grid.IrregularGrid = true
+	if !pg.TableExists(c.SimulationName, grid.Name) {
+		e.Add(pg.CreateIrregularGrid(grid, c.ShapefileSchema))
+	}
+	grids = append(grids, grid)
+}
+
 type SpatialTotals struct {
-	InsideDomainTotals  map[string]map[string]*specValUnits
-	OutsideDomainTotals map[string]map[string]*specValUnits
+	InsideDomainTotals  map[string]map[string]*SpecValUnits
+	OutsideDomainTotals map[string]map[string]*SpecValUnits
 }
 
 func newSpatialTotalHolder() *SpatialTotals {
 	out := new(SpatialTotals)
-	out.InsideDomainTotals = make(map[string]map[string]*specValUnits)
-	out.OutsideDomainTotals = make(map[string]map[string]*specValUnits)
+	out.InsideDomainTotals = make(map[string]map[string]*SpecValUnits)
+	out.OutsideDomainTotals = make(map[string]map[string]*SpecValUnits)
 	return out
 }
 
-func (h *SpatialTotals) Add(pol, grid string, data *specValUnits, i int) {
+func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int) {
 	t := *h
 	if _, ok := t.InsideDomainTotals[grid]; !ok {
-		t.InsideDomainTotals[grid] = make(map[string]*specValUnits)
-		t.OutsideDomainTotals[grid] = make(map[string]*specValUnits)
+		t.InsideDomainTotals[grid] = make(map[string]*SpecValUnits)
+		t.OutsideDomainTotals[grid] = make(map[string]*SpecValUnits)
 	}
 	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
-		t.InsideDomainTotals[grid][pol] = new(specValUnits)
+		t.InsideDomainTotals[grid][pol] = new(SpecValUnits)
 		t.InsideDomainTotals[grid][pol].Units = data.Units
-		t.OutsideDomainTotals[grid][pol] = new(specValUnits)
+		t.OutsideDomainTotals[grid][pol] = new(SpecValUnits)
 		t.OutsideDomainTotals[grid][pol].Units = data.Units
 	} else {
 		if t.InsideDomainTotals[grid][pol].Units != data.Units {
@@ -166,10 +194,16 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 					data.gridded[i] = sparse.ZerosSparse(grid.Ny,
 						grid.Nx)
-					row := int((record.PointYcoord - grid.Y0) /
-						grid.Dy)
-					col := int((record.PointXcoord - grid.X0) /
-						grid.Dx)
+					var row, col int
+					if !grid.IrregularGrid {
+						row = int((record.PointYcoord - grid.Y0) /
+							grid.Dy)
+						col = int((record.PointXcoord - grid.X0) /
+							grid.Dx)
+					} else {
+						row, col = pg.IrregularGridIndex(record.PointYcoord,
+							record.PointXcoord, grid)
+					}
 					if row > 0 && row < grid.Ny &&
 						col > 0 && col < grid.Nx {
 						if data.Val != 0. {
@@ -189,10 +223,10 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 		for record := range InputChan {
 			var matchedVal interface{}
 			if !c.MatchFullSCC {
-				_, _, matchedVal, err = matchCodeDouble(
+				_, _, matchedVal, err = MatchCodeDouble(
 					record.SCC, record.FIPS, gridRef[record.Country])
 			} else {
-				_, matchedVal, err = matchCode(record.FIPS,
+				_, matchedVal, err = MatchCode(record.FIPS,
 					gridRef[record.Country][record.SCC])
 			}
 			if err != nil {

@@ -212,9 +212,9 @@ func (c *RunData) GetTemporalCodes(SCC, FIPS string) [3]string {
 	var err error
 	if !c.MatchFullSCC {
 		_, _, codes, err =
-			matchCodeDouble(SCC, FIPS, temporalRef)
+			MatchCodeDouble(SCC, FIPS, temporalRef)
 	} else {
-		_, codes, err = matchCode(FIPS, temporalRef[SCC])
+		_, codes, err = MatchCode(FIPS, temporalRef[SCC])
 	}
 	if err != nil {
 		err = fmt.Errorf("In temporal reference file: %v. (SCC=%v, FIPS=%v).",
@@ -317,7 +317,7 @@ type PointRecord struct {
 	STKVEL   float64                  //	Stack Gas Exit Velocity (ft/sec) (required)
 	Row      []int                    // grid row number
 	Col      []int                    // grid column number
-	ANN_EMIS map[string]*specValUnits // Annual Emissions (tons/year) (required)
+	ANN_EMIS map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
 }
 
 func newPointRecord(r *ParsedRecord) *PointRecord {

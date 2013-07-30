@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/ajstarks/svgo"
 	_ "github.com/bmizerany/pq"
 	"log"
 	"os"
@@ -28,7 +27,7 @@ func Log(msg string, debug int) {
 }
 
 type PostGis struct {
-	db *sql.DB
+	Db *sql.DB
 }
 
 func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
@@ -39,16 +38,16 @@ func Connect(user, dbname, password, OtherLibpqConnectionParameters string) (
 	if OtherLibpqConnectionParameters != "" {
 		options += " " + OtherLibpqConnectionParameters
 	}
-	db.db, err = sql.Open("postgres", options)
+	db.Db, err = sql.Open("postgres", options)
 	if err != nil {
 		return
 	}
-	err = db.db.Ping()
+	err = db.Db.Ping()
 	return
 }
 
 func (pg *PostGis) Disconnect() error {
-	err := pg.db.Close()
+	err := pg.Db.Close()
 	return err
 }
 
@@ -77,6 +76,11 @@ func (p *ParsedProj4) Equals(p2 *ParsedProj4) bool {
 			p.To_meter == p2.To_meter)
 	case "longlat":
 		return (p.Proj == p2.Proj)
+	case "merc":
+		return (p.Proj == p2.Proj &&
+			p.Lon_0 == p2.Lon_0 &&
+			p.EarthRadius_a == p2.EarthRadius_a &&
+			p.EarthRadius_b == p2.EarthRadius_b)
 	}
 	panic("Unsupported projection type " + p.Proj)
 	return false
@@ -94,12 +98,17 @@ func parseHelperFloat(s1, s2 string) float64 {
 func ParseProj4(proj4 string) *ParsedProj4 {
 	p := new(ParsedProj4)
 	p.Proj = parseHelper(proj4, "proj")
-	if p.Proj == "lcc" {
+	switch p.Proj {
+	case "lcc":
 		p.Lat_1 = parseHelperFloat(proj4, "lat_1")
 		p.Lat_2 = parseHelperFloat(proj4, "lat_2")
 		p.Lat_0 = parseHelperFloat(proj4, "lat_0")
 		p.Lon_0 = parseHelperFloat(proj4, "lon_0")
 		p.To_meter = parseHelperFloat(proj4, "to_meter")
+		p.EarthRadius_a = parseHelperFloat(proj4, "a")
+		p.EarthRadius_b = parseHelperFloat(proj4, "b")
+	case "merc":
+		p.Lon_0 = parseHelperFloat(proj4, "lon_0")
 		p.EarthRadius_a = parseHelperFloat(proj4, "a")
 		p.EarthRadius_b = parseHelperFloat(proj4, "b")
 	}
@@ -116,6 +125,10 @@ func (p *ParsedProj4) ToString() string {
 			p.EarthRadius_a, p.EarthRadius_b, p.To_meter)
 	case "longlat":
 		s = "+proj=longlat +datum=WGS84 +no_defs"
+	case "merc":
+		s = fmt.Sprintf("+proj=merc +a=%f +b=%f +lat_ts=0.0 +lon_0=%f "+
+			"+x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs",
+			p.EarthRadius_a, p.EarthRadius_b, p.Lon_0)
 	default:
 		panic(fmt.Errorf("Unknown proj4 projection `%v'.", p.Proj))
 	}
@@ -131,7 +144,7 @@ func (pg *PostGis) NewProjection(p *ParsedProj4) (err error) {
 		"where SRID=%v", p.SRID)
 	Log(cmd, 3)
 	// See if projection already exists
-	err = pg.db.QueryRow(cmd).Scan(&currentProj4)
+	err = pg.Db.QueryRow(cmd).Scan(&currentProj4)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			err = nil
@@ -140,7 +153,7 @@ func (pg *PostGis) NewProjection(p *ParsedProj4) (err error) {
 				"(srid, auth_name, auth_srid, proj4text) "+
 				"VALUES (%v,'aep',%v,'%v');", p.SRID, p.SRID, p.ToString())
 			Log(cmd, 3)
-			_, err = pg.db.Exec(cmd)
+			_, err = pg.Db.Exec(cmd)
 			return
 		} else {
 			err = fmt.Errorf("In gis.NewProjection:\n%v", err.Error())
@@ -163,16 +176,17 @@ func (pg *PostGis) NewProjection(p *ParsedProj4) (err error) {
 }
 
 type GridDef struct {
-	Name      string
-	Nx        int
-	Ny        int
-	Dx        float64
-	Dy        float64
-	X0        float64
-	Y0        float64
-	SRID      int    // PostGIS projection type (Spatial reference ID)
-	Schema    string // name of the Postgres schema it will be saved in
-	TimeZones map[int]*sparse.SparseArray
+	Name          string
+	Nx            int
+	Ny            int
+	Dx            float64
+	Dy            float64
+	X0            float64
+	Y0            float64
+	SRID          int    // PostGIS projection type (Spatial reference ID)
+	Schema        string // name of the Postgres schema it will be saved in
+	TimeZones     map[int]*sparse.SparseArray
+	IrregularGrid bool // whether the grid is a regular grid
 }
 
 func NewGrid(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
@@ -210,7 +224,7 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 	}
 	cmd := b.String()
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		return err
 	}
@@ -234,7 +248,36 @@ FROM generate_series(0, {{.Ny}} - 1) AS i,generate_series(0, {{.Nx}} - 1) AS j,
 		grid.Schema, grid.Name, grid.Schema, grid.Name, grid.Schema, grid.Name,
 		timeZoneSchema, tzSRID)
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
+	if err != nil {
+		pg.DropTable(grid.Schema, grid.Name)
+		return err
+	}
+
+	pg.VacuumAnalyze(grid.Schema, grid.Name)
+
+	return err
+}
+
+func (pg *PostGis) CreateIrregularGrid(grid *GridDef, inputSchema string) error {
+	if !pg.TableExists(inputSchema, grid.Name) {
+		return (fmt.Errorf("Grid table %v does not exist", grid.Name))
+	}
+	var transcmd string
+	if pg.GetSRID(inputSchema, grid.Name) == grid.SRID {
+		transcmd = "b.geom"
+	} else {
+		transcmd = fmt.Sprintf("ST_Transform(b.geom,%v)", grid.SRID)
+	}
+	cmd := fmt.Sprintf("CREATE TABLE %v.%v AS SELECT a.row, 0 as col, "+
+		"ST_SimplifyPreserveTopology(%v,%v) as geom "+
+		"FROM (SELECT generate_series(0,(SELECT count(geom)-1 "+
+		"FROM %v.%v)) as row) as a "+
+		"LEFT JOIN %v.%v b "+
+		"ON a.row=b.gid-1;", grid.Schema, grid.Name, transcmd, grid.Dx,
+		inputSchema, grid.Name, inputSchema, grid.Name)
+	Log(cmd, 3)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		pg.DropTable(grid.Schema, grid.Name)
 		return err
@@ -252,7 +295,7 @@ func (pg *PostGis) GridAddTimeZones(gridIn *GridDef, timeZoneSchema string) erro
 	gridQuery := fmt.Sprintf("SELECT row,col,timezone FROM %v.%v;",
 		grid.Schema, grid.Name)
 	Log(gridQuery, 3)
-	gridRows, err := pg.db.Query(gridQuery)
+	gridRows, err := pg.Db.Query(gridQuery)
 	if err != nil {
 		return err
 	}
@@ -275,29 +318,29 @@ func (pg *PostGis) GridAddTimeZones(gridIn *GridDef, timeZoneSchema string) erro
 }
 
 func (pg *PostGis) DropTable(schema, name string) {
-	_, err := pg.db.Exec("DROP TABLE IF EXISTS " + schema + "." + name + ";")
+	_, err := pg.Db.Exec("DROP TABLE IF EXISTS " + schema + "." + name + ";")
 	if err != nil {
 		panic(err)
 	}
-	_, err = pg.db.Exec("DROP INDEX IF EXISTS " + schema + "." + name + "_gix;")
+	_, err = pg.Db.Exec("DROP INDEX IF EXISTS " + schema + "." + name + "_gix;")
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (pg *PostGis) DropSchema(name string) {
-	pg.db.Exec("DROP SCHEMA " + name + " CASCADE;")
+	pg.Db.Exec("DROP SCHEMA " + name + " CASCADE;")
 }
 
 func (pg *PostGis) CreateSchema(name string) {
-	pg.db.Exec("CREATE SCHEMA " + name + ";")
+	pg.Db.Exec("CREATE SCHEMA " + name + ";")
 }
 
 // Add ID column to table
 func (pg *PostGis) AddGid(schema, name string) {
 	cmd := "alter table " + schema + "." + name + " add gid serial not null;"
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -308,7 +351,7 @@ func (pg *PostGis) AddGix(schema, name string) {
 	cmd := "CREATE INDEX " + name + "_gix ON " + schema + "." + name +
 		" USING GIST (geom);"
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -320,7 +363,7 @@ func (pg *PostGis) TableExists(schema, name string) (exists bool) {
 		strings.ToLower(schema), strings.ToLower(name))
 	Log(cmd, 3)
 	//	var exists string
-	err := pg.db.QueryRow(cmd).Scan(&exists)
+	err := pg.Db.QueryRow(cmd).Scan(&exists)
 	if err != nil {
 		panic(err)
 	}
@@ -332,7 +375,7 @@ func (pg *PostGis) UpdateSRID(schema, name string, SRID int) {
 	cmd := fmt.Sprintf("SELECT UpdateGeometrySRID('%v','%v', 'geom', %v);",
 		strings.ToLower(schema), strings.ToLower(name), SRID)
 	Log(cmd, 3)
-	_, err := pg.db.Query(cmd)
+	_, err := pg.Db.Query(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -341,7 +384,7 @@ func (pg *PostGis) UpdateSRID(schema, name string, SRID int) {
 func (pg *PostGis) VacuumAnalyze(schema, name string) {
 	cmd := "VACUUM ANALYZE " + schema + "." + name + ";"
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -350,7 +393,7 @@ func (pg *PostGis) VacuumAnalyze(schema, name string) {
 func (pg *PostGis) Vacuum() {
 	cmd := "VACUUM;"
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -359,7 +402,7 @@ func (pg *PostGis) Vacuum() {
 func (pg *PostGis) Rollback() {
 	cmd := "ROLLBACK;"
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -368,7 +411,7 @@ func (pg *PostGis) Rollback() {
 func (pg *PostGis) GetSRID(schema, name string) (SRID int) {
 	cmd := fmt.Sprintf("SELECT ST_SRID(geom) FROM %v.\"%v\" LIMIT 1;", schema, name)
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&SRID)
+	err := pg.Db.QueryRow(cmd).Scan(&SRID)
 	if err != nil {
 		panic(err)
 	}
@@ -381,7 +424,7 @@ func (pg *PostGis) GetNumPolygons(schema, name string) (polygons int) {
 		"OR Geometrytype(geom)='MULTIPOLYGON';",
 		strings.ToLower(schema), strings.ToLower(name))
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&polygons)
+	err := pg.Db.QueryRow(cmd).Scan(&polygons)
 	if err != nil {
 		panic(err)
 	}
@@ -393,7 +436,7 @@ func (pg *PostGis) GetNumLines(schema, name string) (lines int) {
 		"OR Geometrytype(geom)='MULTILINESTRING';",
 		strings.ToLower(schema), strings.ToLower(name))
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&lines)
+	err := pg.Db.QueryRow(cmd).Scan(&lines)
 	if err != nil {
 		panic(err)
 	}
@@ -404,7 +447,7 @@ func (pg *PostGis) GetNumPoints(schema, name string) (points int) {
 		"WHERE Geometrytype(geom)='POINT';",
 		strings.ToLower(schema), strings.ToLower(name))
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&points)
+	err := pg.Db.QueryRow(cmd).Scan(&points)
 	if err != nil {
 		panic(err)
 	}
@@ -414,7 +457,7 @@ func (pg *PostGis) GetNumShapes(schema, name string) (shapes int) {
 	cmd := fmt.Sprintf("SELECT Count(geom) from %v.\"%v\";",
 		strings.ToLower(schema), strings.ToLower(name))
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&shapes)
+	err := pg.Db.QueryRow(cmd).Scan(&shapes)
 	if err != nil {
 		panic(err)
 	}
@@ -575,23 +618,23 @@ func CreateGriddingSurrogate(PGc PostGISconnecter, srgCode, shapeTable,
 	const t = `
 BEGIN;
 CREATE TABLE gridBoundary AS
-SELECT ST_BuildArea(ST_Boundary(ST_Union(geom))) 
+SELECT ST_SetSRID(ST_BuildArea(ST_Extent(geom)),{{.Grid.SRID}})
 	AS geom FROM {{.Grid.Schema}}.{{.Grid.Name}};
 CREATE TABLE shapeSelect AS
-SELECT a.{{.ShapeColumn}} as inputID,
+WITH a AS(SELECT {{.ShapeColumn}} as inputID,
 	ST_SimplifyPreserveTopology({{if .ShapeSameSRID}}
-		ST_Buffer(a.geom,0){{else}}
-		ST_Transform(ST_Buffer(a.geom,0),{{.Grid.SRID}}){{end}},{{.Grid.Dx}}) as geom 
-FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a, gridBoundary b
-WHERE ST_Intersects(ST_Buffer(a.geom,0), {{if .ShapeSameSRID}}b.geom{{else}}
-	ST_Transform(b.geom,{{.ShapeSRID}}){{end}});
+		ST_Buffer(geom,0){{else}}
+		ST_Transform(ST_Buffer(geom,0),{{.Grid.SRID}}){{end}},{{.Grid.Dx}}) as geom 
+	FROM {{.ShapefileSchema}}."{{.ShapeTbl}}" a)
+SELECT a.inputID, a.geom from a, gridBoundary b
+WHERE ST_Intersects(ST_Buffer(a.geom,0), b.geom);
 CREATE INDEX shapeSelect_gix ON shapeSelect USING GIST (geom);
 ANALYZE shapeSelect;
 
 CREATE TABLE srgSelect AS
 SELECT a.gid, ST_SimplifyPreserveTopology({{if .SrgSameSRID}}
-	ST_Buffer(a.geom,0){{else}}
-	ST_Transform(ST_Buffer(a.geom,0),{{.Grid.SRID}})
+	a.geom{{else}}
+	ST_Transform(a.geom,{{.Grid.SRID}})
 	{{end}},{{.Grid.Dx}}) as geom,{{if .PolygonWithWeight}} 
 ({{.WeightColumns}})/ST_Area(ST_Buffer(a.geom,0)) AS weight {{else}}{{if .LineWithWeight}} 
 ({{.WeightColumns}})/ST_Length(a.geom) AS weight {{else}}{{if .PointWithWeight}} 
@@ -610,7 +653,7 @@ COMMIT;`
 	}
 	cmd := b.String()
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		err = handle(err, cmd)
 		return
@@ -624,21 +667,21 @@ COMMIT;`
 		"coveredByGrid boolean);",
 		grid.Schema)
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		err = handle(err, cmd)
 		return
 	}
 
 	var numInputShapes int
-	err = pg.db.QueryRow("SELECT Count(inputID) FROM shapeSelect;").
+	err = pg.Db.QueryRow("SELECT Count(inputID) FROM shapeSelect;").
 		Scan(&numInputShapes)
 	if err != nil {
 		errchan <- handle(err, cmd)
 		return
 	}
 
-	shapeRows, err := pg.db.Query("SELECT DISTINCT inputID FROM shapeSelect;")
+	shapeRows, err := pg.Db.Query("SELECT DISTINCT inputID FROM shapeSelect;")
 	if err != nil {
 		err = handle(err, cmd)
 		return
@@ -679,7 +722,7 @@ COMMIT;`
 	cmd = fmt.Sprintf("ALTER TABLE %v.tempsrg RENAME TO %v",
 		grid.Schema, OutName)
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		err = handle(err, cmd)
 		return
@@ -778,7 +821,7 @@ splitSrgs AS(
 	FROM 
 		(SELECT x.weight, x.geom from singleShapeSrgs_{{.InputID}} x, gridcell y
 		WHERE {{if .Line}}ST_Crosses{{else}}ST_Overlaps{{end}}(x.geom,y.geom)) a,
-		(SELECT ST_ExteriorRing(geom) as geom FROM gridcell) b)
+		(SELECT ST_ExteriorRing((ST_Dump(geom)).geom) as geom FROM gridcell) b)
 SELECT a.weight, a.geom from singleShapeSrgs_{{.InputID}} a, gridcell b
 	WHERE ST_Within(a.geom,b.geom)
 UNION ALL
@@ -803,7 +846,7 @@ splitSrgs AS(
 	FROM 
 		(SELECT x.weight, x.geom from singleShapeSrgs_{{.InputID}} x, gridcell y
 		WHERE {{if .Line}}ST_Crosses{{else}}ST_Overlaps{{end}}(ST_Buffer(x.geom,0),ST_Buffer(y.geom,0))) a,
-		(SELECT ST_ExteriorRing(geom) as geom FROM gridcell) b)
+		(SELECT ST_ExteriorRing((ST_Dump(geom)).geom) as geom FROM gridcell) b)
 SELECT a.weight, a.geom from singleShapeSrgs_{{.InputID}} a, gridcell b
 	WHERE ST_Within(ST_Buffer(a.geom,0),ST_Buffer(b.geom,0))
 UNION ALL
@@ -827,7 +870,7 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 		cmd = fmt.Sprintf("SELECT ST_Within(a.geom,b.geom) FROM "+
 			"(SELECT geom FROM shapeSelect where inputID='%v') a, "+
 			"gridBoundary b;", data.InputID)
-		err = pg.db.QueryRow(cmd).Scan(&coveredByGrid)
+		err = pg.Db.QueryRow(cmd).Scan(&coveredByGrid)
 		if err != nil {
 			errchan <- handle(err, cmd)
 		}
@@ -857,7 +900,7 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 				"FROM singleShapeSrgs_%v;", data.InputID)
 		}
 		Log(cmd, 3)
-		err = pg.db.QueryRow(cmd).Scan(&singleShapeSrgWeightTemp)
+		err = pg.Db.QueryRow(cmd).Scan(&singleShapeSrgWeightTemp)
 		if err != nil {
 			errchan <- handle(err, cmd)
 			return
@@ -872,11 +915,11 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 			"FROM %v.%v a, "+
 			"(SELECT ST_MakeValid(geom) as geom "+
 			"FROM shapeSelect WHERE inputID='%v') b "+
-			"WHERE ST_Intersects(a.geom,b.geom);", data.Grid.Schema,
-			data.Grid.Name, data.InputID)
+			"WHERE ST_Intersects(ST_Buffer(a.geom,0),ST_Buffer(b.geom,0));",
+			data.Grid.Schema, data.Grid.Name, data.InputID)
 
 		Log(gridQuery, 3)
-		gridRows, err := pg.db.Query(gridQuery)
+		gridRows, err := pg.Db.Query(gridQuery)
 		if err != nil {
 			errchan <- handle(err, gridQuery)
 			return
@@ -912,7 +955,7 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 				cmd = "SELECT SUM(weight) FROM srgsInGrid;"
 			}
 			Log(cmd, 4)
-			err = pg.db.QueryRow(cmd).Scan(&gridCellSrgWeightTemp)
+			err = pg.Db.QueryRow(cmd).Scan(&gridCellSrgWeightTemp)
 			if err != nil {
 				errchan <- handle(err, cmd)
 				return
@@ -930,14 +973,14 @@ SELECT a.weight, a.geom from splitSrgs a, gridcell b
 					data.Grid.Schema, row, col, data.InputID, frac, geom,
 					coveredByGrid)
 				Log(cmd, 4)
-				_, err = pg.db.Exec(cmd)
+				_, err = pg.Db.Exec(cmd)
 				if err != nil {
 					errchan <- handle(err, cmd)
 					return
 				}
 			}
 
-			pg.db.Exec("DROP TABLE srgsInGrid;")
+			pg.Db.Exec("DROP TABLE srgsInGrid;")
 		}
 		gridRows.Close()
 		err = gridRows.Err()
@@ -959,7 +1002,7 @@ func (pg *PostGis) RunTemplate(t *template.Template, name string,
 	}
 	cmd := b.String()
 	Log(cmd, lognum)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		return handle(err, cmd)
 	}
@@ -988,7 +1031,7 @@ func (pg *PostGis) RetrieveGriddingSurrogate(srgNum, inputID, schema string,
 		strings.ToLower(grid.Name), srgNum, inputID)
 
 	Log(cmd, 3)
-	rows, err := pg.db.Query(cmd)
+	rows, err := pg.Db.Query(cmd)
 	if err != nil {
 		return
 	}
@@ -1016,7 +1059,7 @@ func (pg *PostGis) ProjectPoint(lat, lon float64, SRID int) (
 	x, y float64, err error) {
 
 	var jsonout []byte
-	err = pg.db.QueryRow("SELECT ST_AsGeoJson(ST_Transform("+
+	err = pg.Db.QueryRow("SELECT ST_AsGeoJson(ST_Transform("+
 		"ST_SetSRID(ST_Point($1, $2), 4030), $3))",
 		lon, lat, SRID).Scan(&jsonout)
 	if err != nil {
@@ -1035,48 +1078,93 @@ func (pg *PostGis) ProjectPoint(lat, lon float64, SRID int) (
 	return
 }
 
-type VectorShape struct {
-	schema, name, shapetype string
-	X                       []float64
-	Y                       []float64
+func (pg *PostGis) IrregularGridIndex(y, x float64, grid *GridDef) (
+	row, col int) {
+	err := pg.Db.QueryRow(fmt.Sprintf("SELECT row, col FROM %v.%v "+
+		"WHERE ST_Intersects(ST_Point(%f,%f),geom);",
+		grid.Schema, grid.Name, x, y)).Scan(&row, &col)
+	if err != nil {
+		// in case point is in between shapes
+		err = pg.Db.QueryRow(fmt.Sprintf("SELECT row, col FROM %v.%v "+
+			"WHERE ST_Intersects(ST_Snap(ST_Point(%f,%f),geom,%v),geom);",
+			grid.Schema, grid.Name, x, y, grid.Dx)).Scan(&row, &col)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return
 }
 
-func (v *VectorShape) DrawToSvg(SVG *svg.SVG, S, W, E, N float64, nx, ny int,
-	style string) {
-	// calculate grid coordinates
-	x := make([]int, len(v.X))
-	y := make([]int, len(v.Y))
-	dx := (E - W) / float64(nx)
-	dy := (N - S) / float64(ny)
-	for i := 0; i < len(v.X); i++ {
-		x[i] = int((v.X[i] - W) / dx)
-		y[i] = ny - 1 - int((v.Y[i] - S) / dy)
+type VectorShape struct {
+	schema, name, Shapetype string
+	X                       []float64
+	Y                       []float64
+	Xmin, Xmax, Ymin, Ymax  float64
+}
+
+func (pg *PostGis) GetVectorColumnFloat64(schema, name, column string) []float64 {
+	var rows *sql.Rows
+	numrows := pg.GetNumShapes(schema, name)
+	out := make([]float64, numrows)
+	rows, err := pg.Db.Query(fmt.Sprintf(
+		"SELECT %v FROM \"%v\".\"%v\"", column, schema, name))
+	if err != nil {
+		panic(err)
 	}
-	switch v.shapetype {
-	case "Point":
-		SVG.Circle(x[0], y[0], 1, style)
-	case "LineString":
-		SVG.Polyline(x, y, style)
-	case "Polygon","MultiPolygon":
-		SVG.Polygon(x, y, style)
-	default:
-		panic(fmt.Sprintf("Type %v not supported.", v.shapetype))
+	i := 0
+	for rows.Next() {
+		err = rows.Scan(&out[i])
+		if err != nil {
+			panic(err)
+		}
+		i++
 	}
+	rows.Close()
+	err = rows.Err()
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func (pg *PostGis) GetVectorColumnString(schema, name, column string) []string {
+	var rows *sql.Rows
+	numrows := pg.GetNumShapes(schema, name)
+	out := make([]string, numrows)
+	rows, err := pg.Db.Query(fmt.Sprintf(
+		"SELECT %v FROM \"%v\".\"%v\"", column, schema, name))
+	if err != nil {
+		panic(err)
+	}
+	i := 0
+	for rows.Next() {
+		err = rows.Scan(&out[i])
+		if err != nil {
+			panic(err)
+		}
+		i++
+	}
+	rows.Close()
+	err = rows.Err()
+	if err != nil {
+		panic(err)
+	}
+	return out
 }
 
 func (pg *PostGis) GetVector(schema, name string, SRID int) (
 	out []*VectorShape, err error) {
 
-	numrows := pg.GetNumPolygons(schema, name)
+	numrows := pg.GetNumShapes(schema, name)
 	out = make([]*VectorShape, numrows)
 
 	vectorSRID := pg.GetSRID(schema, name)
 	var rows *sql.Rows
 	if vectorSRID == SRID {
-		rows, err = pg.db.Query(fmt.Sprintf(
+		rows, err = pg.Db.Query(fmt.Sprintf(
 			"SELECT ST_AsGeoJson(geom) FROM \"%v\".\"%v\"", schema, name))
 	} else {
-		rows, err = pg.db.Query(fmt.Sprintf(
+		rows, err = pg.Db.Query(fmt.Sprintf(
 			"SELECT ST_AsGeoJson(ST_Transform(geom,%v)) FROM \"%v\".\"%v\"",
 			SRID, schema, name))
 	}
@@ -1101,7 +1189,7 @@ func (pg *PostGis) GetVector(schema, name string, SRID int) (
 			return
 		}
 		out[i] = new(VectorShape)
-		out[i].shapetype = data.Type
+		out[i].Shapetype = data.Type
 		out[i].name = name
 		out[i].schema = schema
 		switch data.Type {
@@ -1134,7 +1222,7 @@ func (pg *PostGis) GetVector(schema, name string, SRID int) (
 		case "MultiPolygon":
 			for j, polygon := range data.Coordinates {
 				v := new(VectorShape)
-				v.shapetype = data.Type
+				v.Shapetype = data.Type
 				v.name = name
 				v.schema = schema
 				poly := polygon.([]interface{})
@@ -1160,6 +1248,22 @@ func (pg *PostGis) GetVector(schema, name string, SRID int) (
 			fmt.Println(data)
 			panic(fmt.Sprintf("Type %v not supported.", data.Type))
 		}
+		for _, val := range out[i].X {
+			if val < out[i].Xmin {
+				out[i].Xmin = val
+			}
+			if val > out[i].Xmax {
+				out[i].Xmax = val
+			}
+		}
+		for _, val := range out[i].Y {
+			if val < out[i].Ymin {
+				out[i].Ymin = val
+			}
+			if val > out[i].Ymax {
+				out[i].Ymax = val
+			}
+		}
 		i++
 	}
 	rows.Close()
@@ -1172,7 +1276,7 @@ func (pg *PostGis) MakeRasterTable(schema, name string) {
 	cmd := fmt.Sprintf("CREATE TABLE %v.%v(rid serial primary key, "+
 		"name varchar, rast raster);", schema, name)
 	Log(cmd, 3)
-	_, err := pg.db.Exec(cmd)
+	_, err := pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -1212,7 +1316,7 @@ COMMIT;`
 	}
 	cmd := b.String()
 	Log(cmd, 3)
-	_, err = pg.db.Exec(cmd)
+	_, err = pg.Db.Exec(cmd)
 	if err != nil {
 		panic(err)
 	}
@@ -1221,7 +1325,7 @@ COMMIT;`
 	for _, i := range data.Nonzero() {
 		val = data.Get1d(i)
 		index := data.IndexNd(i)
-		_, err = pg.db.Exec(fmt.Sprintf("UPDATE %v.%v SET rast="+
+		_, err = pg.Db.Exec(fmt.Sprintf("UPDATE %v.%v SET rast="+
 			"ST_SetValue(rast,%v,%v,%v) WHERE name='%v';",
 			schema, tableName, index[1]+1, index[0]+1, val, rasterRowName))
 		if err != nil {
@@ -1236,7 +1340,7 @@ func (pg *PostGis) WriteOutRaster(schema, tableName, rasterRowName,
 		"FROM %v.%v WHERE name='%v';", schema, tableName, rasterRowName)
 	var data []byte
 	Log(cmd, 3)
-	err := pg.db.QueryRow(cmd).Scan(&data)
+	err := pg.Db.QueryRow(cmd).Scan(&data)
 	if err != nil {
 		panic(err)
 	}

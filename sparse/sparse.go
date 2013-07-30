@@ -19,7 +19,7 @@ type SparseArray struct {
 
 // Dense array with an arbitrary number of dimensions
 type DenseArray struct {
-	elements []float64
+	Elements []float64
 	ndims    int
 	Shape    []int
 	arrsize  int // Maximum number of elements in array
@@ -47,7 +47,7 @@ func ZerosDense(dims ...int) *DenseArray {
 	for _, i := range A.Shape {
 		A.arrsize *= i
 	}
-	A.elements = make([]float64, A.arrsize)
+	A.Elements = make([]float64, A.arrsize)
 	return A
 }
 
@@ -61,6 +61,20 @@ func (A *SparseArray) Copy() *SparseArray {
 	B.elements = make(map[int]float64)
 	for i, e := range A.elements {
 		B.elements[i] = e
+	}
+	return B
+}
+
+// Copy an array
+func (A *DenseArray) Copy() *DenseArray {
+	B := new(DenseArray)
+	ndims, shape, arrsize := A.ndims, A.Shape, A.arrsize
+	B.ndims = ndims
+	B.Shape = shape
+	B.arrsize = arrsize
+	B.Elements = make([]float64, arrsize)
+	for i, e := range A.Elements {
+		B.Elements[i] = e
 	}
 	return B
 }
@@ -234,7 +248,7 @@ func (A *DenseArray) Set(val float64, index ...int) {
 		panic(err)
 	}
 	index1d := A.Index1d(index)
-	A.elements[index1d] = val
+	A.Elements[index1d] = val
 }
 
 // Get array value at index
@@ -257,7 +271,7 @@ func (A *DenseArray) Get(index ...int) float64 {
 		panic(err)
 	}
 	index1d := A.Index1d(index)
-	return A.elements[index1d]
+	return A.Elements[index1d]
 }
 
 // Get array value at one-dimensional index
@@ -270,18 +284,27 @@ func (A *SparseArray) Get1d(index1d int) float64 {
 	}
 }
 
+// Get array value at one-dimensional index
+func (A *DenseArray) Get1d(index1d int) float64 {
+	return A.Elements[index1d]
+}
+
 // Add val at array index
 func (A *SparseArray) AddVal(val float64, index ...int) {
 	if err := A.checkIndex(index); err != nil {
 		panic(err)
 	}
 	index1d := A.Index1d(index)
-	_, ok := A.elements[index1d]
-	if ok {
-		A.elements[index1d] += val
-	} else {
-		A.elements[index1d] = val
+	A.elements[index1d] += val
+}
+
+// Add val at array index
+func (A *DenseArray) AddVal(val float64, index ...int) {
+	if err := A.checkIndex(index); err != nil {
+		panic(err)
 	}
+	index1d := A.Index1d(index)
+	A.Elements[index1d] += val
 }
 
 // Add array B to array A in place.
@@ -361,6 +384,15 @@ func (A *SparseArray) Sum() float64 {
 	return sum
 }
 
+// Sum calculates the array sum.
+func (A *DenseArray) Sum() float64 {
+	sum := 0.
+	for _, e := range A.Elements {
+		sum += e
+	}
+	return sum
+}
+
 // Nonzero returns (one dimensional) indicies of nonzero array elements
 func (A *SparseArray) Nonzero() []int {
 	index := make([]int, len(A.elements))
@@ -386,4 +418,16 @@ func (A *SparseArray) ToDense32() []float32 {
 		out[i] = float32(val)
 	}
 	return out
+}
+
+// returns either zero of the maximum value of the
+// array; whichever is greater.
+func (A *DenseArray) Max() float64 {
+	max := 0.
+	for _, v := range A.Elements {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }

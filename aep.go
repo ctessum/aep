@@ -59,7 +59,7 @@ func main() {
 
 	// Set up spatial environment
 	if ConfigAll.DefaultSettings.RunSpatialize {
-		ConfigAll.DefaultSettings.SpatialSetup(e)
+		ConfigAll.DefaultSettings.SpatialSetupRegularGrid(e)
 	}
 
 	// Set up temporal environment
