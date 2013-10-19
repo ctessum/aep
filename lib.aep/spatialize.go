@@ -1,7 +1,7 @@
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/gis"
+	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/aep/sparse"
 	"bufio"
 	"encoding/csv"
