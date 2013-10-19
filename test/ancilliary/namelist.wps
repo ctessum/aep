@@ -1,0 +1,39 @@
+1;2Q
+&share
+wrf_core                      = 'ARW',
+max_dom                       = 1,
+start_date                    = '2004-12-25_00:00:00',
+end_date                      = '2006-01-01_00:00:00',
+interval_seconds              = 21600,
+io_form_geogrid               = 2,
+/
+
+&geogrid
+parent_id                     = 1,
+parent_grid_ratio             = 1,
+i_parent_start                = 1,
+j_parent_start                = 1,
+e_we                          = 40,
+e_sn                          = 40,
+geog_data_res                 = '10m',
+dx                            = 2000,
+dy                            = 2000,
+map_proj                      = 'lambert',
+ref_lat                       = 44.97,
+ref_lon                       = -93.26,
+truelat1                      = 33.0,
+truelat2                      = 45.0,
+stand_lon                     = -97.0,
+geog_data_path                = '/home/marshall/tessumcm/WRFinputs/geogV3.4',
+/
+
+&ungrib
+out_format                    = 'WPS',
+prefix                        = 'FILE',
+/
+
+&metgrid
+fg_name                       = 'FILE',
+io_form_metgrid               = 2,
+/
+
