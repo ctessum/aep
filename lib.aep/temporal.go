@@ -1,7 +1,7 @@
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"fmt"
 	"os"
@@ -304,7 +304,7 @@ func (t *temporalAggregator) AggregateArea(record *ParsedRecord) {
 			}
 		}
 		for i, _ := range grids {
-			t.AreaData[temporalCodes][pol][i].AddSparse(vals.gridded[i])
+			t.AreaData[temporalCodes][pol][i].AddSparse(vals.Gridded[i])
 		}
 	}
 }

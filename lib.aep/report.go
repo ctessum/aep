@@ -2,7 +2,7 @@ package aep
 
 import (
 	"bitbucket.org/ctessum/gis"
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/json"
 	"errors"

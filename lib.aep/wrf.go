@@ -1,7 +1,7 @@
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"code.google.com/p/lvd.go/cdf"
 	"errors"
@@ -231,7 +231,7 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
 		for _, record := range data {
 			for pol, emis := range record.ANN_EMIS {
-				for i, gridVal := range emis.gridded {
+				for i, gridVal := range emis.Gridded {
 					k := 0
 					if w.config.Kemit > 1 {
 						k = met.PlumeRise(i, record)
