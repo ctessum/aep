@@ -1,7 +1,7 @@
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"fmt"
 	"io"
@@ -86,7 +86,7 @@ type ParsedRecord struct {
 type SpecValUnits struct {
 	Val     float64
 	Units   string
-	gridded []*sparse.SparseArray
+	Gridded []*sparse.SparseArray
 }
 
 func (c RunData) newParsedRecord() (rec *ParsedRecord) {

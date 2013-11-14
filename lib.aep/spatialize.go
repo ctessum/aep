@@ -2,7 +2,7 @@ package aep
 
 import (
 	"bitbucket.org/ctessum/gis"
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/csv"
 	"fmt"
@@ -84,10 +84,12 @@ func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 }
 
 func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
+	c.Log("Setting up spatial projection and database connection...", 5)
 	pg := c.setupCommon(e)
 	defer pg.Disconnect()
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
+		c.Log("Setting up grid...", 5)
 		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
 			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
 
@@ -95,7 +97,8 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
 		}
 		grid.IrregularGrid = false
-		e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema))
+		c.Log("Adding time zones to grid...", 5)
+		//e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema)) // no timezones for now
 		grids = append(grids, grid)
 	}
 }
@@ -106,7 +109,7 @@ func (c *RunData) SpatialSetupIrregularGrid(gridname string, e *ErrCat) {
 	pg := c.setupCommon(e)
 	defer pg.Disconnect()
 	x := c.wrfData
-	numRows := pg.GetNumShapes(c.ShapefileSchema,gridname)
+	numRows := pg.GetNumShapes(c.ShapefileSchema, gridname)
 	grid := gis.NewGrid(gridname, 1, numRows,
 		x.Dx[0], x.Dy[0], x.W[0], x.S[0], c.SRID, c.SimulationName)
 	grid.IrregularGrid = true
@@ -146,7 +149,7 @@ func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int) {
 			panic(err)
 		}
 	}
-	gridTotal := data.gridded[i].Sum()
+	gridTotal := data.Gridded[i].Sum()
 	t.InsideDomainTotals[grid][pol].Val += gridTotal
 	t.OutsideDomainTotals[grid][pol].Val += data.Val - gridTotal
 	*h = t
@@ -182,7 +185,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 			emisInRecord := false
 			for pol, data := range record.ANN_EMIS {
-				data.gridded = make([]*sparse.SparseArray, len(grids))
+				data.Gridded = make([]*sparse.SparseArray, len(grids))
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
 						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
@@ -192,7 +195,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 							sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
-					data.gridded[i] = sparse.ZerosSparse(grid.Ny,
+					data.Gridded[i] = sparse.ZerosSparse(grid.Ny,
 						grid.Nx)
 					var row, col int
 					if !grid.IrregularGrid {
@@ -209,7 +212,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 						if data.Val != 0. {
 							emisInRecord = true
 						}
-						data.gridded[i].Set(data.Val, row, col)
+						data.Gridded[i].Set(data.Val, row, col)
 						TotalGrid[grid][pol].AddVal(data.Val, row, col)
 					}
 					totals.Add(pol, grid.Name, data, i)
@@ -237,7 +240,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 			srgNum := matchedVal.(string)
 
 			for pol, val := range record.ANN_EMIS {
-				val.gridded = make([]*sparse.SparseArray,
+				val.Gridded = make([]*sparse.SparseArray,
 					len(grids))
 				for i, grid := range grids {
 					if _, ok := TotalGrid[grid]; !ok {
@@ -247,10 +250,10 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 						TotalGrid[grid][pol] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
-					val.gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid, pg,
+					val.Gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid, pg,
 						make([]string, 0))
-					val.gridded[i].Scale(val.Val)
-					TotalGrid[grid][pol].AddSparse(val.gridded[i])
+					val.Gridded[i].Scale(val.Val)
+					TotalGrid[grid][pol].AddSparse(val.Gridded[i])
 					totals.Add(pol, grid.Name, val, i)
 				}
 			}
