@@ -1,6 +1,7 @@
 #!/bin/bash
 
-dbase=gis
+#dbase=gis
+dbase=postgres
 schema=aepshp
 
 # Load administrative boundary and 
