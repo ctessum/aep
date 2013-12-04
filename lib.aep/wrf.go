@@ -700,7 +700,7 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	plumeHeight := stackHeight + deltaH
 
 	// Find K level of plume
-	for kPlume := 0; m.LayerHeights[gi][j][i][kPlume+1] < float32(plumeHeight); kPlume++ {
+	for kPlume = 0; m.LayerHeights[gi][j][i][kPlume+1] < float32(plumeHeight); kPlume++ {
 		if kPlume > m.Kemit {
 			break
 		}
