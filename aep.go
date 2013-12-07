@@ -22,6 +22,8 @@ func main() {
 	var configFile *string = flag.String("config", "none", "Path to configuration file")
 	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
 	var testmode *bool = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
+	var slavesFlag *string = flag.String("slaves", "", "List of addresses of available slaves, in quotes, separated by spaces.")
+	var isslave *bool = flag.Bool("isslave", false, "Should this program run in slave mode?")
 	flag.Parse()
 
 	if *configFile == "none" {
@@ -34,8 +36,22 @@ func main() {
 	// create list of sectors
 	sectors := strings.Split(*sectorFlag, " ")
 
+	// Are we doing distributed computing,
+	// and is this the master?
+	var slaves []string
+	if *slavesFlag != "" {
+		// create list of slaves
+		slaves = strings.Split(*slavesFlag, " ")
+	}
+
 	// parse configuration file
-	ConfigAll := aep.ReadConfigFile(configFile, testmode, e)
+	ConfigAll := aep.ReadConfigFile(configFile, testmode, slaves, e)
+
+	if *isslave == true {
+		// Set up a server to accept RPC requests;
+		// this will block and run forever.
+		aep.DistributedServer(ConfigAll.DefaultSettings)
+	}
 
 	// go to localhost:6060 in web browser to view report
 	if *reportOnly {
