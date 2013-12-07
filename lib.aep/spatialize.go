@@ -427,7 +427,7 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
 	err = gis.CreateGriddingSurrogate(c, srgNum, inputMap,
 		inputColumn, surrogateMap, WeightColumns, FilterFunction,
-		grid, c.ShapefileSchema)
+		grid, c.ShapefileSchema, c.slaves)
 	if err == nil {
 		Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
 		return

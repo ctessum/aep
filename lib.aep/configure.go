@@ -22,7 +22,8 @@ const (
 
 // Reads and parse a json configuration file.
 // See below for the required variables.
-func ReadConfigFile(filepath *string, testmode *bool, e *ErrCat) (config *configInput) {
+func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat) (
+	config *configInput) {
 	// Open the configuration file
 	var (
 		file  *os.File
@@ -54,6 +55,7 @@ func ReadConfigFile(filepath *string, testmode *bool, e *ErrCat) (config *config
 	}
 
 	config.DefaultSettings.testMode = *testmode
+	config.DefaultSettings.slaves = slaves
 	// Replace variables in directories with full paths
 	config.setup(e)
 
@@ -131,6 +133,7 @@ type RunData struct {
 	ErrorFlag                      bool // whether this sector has already encountered an error
 	testMode                       bool // testMode is set by a command line flag and is used for testing the program. In ensures that SpecType is set to "mass" and turns off the conversion from VOCs to TOGs so that speciated emissions totals can be compared to total emissions in the inventory
 	msgchan                        chan string
+	slaves                         []string // Addresses for available slaves when in distributed mode.
 }
 
 // PolHolder allows the configuration of chemical speciation settings for individual pollutants.
@@ -237,6 +240,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	if c.InputUnits == "" {
 		c.InputUnits = d.InputUnits
 	}
+	c.slaves = d.slaves
 	*p = c
 }
 
