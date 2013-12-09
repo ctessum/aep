@@ -118,7 +118,7 @@ type RunData struct {
 	PostGISuser                    string        // should have been chosen when setting up PostGIS
 	PostGISdatabase                string        // should have been previously created as a PostgreSQL database with the PostGIS additions
 	PostGISpassword                string        // should have been chosen when setting up PostGIS
-	OtherLibpqConnectionParameters string        // Other parameters for connecting to the database. See: https://github.com/bmizerany/pq
+	OtherLibpqConnectionParameters string        // Other parameters for connecting to the database. See: https://github.com/lib/pq
 	ShapefileSchema                string        // PostGIS schema where surrogate shapefiles are stored
 	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
 	WPSnamelist                    string        // Path to WPS namelist file
