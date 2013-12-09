@@ -47,6 +47,8 @@ func main() {
 	// parse configuration file
 	ConfigAll := aep.ReadConfigFile(configFile, testmode, slaves, e)
 
+	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
+
 	if *isslave == true {
 		// Set up a server to accept RPC requests;
 		// this will block and run forever.
@@ -64,8 +66,6 @@ func main() {
 	defer ConfigAll.DefaultSettings.WriteReport()
 
 	runChan := make(chan string, 1)
-
-	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
 
 	// Start server for retrieving profiles from the
 	// SPECIATE database
