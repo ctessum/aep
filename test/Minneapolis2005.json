@@ -1,22 +1,22 @@
 {
     "Dirs": {
-        "Home": "${GOPATH}/src/bitbucket.org/ctessum/aep/test",
-        "Input": "[Home]/Minneapolis2005",
-        "Ancilliary": "[Home]/ancilliary",
-        "Output": "[Home]/output"
+        "Home": "/media/chris/data1/2005_nei_data",
+        "Input": "[Home]",
+        "Ancilliary": "/home/chris/go/src/bitbucket.org/ctessum/aep/test/ancilliary",
+		"Output":"[Home]/Output"
     },
     "DefaultSettings": {
 		"StartDate": "2005/01/01",
 		"EndDate": "2005/02/28",
 		"Tstep":"1h",
         "OutputType": "WRF",
-		"OldWRFout":"[Home]/[DATE]",
-		"ForceWesternHemisphere": true,
         "SpecType": "mol",
         "InputUnits": "tons/year",
         "MatchFullSCC": false,
         "WPSnamelist": "[Ancilliary]/namelist.wps",
         "WRFnamelist": "[Ancilliary]/namelist.input",
+        "OldWRFout": "[Home]/xxx[DATE]",
+		"ForceWesternHemisphere":true,
 		"SRID":500001,
         "EarthRadius": 6370000,
 		"PostGISuser":"chris",
@@ -39,7 +39,7 @@
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"PM2_5":{"SpecType":"PM2.5"},
-			"PM10":{"SpecProf":{"E_PM10":{"Factor":1.0,
+			"PM10":{"SpecProf":{"E_PM_10":{"Factor":1.0,
 				"Units":"gram/gram"}}},
 			"NOX":{"SpecNames":["Nitrogen Dioxide"]},
 			"NH3":{"SpecNames":["Ammonia"]},
@@ -65,7 +65,7 @@
 		"HolidayFile":"[Ancilliary]/holidays_04may2006_v0.txt",
 		"SrgSpecFile":"[Ancilliary]/surrogate_specification_2002.csv"
     },
-    "Sectors": {
+    "sectors": {
         "ptnonipm": {
             "CaseName": "2005cs_05b",
             "SectorType": "point",
@@ -108,6 +108,7 @@
             "SectorType": "area",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
                 "arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
                 "arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
@@ -118,6 +119,7 @@
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
                 "mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
@@ -127,6 +129,7 @@
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
                 "mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
@@ -136,6 +139,7 @@
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
+			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
                 "mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
                 "mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
