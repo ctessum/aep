@@ -115,6 +115,7 @@ type RunData struct {
 	ForceWesternHemisphere         bool // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
 	InvFileNames                   []string
 	EarthRadius                    float64       // in meters
+	PostGIShost                    string        // address of postgresql server. Default is `localhost'.
 	PostGISuser                    string        // should have been chosen when setting up PostGIS
 	PostGISdatabase                string        // should have been previously created as a PostgreSQL database with the PostGIS additions
 	PostGISpassword                string        // should have been chosen when setting up PostGIS
@@ -190,6 +191,10 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.SRID = d.SRID
 	c.wrfData = d.wrfData
 	c.SimulationName = d.SimulationName
+	if d.PostGIShost == "" {
+		d.PostGIShost = "localhost"
+	}
+	c.PostGIShost = d.PostGIShost
 	c.PostGISuser = d.PostGISuser
 	c.PostGISdatabase = d.PostGISdatabase
 	c.PostGISpassword = d.PostGISpassword

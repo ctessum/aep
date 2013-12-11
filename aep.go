@@ -23,7 +23,7 @@ func main() {
 	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
 	var testmode *bool = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
 	var slavesFlag *string = flag.String("slaves", "", "List of addresses of available slaves, in quotes, separated by spaces.")
-	var isslave *bool = flag.Bool("isslave", false, "Should this program run in slave mode?")
+	var masterAddress *string = flag.String("masteraddress", "", "What is the address of the master? Leave empty if this is not a slave.")
 	flag.Parse()
 
 	if *configFile == "none" {
@@ -49,9 +49,10 @@ func main() {
 
 	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
 
-	if *isslave == true {
+	if *masterAddress != "" {
 		// Set up a server to accept RPC requests;
 		// this will block and run forever.
+		ConfigAll.DefaultSettings.PostGIShost = *masterAddress
 		aep.DistributedServer(ConfigAll.DefaultSettings)
 	}
 

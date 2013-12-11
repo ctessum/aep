@@ -25,7 +25,7 @@ var (
 )
 
 func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
-	pg, err = gis.Connect(c.PostGISuser, c.PostGISdatabase,
+	pg, err = gis.Connect(c.PostGIShost, c.PostGISuser, c.PostGISdatabase,
 		c.PostGISpassword, c.OtherLibpqConnectionParameters)
 	return
 }
