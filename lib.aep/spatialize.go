@@ -265,7 +265,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 	}
 	close(OutputChan)
 	Report.SectorResults[c.Sector][period].SpatialResults = totals
-	c.ResultMaps(TotalGrid, period, pg)
+	c.ResultMaps(totals, TotalGrid, period)
 	c.msgchan <- "Finished spatializing " + period + " " + c.Sector
 	return
 }

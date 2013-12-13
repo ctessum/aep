@@ -72,7 +72,7 @@ func (c *RunData) NewWRFoutput(filebase string, polsAndUnits map[string]string,
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
 		for pol, units := range polsAndUnits {
-			createVar(wrfoutH, pol, units)
+			createWRFvar(wrfoutH, pol, units)
 		}
 
 		wrfoutH.Define()
@@ -94,7 +94,7 @@ func (c *RunData) NewWRFoutput(filebase string, polsAndUnits map[string]string,
 	return out
 }
 
-func createVar(h *cdf.Header, name, unitsIn string) {
+func createWRFvar(h *cdf.Header, name, unitsIn string) {
 	dims := []string{"Time", "emissions_zdim", "south_north", "west_east"}
 	h.AddVariable(name, dims, []float32{0.})
 	var units string
