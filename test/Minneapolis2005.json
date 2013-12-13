@@ -29,7 +29,7 @@
 		"ShapefileSchema":"aepshp",
         "LineMap": "CoastAndPolitical",
 		"SpeciesGroupName":"RADM2",
-		"RegenerateSpatialData": false,
+		"RegenerateSpatialData": true,
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 8,
