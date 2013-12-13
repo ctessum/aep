@@ -10,8 +10,9 @@ import (
 var RPCport = "6061" // Port for RPC communications for distributed computing
 
 // Set up a server to remotely calculate gridding surrogates.
-func DistributedServer(PGc gis.PostGISconnecter) {
-	srgGenWorker, err := gis.NewSrgGenWorker(PGc)
+func DistributedServer(c *RunData) {
+	gis.DebugLevel = c.DebugLevel
+	srgGenWorker, err := gis.NewSrgGenWorker(c)
 	if err != nil {
 		panic(err)
 	}
