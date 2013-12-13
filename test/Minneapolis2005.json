@@ -3,7 +3,7 @@
         "Home": "/media/chris/data1/2005_nei_data",
         "Input": "[Home]",
         "Ancilliary": "/home/chris/go/src/bitbucket.org/ctessum/aep/test/ancilliary",
-		"Output":"[Home]/Output"
+		"Output":"/home/chris/go/src/bitbucket.org/ctessum/aep/test/Output"
     },
     "DefaultSettings": {
 		"StartDate": "2005/01/01",
@@ -29,7 +29,7 @@
 		"ShapefileSchema":"aepshp",
         "LineMap": "CoastAndPolitical",
 		"SpeciesGroupName":"RADM2",
-		"RegenerateSpatialData": true,
+		"RegenerateSpatialData": false,
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 8,

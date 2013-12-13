@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
+	"code.google.com/p/lvd.go/cdf"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,25 +173,68 @@ func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string 
 	}
 }
 
-// Prepare maps of emissions for each species and domain.
-func (c *RunData) ResultMaps(
+// Prepare maps of emissions for each species and domain in NetCDF format.
+// (http://www.unidata.ucar.edu/software/netcdf/).
+func (c *RunData) ResultMaps(totals *SpatialTotals,
 	TotalGrid map[*gis.GridDef]map[string]*sparse.SparseArray,
-	period string, pg *gis.PostGis) {
+	period string) {
 
+	dir := filepath.Join(c.outputDir, "maps")
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
 	for grid, d1 := range TotalGrid {
-		tableName := c.Sector + "_" + period + "_" + grid.Name
-		pg.MakeRasterTable(c.SimulationName, tableName)
-		for pol, data := range d1 {
-			pg.AddDataRowToRasterTable(c.SimulationName, tableName, pol,
-				grid, data)
-			dir := filepath.Join(c.outputDir, pol+"_maps")
-			err := os.MkdirAll(dir, os.ModePerm)
+		filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v_%v.nc",
+			c.SimulationName, c.Sector, period, grid.Name))
+		h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
+		h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
+			"by AEP (bitbucket.org/ctessum/aep)")
+		h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
+		h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
+		h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
+		h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
+		h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
+		h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
+		fmt.Println(grid.SRID, int32(grid.SRID), c.SRID, int32(c.SRID))
+		h.AddAttribute("", "spatial_ref", fmt.Sprint(grid.SRID))
+		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
+			float64(grid.Ny)*grid.Dy})
+		h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
+		h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
+			float64(grid.Nx)*grid.Dx})
+		h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
+		for pol, _ := range d1 {
+			h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
+			h.AddAttribute(pol, "units",
+				totals.InsideDomainTotals[grid.Name][pol].Units)
+		}
+		h.Define()
+		errs := h.Check()
+		for _, err := range errs {
 			if err != nil {
 				panic(err)
 			}
-			filename := filepath.Join(dir, tableName+"_"+pol+".tif")
-			pg.WriteOutRaster(c.SimulationName, tableName, pol, filename)
 		}
+		f, err := os.Create(filename)
+		if err != nil {
+			panic(err)
+		}
+		ff, err := cdf.Create(f, h)
+		if err != nil {
+			panic(err)
+		}
+		for pol, data := range d1 {
+			r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
+			if _, err = r.Write(data.ToDense32()); err != nil {
+				panic(err)
+			}
+		}
+		err = cdf.UpdateNumRecs(f)
+		if err != nil {
+			panic(err)
+		}
+		f.Close()
 	}
 }
 
