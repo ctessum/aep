@@ -196,7 +196,6 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 		h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
 		h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
 		h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-		fmt.Println(grid.SRID, int32(grid.SRID), c.SRID, int32(c.SRID))
 		h.AddAttribute("", "spatial_ref", fmt.Sprint(grid.SRID))
 		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
 			float64(grid.Ny)*grid.Dy})
