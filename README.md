@@ -35,11 +35,16 @@ Use
 4. Run the program: 
 
 		aep -config=$GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005.json. 
-	While the program is running, you can open a web browser and navigate to [localhost:6060](localhost:6060) to view status and diagnostic information.
-	After the program finishes running, output can be found in the directory $GOPATH/bitbucket.org/ctessum/aep/test/Output
+	While the program is running, you can open a web browser and navigate to localhost:6060 to view status and diagnostic information.
+	After the program finishes running, output can be found in the directory 
+
+		$GOPATH/bitbucket.org/ctessum/aep/test/Output
 
 5. Once you have run the test case, you can try running the program for your domain and time period of interest.
 	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis)
-	* You can start with the configuration file at $GOPATH/bitbucket.org/ctessum/aep/test/2005\_nei.json and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
+	* You can start with the configuration file at 
+
+		$GOPATH/bitbucket.org/ctessum/aep/test/2005\_nei.json 
+	and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
 
 
