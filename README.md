@@ -30,7 +30,9 @@ Use
 		$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
 	Both of these scripts may need to be edited to specify the name of the PostGIS database you have created.
 
-3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory $GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005
+3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory 
+
+		$GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005
 
 4. Run the program: 
 
@@ -44,7 +46,7 @@ Use
 	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis)
 	* You can start with the configuration file at 
 
-			$GOPATH/bitbucket.org/ctessum/aep/test/2005_nei.json 
+			$GOPATH/bitbucket.org/ctessum/aep/test/2005\_nei.json 
 		and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
 
 
