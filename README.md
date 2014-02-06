@@ -12,12 +12,9 @@ Installation
 	3. The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
 
 3. Download and install the main program:
-
-	hg clone https://ctessum@bitbucket.org/ctessum/aep $GOPATH/bitbucket.org/ctessum/aep // download the main program
-
-	go get bitbucket.org/ctessum/aep // download its (Go-language) dependencies and compile and install it.
-
-	Normally we could skip the first step, but since the AEP program is in a password protected repository, it needs to be downloaded separately
+		hg clone https://ctessum@bitbucket.org/ctessum/aep $GOPATH/bitbucket.org/ctessum/aep // download the main program
+		go get bitbucket.org/ctessum/aep // download its (Go-language) dependencies and compile and install it.
+		Normally we could skip the first step, but since the AEP program is in a password protected repository, it needs to be downloaded separately
 
 Use
 ---
@@ -29,6 +26,11 @@ Use
 This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run:
 	$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
 Both of these scripts may need to be edited for your specific PostGIS setup.
+
+3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory $GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005
+
+4. Run the program: aep -config=$GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005.json. Output can be found in the directory $GOPATH/bitbucket.org/ctessum/aep/test/Output
+
 
 3. Download the emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis)
 	
