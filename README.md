@@ -23,9 +23,13 @@ Use
 1. First, it is important for the PostGIS server to be up and running. One way to (partially) check this is to type "psql" in a command line and see what happens. 
 
 2. Once PostGIS is up and running, you can load the shapefiles into the server. To do this first run:
-	$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
+		
+		$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
+
 This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run:
-	$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
+
+		$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
+
 Both of these scripts may need to be edited for your specific PostGIS setup.
 
 3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory $GOPATH/bitbucket.org/ctessum/aep/test/Minneapolis2005
