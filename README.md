@@ -26,6 +26,7 @@ Use
 		
 		$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
 	This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run:
+
 		$GOPATH/bitbucket.org/ctessum/aep/test/loadshp.sh
 	Both of these scripts may need to be edited for your specific PostGIS setup.
 
