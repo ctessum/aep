@@ -14,9 +14,10 @@ Installation
 3. Download and install the main program:
 
 	hg clone https://ctessum@bitbucket.org/ctessum/aep $GOPATH/bitbucket.org/ctessum/aep // download the main program
+
 	go get bitbucket.org/ctessum/aep // download its (Go-language) dependencies and compile and install it.
 
-Normally we could skip the first step, but since the AEP program is in a password protected repository, it needs to be downloaded separately
+	Normally we could skip the first step, but since the AEP program is in a password protected repository, it needs to be downloaded separately
 
 Use
 ---
