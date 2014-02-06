@@ -1,6 +1,7 @@
 package aep
 
 import (
+	"bitbucket.org/ctessum/aep/spatialsrg"
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
@@ -33,6 +34,7 @@ func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
 func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 	c.Log("Setting up spatial environment...", 1)
 	gis.DebugLevel = c.DebugLevel
+	spatialsrg.DebugLevel = c.DebugLevel
 	var err error
 	pg, err = c.PGconnect()
 	if err != nil {
@@ -89,32 +91,33 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 	defer pg.Disconnect()
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
-		c.Log("Setting up grid...", 5)
 		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
 			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
 
 		if !pg.TableExists(c.SimulationName, grid.Name) {
-			e.Add(pg.CreateGrid(grid, c.ShapefileSchema))
+			c.Log(fmt.Sprintf("Setting up grid %v...", i+1), 0)
+			e.Add(spatialsrg.GridGeomWithTimeZone(grid, pg, c.ShapefileSchema,
+				"timezone", "zone"))
 		}
 		grid.IrregularGrid = false
 		c.Log("Adding time zones to grid...", 5)
-		//e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema)) // no timezones for now
+		e.Add(pg.GridAddTimeZones(grid, c.ShapefileSchema))
 		grids = append(grids, grid)
 	}
 }
 
 // Use a spatial table (which needs to be already loaded into PostGIS
 // as the grid. The table to needs to have an ID column called gid
-func (c *RunData) SpatialSetupIrregularGrid(gridname string, e *ErrCat) {
+func (c *RunData) SpatialSetupIrregularGrid(schema, gridname string, e *ErrCat) {
 	pg := c.setupCommon(e)
 	defer pg.Disconnect()
 	x := c.wrfData
-	numRows := pg.GetNumShapes(c.ShapefileSchema, gridname)
+	numRows := pg.GetNumShapes(schema, gridname)
 	grid := gis.NewGrid(gridname, 1, numRows,
 		x.Dx[0], x.Dy[0], x.W[0], x.S[0], c.SRID, c.SimulationName)
 	grid.IrregularGrid = true
 	if !pg.TableExists(c.SimulationName, grid.Name) {
-		e.Add(pg.CreateIrregularGrid(grid, c.ShapefileSchema))
+		e.Add(pg.CreateIrregularGrid(grid, schema))
 	}
 	grids = append(grids, grid)
 }
@@ -322,7 +325,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	MergeFunction := srgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
 
-		srg, err = pg.RetrieveGriddingSurrogate(srgNum, FIPS,
+		srg, err = spatialsrg.RetrieveGriddingSurrogate(pg, srgNum, FIPS,
 			c.SimulationName, grid)
 		if err != nil {
 			panic(err)
@@ -425,7 +428,7 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
-	err = gis.CreateGriddingSurrogate(c, srgNum, inputMap,
+	err = spatialsrg.CreateGriddingSurrogate(c, srgNum, inputMap,
 		inputColumn, surrogateMap, WeightColumns, FilterFunction,
 		grid, c.ShapefileSchema, c.slaves)
 	if err == nil {
@@ -496,7 +499,7 @@ type srgSpecHolder struct {
 	QUARTERNARYSURROGATE string
 	DETAILS              string
 	WeightColumns        string
-	FilterFunction       *gis.SurrogateFilter
+	FilterFunction       *spatialsrg.SurrogateFilter
 	MergeFunction        []*SrgMerge
 }
 
@@ -563,7 +566,7 @@ func (c *RunData) SurrogateSpecification() (err error) {
 
 		// Parse filter function
 		if srg.FILTERFUNCTION != "NONE" && srg.FILTERFUNCTION != "" {
-			srg.FilterFunction = gis.NewSurrogateFilter()
+			srg.FilterFunction = spatialsrg.NewSurrogateFilter()
 			s := make([]string, 0)
 			if strings.Index(srg.FILTERFUNCTION, "!=") != -1 {
 				srg.FilterFunction.EqualNotEqual = "NotEqual"
