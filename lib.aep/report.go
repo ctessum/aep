@@ -1,6 +1,7 @@
 package aep
 
 import (
+	"bitbucket.org/ctessum/aep/spatialsrg"
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
@@ -557,7 +558,7 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	}
 }
 func renderStatusTemplate(w http.ResponseWriter) {
-	Status.SrgProgress = gis.SrgProgress
+	Status.SrgProgress = spatialsrg.SrgProgress
 	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
 		"\n", "<br>", -1))
 	err := templates.ExecuteTemplate(w, "status.html", Status)

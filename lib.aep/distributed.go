@@ -1,7 +1,7 @@
 package aep
 
 import (
-	"bitbucket.org/ctessum/gis"
+	"bitbucket.org/ctessum/aep/spatialsrg"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -11,8 +11,8 @@ var RPCport = "6061" // Port for RPC communications for distributed computing
 
 // Set up a server to remotely calculate gridding surrogates.
 func DistributedServer(c *RunData) {
-	gis.DebugLevel = c.DebugLevel
-	srgGenWorker, err := gis.NewSrgGenWorker(c)
+	spatialsrg.DebugLevel = c.DebugLevel
+	srgGenWorker, err := spatialsrg.NewSrgGenWorker(c)
 	if err != nil {
 		panic(err)
 	}
