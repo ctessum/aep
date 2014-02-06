@@ -44,7 +44,7 @@ Use
 	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis)
 	* You can start with the configuration file at 
 
-		$GOPATH/bitbucket.org/ctessum/aep/test/2005\_nei.json 
+		$GOPATH/bitbucket.org/ctessum/aep/test/2005_nei.json 
 	and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
 
 
