@@ -71,8 +71,8 @@ type configInput struct {
 type DirInfo struct {
 	Home       string // Home directory
 	Input      string // Directory of input files
-	Ancilliary string // Home directory of log files
-	Output     string // Directory for ancilliary information
+	Ancilliary string // Directory for ancilliary information
+	Output     string // Directory for output data and reports
 }
 
 // type RunData is a container for the configuration and report info
