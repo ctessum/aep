@@ -172,6 +172,9 @@ func (p *configInput) setup(e *ErrCat) {
 	*p = c
 }
 
+// Fill the configuration settings for an individual sector with 
+// default settings, where `p` represents the settings for the individual
+// sector and `d` represents the default settings.
 func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c := *p
 	c.RunSpeciate = d.RunSpeciate
