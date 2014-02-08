@@ -59,7 +59,7 @@ The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/J
 
 	{
 		"Dirs": {
-			[DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
+			<a href="https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71">DirInfo</a>
 		},
 	}
 
