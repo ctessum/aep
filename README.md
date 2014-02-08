@@ -57,10 +57,10 @@ Additional information
 
 The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/JSON) file with the following format:
 
-	{
-		"Dirs": {
-			<a href="https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71">DirInfo</a>
-		},
-	}
+{
+	"Dirs": {
+		<a href="https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71">DirInfo</a>
+	},
+}
 
 
