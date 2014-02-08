@@ -83,37 +83,37 @@ type RunData struct {
 	RunSpeciate                    bool   // Whether to speciate data
 	RunSpatialize                  bool   // Whether to spatialize data
 	RunTemporal                    bool   // Whether to temporalize data
-	StartDate                      string
+	StartDate                      string // Date for which to begin processing emissions
 	startDate                      time.Time
-	EndDate                        string
+	EndDate                        string // Date for which to end processing emissions
 	endDate                        time.Time
 	Tstep                          string
 	tStep                          time.Duration
-	OutputType                     string
+	OutputType                     string // Type of output file. Currently the only available option is "WRF".
 	SccDesc                        string // name of file with SCC code descriptions
 	SicDesc                        string // name of file with SIC code descriptions
 	NaicsDesc                      string // name of file with NAICS code descriptions
-	SpecRefFile                    string
-	SpecRefComboFile               string
-	SpecProFile                    string
+	SpecRefFile                    string // Location of the speciation code reference file.
+	SpecRefComboFile               string // Location of the county specific speciation code reference file, if any.
+	SpecProFile                    string // Location of the SPECIATE database in sqlite format.
 	SpecType                       string // Type of speciation to perform. Either "mol" or "mass".
 	SpeciesGroupName               string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
 	specFrac                       map[string]map[string]map[string]SpecHolder
 	PolsToKeep                     map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
-	GridRefFile                    string
-	SrgSpecFile                    string
-	TemporalRefFile                string
-	TemporalProFile                string
-	HolidayFile                    string
+	GridRefFile                    string                // Location of the gridding reference file
+	SrgSpecFile                    string                // Location of the surrogate specification file
+	TemporalRefFile                string                // Location of the temporal reference file
+	TemporalProFile                string                // Location of the temporal profile file
+	HolidayFile                    string                // Location of the file specifying which days are holidays
 	CaseName                       string
-	InventoryFreq                  string
-	MatchFullSCC                   bool
-	DebugLevel                     int // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
-	Ncpus                          int // Number of processors available for use
-	InputUnits                     string
+	InventoryFreq                  string // The temporal frequency of the inventory data files. Currently the options are "annual" and "monthly".
+	MatchFullSCC                   bool   // Whether to only match codes which are identical, or to accept partial matches.
+	DebugLevel                     int    // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
+	Ncpus                          int    // Number of processors available for use
+	InputUnits                     string // Units of emissions in input file
 	InputConv                      float64
-	ForceWesternHemisphere         bool // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
-	InvFileNames                   []string
+	ForceWesternHemisphere         bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
+	InvFileNames                   []string      // List of input files.
 	EarthRadius                    float64       // in meters
 	PostGIShost                    string        // address of postgresql server. Default is `localhost'.
 	PostGISuser                    string        // should have been chosen when setting up PostGIS

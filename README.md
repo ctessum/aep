@@ -1,8 +1,6 @@
-**A**ir **E**missions **P**rocessor program
-===========================================
+# **A**ir **E**missions **P**rocessor program
 
-Installation
-------------
+## Installation
 
 1. Install the [Go compiler](http://golang.org/doc/install). Also make sure to set the [GOPATH](http://golang.org/doc/code.html#GOPATH) environment variable.
 
@@ -17,8 +15,7 @@ Installation
 		go get bitbucket.org/ctessum/aep // download its (Go-language) dependencies and compile and install it.
 	Normally we could skip the first command, but since the AEP program is in a password protected repository, it needs to be downloaded separately.
 
-Use
----
+## Use
 
 1. First, it is important for the PostGIS server to be up and running. 
 
@@ -50,10 +47,9 @@ Use
 		and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
 
 
-Additional information
-----------------------
+## Additional information
 
-**Configuration file**
+### Configuration file
 
 The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/JSON) file with the following format:
 
@@ -76,5 +72,7 @@ The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/J
 Refer directly to the source code for the options available in the 
 [DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
 and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
+
+Within the configuration file, you can use the variables <[Home]>, "[Input]", and "[Ancilliary]" to represent the directories specified in the "Dirs" section of the file.You can also use environment variables such as "$GOPATH"
 
 
