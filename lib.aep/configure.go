@@ -124,7 +124,9 @@ type RunData struct {
 	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
 	WPSnamelist                    string        // Path to WPS namelist file
 	WRFnamelist                    string        // Path to WPS namelist file
-	OldWRFout                      string        // Path to old WRF output files for plume rise calculations. [DOMAIN] and [DATE] can be used as wildcards.
+	OldWRFout                      string        // Path to old WRF output files for plume rise calculations. 
+		//[DOMAIN] and [DATE] can be used as wildcards. If kemit > 1 in the WRF namelist.input file, these files 
+		// will be needed to calculate plume rise for point sources. Otherwise, these files will not be necessary.
 	wrfData                        *WRFconfigData
 	SRID                           int    // PostGIS projection ID number. It should be a number not currently being used by PostGIS, unless the output projection is the same as the projection in any of the input shapefiles, in which case the SRID should be the same as the SRID in the matching input data (using more than one SRID for the same projection will cause errors).
 	LineMap                        string // Name of map containing lines to be overlayed on output maps. Should be in the "PERMANENT" mapset of the "SpatialDataLoc" location
