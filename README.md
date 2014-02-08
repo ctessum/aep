@@ -87,7 +87,7 @@ and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go
 
 Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run.
 
-Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-175) to further understand this behavior.
+Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
 
 ### API
 
