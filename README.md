@@ -57,10 +57,24 @@ Additional information
 
 The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/JSON) file with the following format:
 
-{
-	"Dirs": {
-		<a href="https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71">DirInfo</a>
-	},
-}
+	{
+		"Dirs": {
+			DirInfo
+		},
+		"DefaultSettings": {
+			RunData
+		},
+		"sectors": {
+			"sectorname1": {
+				RunData
+			},
+			"sectorname2": {
+				RunData
+			}
+		}
+	}
+Refer directly to the source code for the options available in the 
+[DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
+and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
 
 
