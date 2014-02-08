@@ -31,9 +31,8 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 1. First, it is important for the PostGIS server to be up and running. 
 
-2. Once PostGIS is up and running, you can load the shapefiles into your PostGIS database. To do this first run:
-		
-		$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh
+2. Once PostGIS is up and running, you can load the shapefiles into your PostGIS database. 
+	To do this first run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh`](src/default/test/loadshp2.sh)
 	This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh`](src/default/test/loadshp.sh)
 	Both of these scripts may need to be edited to specify the name of the PostGIS database you have created.
 
@@ -80,12 +79,12 @@ The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/J
 		}
 	}
 Refer directly to the source code for the fields that make up the 
-[DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
-and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
+[DirInfo](src/default/lib.aep/configure.go#cl-71)
+and [RunData](src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
 
 Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run.
 
-Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
+Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
 
 ### API
 
@@ -100,4 +99,4 @@ to see the functions available in the API and investigate how they work.
 
 ### Distributed computing
 
-AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](https://bitbucket.org/ctessum/aep/src/default/test/run_distributed.pbs).
+AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](src/default/test/run_distributed.pbs).
