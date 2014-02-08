@@ -34,7 +34,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 2. Once PostGIS is up and running, you can load the shapefiles into your PostGIS database. To do this first run:
 		
 		$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh
-	This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh`](../src/test/loadshp.sh)
+	This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh`](../src/default/test/loadshp.sh)
 	Both of these scripts may need to be edited to specify the name of the PostGIS database you have created.
 
 3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory 
