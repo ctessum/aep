@@ -3,6 +3,7 @@
 AEP is a program designed to ingest data collected during national emissions inventories and process it for use in air quality models by breaking up emissions into detailed chemical groups, spatially allocating the emissions to a grid or other set of shapes, and then temporally allocating the emissions to specific times of the year.
 
 The program is designed to more or less reproduce the functionality of the [SMOKE](http://www.cmascenter.org/smoke/) model, but with a focus on usability, flexibility, and expandability. This model differs from the SMOKE model in several ways:
+
 * AEP is a single self-contained model, rather than a set of executables linked by shell scripts. This makes it much easier to use.
 * AEP can process all of the sectors of a national emissions inventory simultaneously, based on a single configuration file, instead of requiring a custom set of shell scripts for each sector. This makes the program much easier to use and reduces the opportunity for configuration errors.
 * AEP's spatial surrogate generator is integrated into the program and generates surrogates automatically, instead of requiring a completely separate program to generate spatial surrogates. This greatly reduces the time and effort requires to produce emissions for a new model domain.
