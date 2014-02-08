@@ -73,6 +73,6 @@ Refer directly to the source code for the options available in the
 [DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
 and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
 
-Within the configuration file, you can use the variables <[Home]>, "[Input]", and "[Ancilliary]" to represent the directories specified in the "Dirs" section of the file.You can also use environment variables such as "$GOPATH"
+Within the configuration file, you can use the variables <code>[Home]</code>, "[Input]", and "[Ancilliary]" to represent the directories specified in the "Dirs" section of the file.You can also use environment variables such as "$GOPATH"
 
 
