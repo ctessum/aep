@@ -25,7 +25,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 		hg clone https://ctessum@bitbucket.org/ctessum/aep $GOPATH/src/bitbucket.org/ctessum/aep // download the main program
 		go get bitbucket.org/ctessum/aep // download its (Go-language) dependencies and compile and install it.
-	Normally we could skip the first command, but since the AEP program is in a password protected repository, it needs to be downloaded separately.
+	Normally we could skip the first command, but since the AEP program is in a password protected repository, it needs to be downloaded separately. The Go language has an automatic system for finding and installing library dependencies; you may want to refer [here](http://golang.org/doc/code.html) to understand how it works.
 
 ## Use
 
@@ -52,11 +52,11 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 		$GOPATH/src/bitbucket.org/ctessum/aep/test/Output
 
 5. Once you have run the test case, you can try running the program for your domain and time period of interest.
-	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis)
+	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis).
 	* You can start with the configuration file at 
 
 			$GOPATH/src/bitbucket.org/ctessum/aep/test/2005_nei.json 
-		and edit it to point to the emissions files you have downloaded as well as the namelist,input and namelist.wps files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
+		and edit it to point to the emissions files you have downloaded as well as the `namelist.input` and `namelist.wps` files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
 
 
 ## Additional information
@@ -85,7 +85,7 @@ Refer directly to the source code for the fields that make up the
 [DirInfo](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-71)
 and [RunData](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
 
-Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to represent the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run.
+Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run.
 
 Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](https://bitbucket.org/ctessum/aep/src/default/lib.aep/configure.go#cl-175) to further understand this behavior.
 
@@ -99,3 +99,7 @@ and then open a web browser and navigate to
 
 	http://localhost:8080/pkg/bitbucket.org/ctessum/aep/lib.aep/
 to see the functions available in the API and investigate how they work.
+
+### Distributed computing
+
+AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](https://bitbucket.org/ctessum/aep/src/default/test/run_distributed.pbs).
