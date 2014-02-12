@@ -25,23 +25,11 @@ var (
 	srgCache               *cache.Cache
 )
 
-func (c *RunData) PGconnect() (pg *gis.PostGis, err error) {
-	pg, err = gis.Connect(c.PostGIShost, c.PostGISuser, c.PostGISdatabase,
-		c.PostGISpassword, c.OtherLibpqConnectionParameters)
-	return
-}
-
-func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
+func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log("Setting up spatial environment...", 1)
 	gis.DebugLevel = c.DebugLevel
 	spatialsrg.DebugLevel = c.DebugLevel
 	var err error
-	pg, err = c.PGconnect()
-	if err != nil {
-		e.Add(err)
-		return
-	}
-	e.Add(err)
 	x := c.wrfData
 	Report.GridNames = x.DomainNames
 	var proj string
@@ -60,7 +48,6 @@ func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 		return
 	}
 	projInfo := new(gis.ParsedProj4)
-	projInfo.SRID = c.SRID
 	projInfo.Proj = proj
 	projInfo.Lat_1 = x.Truelat1
 	projInfo.Lat_2 = x.Truelat2
@@ -71,12 +58,21 @@ func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 	projInfo.To_meter = 1.
 	msg := fmt.Sprintf("Output projection is:\n%v", projInfo.ToString())
 	c.Log(msg, 0)
-	e.Add(pg.NewProjection(projInfo))
+	sr, err = gis.CreateSpatialReferenceProj4(projInfo.ToString())
+	e.Add(err)
 	if c.RegenerateSpatialData {
-		pg.DropSchema(c.SimulationName)
+		// delete spatial surrogates
+		e.Add(filepath.Walk(c.griddedSrgs,
+			func(path string, info os.FileInfo, err error) error {
+				e.Add(err)
+				if strings.HasSuffix(path, ".shp") ||
+					strings.HasSuffix(path, ".shx") ||
+					strings.HasSuffix(path, ".dbf") ||
+					strings.HasSuffix(path, ".prj") {
+					os.Remove(path)
+				}
+			}))
 	}
-	pg.CreateSchema(c.SimulationName)
-
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
 	e.Add(c.SurrogateSpecification())
@@ -87,12 +83,11 @@ func (c *RunData) setupCommon(e *ErrCat) (pg *gis.PostGis) {
 
 func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 	c.Log("Setting up spatial projection and database connection...", 5)
-	pg := c.setupCommon(e)
-	defer pg.Disconnect()
+	sr := c.setupCommon(e)
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
 		grid := gis.NewGrid(x.DomainNames[i], x.Nx[i], x.Ny[i],
-			x.Dx[i], x.Dy[i], x.W[i], x.S[i], c.SRID, c.SimulationName)
+			x.Dx[i], x.Dy[i], x.W[i], x.S[i])
 
 		if !pg.TableExists(c.SimulationName, grid.Name) {
 			c.Log(fmt.Sprintf("Setting up grid %v...", i+1), 0)
@@ -109,8 +104,7 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 // Use a spatial table (which needs to be already loaded into PostGIS
 // as the grid. The table to needs to have an ID column called gid
 func (c *RunData) SpatialSetupIrregularGrid(schema, gridname string, e *ErrCat) {
-	pg := c.setupCommon(e)
-	defer pg.Disconnect()
+	sr := c.setupCommon(e)
 	x := c.wrfData
 	numRows := pg.GetNumShapes(schema, gridname)
 	grid := gis.NewGrid(gridname, 1, numRows,
@@ -167,9 +161,6 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 	totals := newSpatialTotalHolder()
 	TotalGrid := make(map[*gis.GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
-
-	pg, err := c.PGconnect()
-	defer pg.Disconnect()
 
 	switch c.SectorType {
 	case "point":
@@ -312,11 +303,6 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 		// send copy so original is not altered.
 		return srg.(*sparse.SparseArray).Copy()
 	}
-	//srgRequest := srgCacheRequest{grid.Name, srgNum, FIPS, nil,
-	//	make(chan *sparse.SparseArray)}
-	//srgCacheRequestChan <- &srgRequest
-	//srg := <-srgRequest.returnChan
-	//if srg != nil {
 
 	var srg *sparse.SparseArray
 	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
@@ -373,8 +359,6 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *gis.GridDef,
 	}
 	// store surrogate in cache for faster access.
 	srgCache.Set(cacheKey, srg, 0)
-	//srgSendRequest := srgCacheRequest{grid.Name, srgNum, FIPS, srg, nil}
-	//srgCacheRequestChan <- &srgSendRequest
 	return srg.Copy()
 }
 

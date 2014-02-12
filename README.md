@@ -20,6 +20,11 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 	* [PostGIS](http://postgis.net/) and its dependencies.
 	* [GEOS](http://trac.osgeo.org/geos/) and [proj4](http://trac.osgeo.org/proj/). These libraries are requirements for PostGIS, but they are also directly used by the AEP program. If these libraries are in a nonstandard location, be sure to set the CGO\_CFLAGS and CGO\_LDFLAGS environment variables to ensure that the Go compiler can find the libraries.
 	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
+	* GDAL
+		* To install using Ubuntu linux:
+			sudo apt-get libgdal-dev
+			curl -ks 'https://gist.github.com/nicerobot/5160658/raw/install-gdalpc.sh' | sudo bash -
+		Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
 
 3. Download and install the main program:
 
@@ -82,7 +87,7 @@ Refer directly to the source code for the fields that make up the
 [DirInfo](src/default/lib.aep/configure.go#cl-71)
 and [RunData](src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
 
-Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run.
+Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run. In the emissions files, you can use the variable [month] to represent the current month.
 
 Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
 

@@ -1,0 +1,25 @@
+<div class="container">
+	<h4>Speciation</h4>
+	<p>(See file Report.json in the log directory for more detail)</p>
+	<div class="row">
+		<div class="span12">
+			<h5>Kept pollutants</h5>
+			<p>These are the emissions that go on to the next modeling step.</p>
+			{{.SpecKeptTable}}
+		</div>
+	</div>
+	<div class="row">
+		<div class="span12">
+			<h5>Pollutants dropped due to double counting</h5>
+			<p>When there is a general species group (like VOCs) that is speciated into specific chemicals, but some of the specific chemicals are also tracked in the inventory, there is a possibility for double counting. So for records that include both the general species group and specific data for some of its components, the specific components that are explicitly included in the inventory are dropped from the speciation of the general group.</p>
+			{{.SpecDoubleCountedTable}}
+		</div>
+	</div>
+	<div class="row">
+		<div class="span12">
+			<h5>Pollutants dropped due to lack of a species group</h5>
+			<p>The individual chemicals are lumped into groups for representation in air quality model chemical mechanisms. These are the emission that do not fit into any of the specified groups.</p>
+			{{.SpecUngroupedTable}}
+		</div>
+	</div>
+</div>
