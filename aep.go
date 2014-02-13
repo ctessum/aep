@@ -52,7 +52,6 @@ func main() {
 	if *masterAddress != "" {
 		// Set up a server to accept RPC requests;
 		// this will block and run forever.
-		ConfigAll.DefaultSettings.PostGIShost = *masterAddress
 		aep.DistributedServer(ConfigAll.DefaultSettings)
 	}
 
