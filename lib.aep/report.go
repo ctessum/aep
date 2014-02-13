@@ -2,7 +2,6 @@ package aep
 
 import (
 	"bitbucket.org/ctessum/aep/spatialsrg"
-	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"code.google.com/p/lvd.go/cdf"
@@ -150,7 +149,7 @@ func NewStatus() *StatusHolder {
 	return out
 }
 
-func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string {
+func (s *StatusHolder) GetSrgStatus(srg,srgfile string) string {
 	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
 		return "Generating"
 	} else if status, ok := s.Surrogates[srg]; ok &&
@@ -163,7 +162,7 @@ func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string 
 			srg)
 		panic(err)
 	} else if _, ok := s.Surrogates[srg]; !ok {
-		if pg.TableExists(schema, srg) {
+		if _, err := os.Stat(srgfile); err == nil {
 			Status.Surrogates[srg] = "Ready"
 			return "Ready"
 		} else {
@@ -177,7 +176,7 @@ func (s *StatusHolder) GetSrgStatus(srg, schema string, pg *gis.PostGis) string 
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
 func (c *RunData) ResultMaps(totals *SpatialTotals,
-	TotalGrid map[*gis.GridDef]map[string]*sparse.SparseArray,
+	TotalGrid map[*spatialsrg.GridDef]map[string]*sparse.SparseArray,
 	period string) {
 
 	dir := filepath.Join(c.outputDir, "maps")
@@ -197,7 +196,6 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 		h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
 		h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
 		h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-		h.AddAttribute("", "spatial_ref", fmt.Sprint(grid.SRID))
 		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
 			float64(grid.Ny)*grid.Dy})
 		h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})

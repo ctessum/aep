@@ -1,9 +1,11 @@
 package aep
 
 import (
+	"bitbucket.org/ctessum/gis"
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/lukeroth/gdal"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -79,61 +81,55 @@ type DirInfo struct {
 
 // type RunData is a container for the configuration and report info
 type RunData struct {
-	outputDir                      string // Output directory
-	shapefiles                     string // Directory where input shapefiles are stored
-	griddedSrgs                    string // Directory where gridded spatial surrogate shapefiles are to be created
-	Sector                         string // Name of the sector
-	SectorType                     string // Type of sector (point, area)
-	RunSpeciate                    bool   // Whether to speciate data
-	RunSpatialize                  bool   // Whether to spatialize data
-	RunTemporal                    bool   // Whether to temporalize data
-	StartDate                      string // Date for which to begin processing emissions
-	startDate                      time.Time
-	EndDate                        string // Date for which to end processing emissions
-	endDate                        time.Time
-	Tstep                          string
-	tStep                          time.Duration
-	OutputType                     string // Type of output file. Currently the only available option is "WRF".
-	SccDesc                        string // name of file with SCC code descriptions
-	SicDesc                        string // name of file with SIC code descriptions
-	NaicsDesc                      string // name of file with NAICS code descriptions
-	SpecRefFile                    string // Location of the speciation code reference file.
-	SpecRefComboFile               string // Location of the county specific speciation code reference file, if any.
-	SpecProFile                    string // Location of the SPECIATE database in sqlite format.
-	SpecType                       string // Type of speciation to perform. Either "mol" or "mass".
-	SpeciesGroupName               string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
-	specFrac                       map[string]map[string]map[string]SpecHolder
-	PolsToKeep                     map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
-	GridRefFile                    string                // Location of the gridding reference file
-	SrgSpecFile                    string                // Location of the surrogate specification file
-	TemporalRefFile                string                // Location of the temporal reference file
-	TemporalProFile                string                // Location of the temporal profile file
-	HolidayFile                    string                // Location of the file specifying which days are holidays
-	CaseName                       string
-	InventoryFreq                  string // The temporal frequency of the inventory data files. Currently the options are "annual" and "monthly".
-	MatchFullSCC                   bool   // Whether to only match codes which are identical, or to accept partial matches.
-	DebugLevel                     int    // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
-	Ncpus                          int    // Number of processors available for use
-	InputUnits                     string // Units of emissions in input file
-	InputConv                      float64
-	ForceWesternHemisphere         bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
-	InvFileNames                   []string      // List of input files.
-	EarthRadius                    float64       // in meters
-	PostGIShost                    string        // address of postgresql server. Default is `localhost'.
-	PostGISuser                    string        // should have been chosen when setting up PostGIS
-	PostGISdatabase                string        // should have been previously created as a PostgreSQL database with the PostGIS additions
-	PostGISpassword                string        // should have been chosen when setting up PostGIS
-	OtherLibpqConnectionParameters string        // Other parameters for connecting to the database. See: https://github.com/lib/pq
-	ShapefileSchema                string        // PostGIS schema where surrogate shapefiles are stored
-	SrgCacheExpirationTime         time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
-	WPSnamelist                    string        // Path to WPS namelist file
-	WRFnamelist                    string        // Path to WPS namelist file
-	OldWRFout                      string        // Path to old WRF output files for plume rise calculations.
+	outputDir              string // Output directory
+	shapefiles             string // Directory where input shapefiles are stored
+	griddedSrgs            string // Directory where gridded spatial surrogate shapefiles are to be created
+	Sector                 string // Name of the sector
+	SectorType             string // Type of sector (point, area)
+	RunSpeciate            bool   // Whether to speciate data
+	RunSpatialize          bool   // Whether to spatialize data
+	RunTemporal            bool   // Whether to temporalize data
+	StartDate              string // Date for which to begin processing emissions
+	startDate              time.Time
+	EndDate                string // Date for which to end processing emissions
+	endDate                time.Time
+	Tstep                  string
+	tStep                  time.Duration
+	OutputType             string // Type of output file. Currently the only available option is "WRF".
+	SccDesc                string // name of file with SCC code descriptions
+	SicDesc                string // name of file with SIC code descriptions
+	NaicsDesc              string // name of file with NAICS code descriptions
+	SpecRefFile            string // Location of the speciation code reference file.
+	SpecRefComboFile       string // Location of the county specific speciation code reference file, if any.
+	SpecProFile            string // Location of the SPECIATE database in sqlite format.
+	SpecType               string // Type of speciation to perform. Either "mol" or "mass".
+	SpeciesGroupName       string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
+	specFrac               map[string]map[string]map[string]SpecHolder
+	PolsToKeep             map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
+	InputProj4             string                // Proj4 specification of the input projection
+	inputSr                gdal.SpatialReference
+	GridRefFile            string // Location of the gridding reference file
+	SrgSpecFile            string // Location of the surrogate specification file
+	TemporalRefFile        string // Location of the temporal reference file
+	TemporalProFile        string // Location of the temporal profile file
+	HolidayFile            string // Location of the file specifying which days are holidays
+	CaseName               string
+	InventoryFreq          string // The temporal frequency of the inventory data files. Currently the options are "annual" and "monthly".
+	MatchFullSCC           bool   // Whether to only match codes which are identical, or to accept partial matches.
+	DebugLevel             int    // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
+	Ncpus                  int    // Number of processors available for use
+	InputUnits             string // Units of emissions in input file
+	InputConv              float64
+	ForceWesternHemisphere bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
+	InvFileNames           []string      // List of input files.
+	EarthRadius            float64       // in meters
+	SrgCacheExpirationTime time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
+	WPSnamelist            string        // Path to WPS namelist file
+	WRFnamelist            string        // Path to WPS namelist file
+	OldWRFout              string        // Path to old WRF output files for plume rise calculations.
 	//[DOMAIN] and [DATE] can be used as wildcards. If kemit > 1 in the WRF namelist.input file, these files
 	// will be needed to calculate plume rise for point sources. Otherwise, these files will not be necessary.
 	wrfData               *WRFconfigData
-	SRID                  int    // PostGIS projection ID number. It should be a number not currently being used by PostGIS, unless the output projection is the same as the projection in any of the input shapefiles, in which case the SRID should be the same as the SRID in the matching input data (using more than one SRID for the same projection will cause errors).
-	LineMap               string // Name of map containing lines to be overlayed on output maps. Should be in the "PERMANENT" mapset of the "SpatialDataLoc" location
 	RegenerateSpatialData bool   // Whether or not to delete surrogates and shapefiles generated by previous run and start over. If the model has not been previously run with the current "SimuationName", this does nothing.
 	SimulationName        string // Name for the simulation: user choice
 	currentTime           time.Time
@@ -197,7 +193,6 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.WPSnamelist = d.WPSnamelist
 	c.WRFnamelist = d.WRFnamelist
 	c.OldWRFout = d.OldWRFout
-	c.SRID = d.SRID
 	c.wrfData = d.wrfData
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
@@ -245,6 +240,15 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	if c.InputUnits == "" {
 		c.InputUnits = d.InputUnits
 	}
+	if c.InputProj4 == "" {
+		c.InputProj4 = d.InputProj4
+		if d.InputProj4 == "" {
+			e.Add(fmt.Errorf("InputProj4 is unspecified"))
+		}
+	}
+	var err error
+	c.inputSr, err = gis.CreateSpatialReference(c.InputProj4)
+	e.Add(err)
 	c.slaves = d.slaves
 	*p = c
 }
@@ -327,7 +331,7 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 		"[Ancilliary]", d.Ancilliary, -1),
 		"[Output]", d.Output, -1)
 	d.GriddedSrgs = os.ExpandEnv(d.GriddedSrgs)
-	err := os.MkdirAll(d.GriddedSrgs, os.ModePerm)
+	err = os.MkdirAll(d.GriddedSrgs, os.ModePerm)
 	if err != nil {
 		e.Add(fmt.Errorf("Unable to make gridded surrogates directory `%v'.",
 			d.GriddedSrgs))
