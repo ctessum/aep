@@ -265,12 +265,12 @@ func (ta *temporalAggregator) Combine(a ...*temporalAggregator) {
 }
 
 type temporalAggregator struct {
-	PointData map[[3]string][]*PointRecord
-	PointLock sync.Mutex
-	AreaData  map[[3]string]map[string][]*sparse.SparseArray
-	AreaLock  sync.Mutex
-	config    *RunData
-	WaitGroup sync.WaitGroup
+	PointData   map[[3]string][]*PointRecord
+	PointLock   sync.Mutex
+	AreaData    map[[3]string]map[string][]*sparse.SparseArray
+	AreaLock    sync.Mutex
+	config      *RunData
+	WaitGroup   sync.WaitGroup
 	overallLock sync.RWMutex
 }
 
@@ -304,7 +304,9 @@ func (t *temporalAggregator) AggregateArea(record *ParsedRecord) {
 			}
 		}
 		for i, _ := range grids {
-			t.AreaData[temporalCodes][pol][i].AddSparse(vals.Gridded[i])
+			if vals.Gridded[i] != nil {
+				t.AreaData[temporalCodes][pol][i].AddSparse(vals.Gridded[i])
+			}
 		}
 	}
 }

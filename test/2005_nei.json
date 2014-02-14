@@ -2,8 +2,10 @@
     "Dirs": {
         "Home": "/media/chris/data1/2005_nei_data",
         "Input": "[Home]",
-        "Ancilliary": "/home/chris/go/src/bitbucket.org/ctessum/aep/test/ancilliary",
-		"Output":"[Home]/Output"
+        "Ancilliary": "${GOPATH}/src/bitbucket.org/ctessum/aep/test/ancilliary",
+		"Shapefiles": "[Home]/shapefiles",
+		"Output":"[Home]/Output",
+		"GriddedSrgs":"[Output]/srgs"
     },
     "DefaultSettings": {
 		"StartDate": "2005/01/01",
@@ -17,21 +19,16 @@
         "WRFnamelist": "[Home]/namelist_na12.input",
         "OldWRFout": "[Home]/xxx[DATE]",
 		"ForceWesternHemisphere":true,
-		"SRID":500000,
+		"InputProj4":"+proj=longlat",
         "EarthRadius": 6370997,
-		"PostGISuser":"chris",
-		"PostGISdatabase":"gis",
-		"PostGISpassword":"pw",
-		"ShapefileSchema":"aepshp",
-        "LineMap": "CoastAndPolitical",
 		"SpeciesGroupName":"RADM2",
 		"RegenerateSpatialData": false,
 		"SimulationName":"aep_2005nei_na12",
         "DebugLevel": 0,
         "Ncpus": 8,
-        "RunSpeciate": false,
+        "RunSpeciate": true,
         "RunSpatialize": true,
-        "RunTemporal": false,
+        "RunTemporal": true,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"PM2_5":{"SpecType":"PM2.5"},
