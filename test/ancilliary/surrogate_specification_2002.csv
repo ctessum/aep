@@ -128,22 +128,3 @@ CA,HDDV1,99401,can_province,FIPS,,,,,0.401*ATF1+0.599*ATF2,Paved Roads,,,Compute
 CA,HDDV2,99402,can_province,FIPS,,,,,0.610*ATF3+0.390*ATF4,Paved Roads,,,Computed from the base data provided by Canada
 CA,Heavy Duty Diesel Vehicles (HDDV),940,can_province,FIPS,,,,,0.690*HDDV1+0.310*HDDV2,Paved Roads,,,Computed frbase data provided by Canada
 MEXICO,MEX Population,100,mexico_pop,FIPS,mexico_pop,POP2000,,,,,,,Census 2000
-MEXICO,MEX Housing,12,mexico_pop,FIPS,com_ind_viv,110_2000,,,,Population,,,Census 2000
-MEXICO,MEX Residential Heating - Wood,14,mexico_pop,FIPS,REPMEX_ES_HEAT1,HOG_LENA,,,,Housing,,,Census 2000
-MEXICO,MEX Residential Heating - Distillate Oil,16,mexico_pop,FIPS,REPMEX_ES_HEAT1,HOGAR__PET,,,,Housing,,,Census 2000
-MEXICO,MEX Residential Heating - Coal,18,mexico_pop,FIPS,REPMEX_ES_HEAT1,HOGAR_CARB,,,,Housing,,,Census 2000
-MEXICO,MEX Residential Heating - LP Gas,20,mexico_pop,FIPS,REPMEX_ES_HEAT1,HOG_GAS,,,,Housing,,,Census 2000
-MEXICO,MEX Total Road Miles,22,mexico_pop,FIPS,carretera_ESPHE,SHAPE_len,,,,,,,INEGI
-MEXICO,MEX Total Railroads Miles,24,mexico_pop,FIPS,mexico_rr,LENGTH,,,,,,,Comming from Zac
-MEXICO,MEX Total Agriculture,26,mexico_pop,FIPS,A_Agricola,HA,,,,,,,INEGI
-MEXICO,MEX Forest Land,28,mexico_pop,FIPS,BOSQUE_LAD,320_2000,,,,,,,INEGI
-MEXICO,MEX Land Area,30,mexico_pop,FIPS,REPMEX_ES_HEAT1,P001,,,,,,,Census 2000
-MEXICO,MEX Commercial Land,32,mexico_pop,FIPS,com_ind_viv,500_2000,,,,Land,,,Economic census 2000
-MEXICO,MEX Industrial Land,34,mexico_pop,FIPS,com_ind_viv,505_2000,,,,Land,,,Economic census 2000
-MEXICO,MEX Commercial plus Industrial Land,36,mexico_pop,FIPS,com_ind_viv,510_2000,,,,Land,,,Economic census 2000
-MEXICO,MEX Commercial plus Institutional Land,38,mexico_pop,FIPS,com_ind_viv,515_2000,,,,Land,,,Economic census 2000
-MEXICO,Residential (RES1-4)+Comercial+Industrial+Institutional+Government,40,mexico_pop,FIPS,com_ind_viv,535_2000,,,,Land,,,Economic census 2000
-MEXICO,MEX Personal Repair (COM3),42,mexico_pop,FIPS,REP_CRUCES,545_1999,,,,Population,,,Economic census 2000
-MEXICO,Airports Area,44,mexico_pop,FIPS,mexico_air,VALUE,,,,,,,Comming from Zac
-MEXICO,MEX Marine Ports,46,mexico_pop,FIPS,mexico_ports,VALUE,,,,,,,Comming from Zac
-MEXICO,Brick Kilns - Mexico,48,mexico_pop,FIPS,BOSQUE_LAD,LAD_2000,,,,,,,Economic census 2000

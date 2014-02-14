@@ -77,7 +77,6 @@ func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
 	spatialsrg.SetupSrgMapCache(t)
-	e.Add(c.SurrogateSpecification())
 	e.Add(c.GridRef())
 	go c.SurrogateGenerator()
 	return
@@ -89,12 +88,11 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
 		c.Log(fmt.Sprintf("Setting up grid %v...", i+1), 0)
-		grid, err := spatialsrg.NewGridRegular(x.DomainNames[i],
+		grid := spatialsrg.NewGridRegular(x.DomainNames[i],
 			x.Nx[i], x.Ny[i], x.Dx[i], x.Dy[i], x.W[i], x.S[i], sr)
-		e.Add(err)
 		if c.RunTemporal {
 			e.Add(grid.GetTimeZones(
-				filepath.Join(c.shapefiles, "timezone"), "zone"))
+				filepath.Join(c.shapefiles, "timezone.shp"), "zone"))
 		}
 		e.Add(grid.WriteToShp(c.griddedSrgs))
 		grids = append(grids, grid)
@@ -180,8 +178,11 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 					}
 					data.Gridded[i] = sparse.ZerosSparse(grid.Ny,
 						grid.Nx)
-					row, col, withinGrid, err := grid.GetIndex(record.PointXcoord,
-						record.PointYcoord, &c.inputSr, &ct)
+					var row, col int
+					var withinGrid bool
+					record.PointXcoord, record.PointYcoord, row, col,
+						withinGrid, err = grid.GetIndex(record.XLOC,
+						record.YLOC, &c.inputSr, &ct)
 					if err != nil {
 						panic(err)
 					}
@@ -227,11 +228,13 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 						TotalGrid[grid][pol] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
 
-					val.Gridded[i] = c.getSurrogate(srgNum, record.FIPS, grid,
+					srg := c.getSurrogate(srgNum, record.FIPS, grid,
 						make([]string, 0))
-					val.Gridded[i].Scale(val.Val)
-					TotalGrid[grid][pol].AddSparse(val.Gridded[i])
-					totals.Add(pol, grid.Name, val, i)
+					if srg != nil {
+						val.Gridded[i] = srg.ScaleCopy(val.Val)
+						TotalGrid[grid][pol].AddSparse(val.Gridded[i])
+						totals.Add(pol, grid.Name, val, i)
+					}
 				}
 			}
 			OutputChan <- record
@@ -273,6 +276,8 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	return
 }
 
+// It is important not to edit the returned surrogate in place, because the
+// same copy is used over and over again.
 func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	upstreamSrgs []string) *sparse.SparseArray {
 
@@ -284,8 +289,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 
 	// Check if surrogate is already in the cache.
 	if srg, found := srgCache.Get(cacheKey); found {
-		// send copy so original is not altered.
-		return srg.(*sparse.SparseArray).Copy()
+		return srg.(*sparse.SparseArray)
 	}
 
 	var srg *sparse.SparseArray
@@ -294,7 +298,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
 	MergeFunction := srgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
-		shapefileName := filepath.Join(c.shapefiles, grid.Name+"_"+srgNum+".shp")
+		shapefileName := filepath.Join(c.griddedSrgs, grid.Name+"_"+srgNum+".shp")
 		srg, err = spatialsrg.RetrieveGriddingSurrogate(
 			shapefileName, FIPS, grid)
 		if err != nil {
@@ -312,7 +316,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 							append(upstreamSrgs, newSrgNum))
 					}
 				}
-				if srg.Sum() > 0. {
+				if srg != nil && srg.Sum() > 0. {
 					break
 				}
 			}
@@ -327,8 +331,9 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 			weight := mrgval.val
 			tempSrg := c.retrieveSurrogate(newSrgNum, FIPS, grid,
 				append(upstreamSrgs, newSrgNum))
-			tempSrg.Scale(weight)
-			srg.AddSparse(tempSrg)
+			if tempSrg != nil {
+				srg.AddSparse(tempSrg.ScaleCopy(weight))
+			}
 		}
 	}
 	//srgSum := srg.Sum()
@@ -342,7 +347,7 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	//}
 	// store surrogate in cache for faster access.
 	srgCache.Set(cacheKey, srg, 0)
-	return srg.Copy()
+	return srg
 }
 
 type SrgGenData struct {
@@ -393,9 +398,8 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
 	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
-	inputFilePath := filepath.Join(c.shapefiles, grid.Name+"_"+inputMap+".shp")
-	surrogateFilePath := filepath.Join(c.shapefiles,
-		grid.Name+"_"+surrogateMap+".shp")
+	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
+	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
 	err = spatialsrg.CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
 		grid, c.griddedSrgs, c.slaves)
@@ -466,7 +470,7 @@ type srgSpecHolder struct {
 	TERTIARYSURROGATE    string
 	QUARTERNARYSURROGATE string
 	DETAILS              string
-	WeightColumns        string
+	WeightColumns        []string
 	FilterFunction       *spatialsrg.SurrogateFilter
 	MergeFunction        []*SrgMerge
 }
@@ -527,9 +531,10 @@ func (c *RunData) SurrogateSpecification() (err error) {
 
 		// Parse weight function
 		if srg.WEIGHTATTRIBUTE != "NONE" && srg.WEIGHTATTRIBUTE != "" {
-			srg.WeightColumns = srg.WEIGHTATTRIBUTE
-		} else if srg.WEIGHTFUNCTION != "NONE" && srg.WEIGHTFUNCTION != "" {
-			srg.WeightColumns = srg.WEIGHTFUNCTION
+			srg.WeightColumns = strings.Split(srg.WEIGHTATTRIBUTE, "+")
+			for i := 0; i < len(srg.WeightColumns); i++ {
+				srg.WeightColumns[i] = strings.TrimSpace(srg.WeightColumns[i])
+			}
 		}
 
 		// Parse filter function
@@ -543,7 +548,7 @@ func (c *RunData) SurrogateSpecification() (err error) {
 				srg.FilterFunction.EqualNotEqual = "Equal"
 				s = strings.Split(srg.FILTERFUNCTION, "=")
 			}
-			srg.FilterFunction.Column = s[0]
+			srg.FilterFunction.Column = strings.TrimSpace(s[0])
 			splitstr := strings.Split(s[1], ",")
 			for _, val := range splitstr {
 				srg.FilterFunction.Values = append(srg.FilterFunction.Values,

@@ -1,8 +1,6 @@
 package spatialsrg
 
 import (
-	"bitbucket.org/ctessum/gdal2rtree"
-	"bitbucket.org/ctessum/geos2rtree"
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"fmt"
@@ -10,7 +8,6 @@ import (
 	"github.com/lukeroth/gdal"
 	"github.com/paulsmith/gogeos/geos"
 	"github.com/pmylund/go-cache"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/rpc"
@@ -79,11 +76,10 @@ func NewSurrogateFilter() (srgflt *SurrogateFilter) {
 }
 
 func CreateGriddingSurrogate(srgCode, inputShapeFile,
-	ShapeColumn, surrogateFile, WeightColumns string,
+	ShapeColumn, surrogateFile string, WeightColumns []string,
 	FilterFunction *SurrogateFilter, gridData *GridDef,
 	outputDir string, slaves []string) (err error) {
 
-	srgCompletion := 0
 	SrgProgress = 0.
 
 	OutName := fmt.Sprintf("%v_%v", gridData.Name, srgCode)
@@ -119,14 +115,17 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	}
 
 	// Start workers
-	singleShapeChan := make(chan *GriddedSrgData)
-	griddedSrgChan := make(chan *GriddedSrgData)
+	nprocs := runtime.GOMAXPROCS(0)
+	singleShapeChan := make(chan *GriddedSrgData, nprocs*2)
+	griddedSrgChan := make(chan *GriddedSrgData, nprocs*2)
 	errchan := make(chan error)
 	workersRunning := 0
 	if len(slaves) == 0 { // not distributed computing
-		go srgGenWorkerLocal(singleShapeChan, griddedSrgChan, errchan,
-			gridData, srgData, srgType)
-		workersRunning++
+		for i := 0; i < nprocs; i++ {
+			go srgGenWorkerLocal(singleShapeChan, griddedSrgChan, errchan,
+				gridData, srgData, srgType)
+			workersRunning++
+		}
 	} else { // distributed computing
 		for i := 0; i < len(slaves); i++ {
 			go srgGenWorkerDistributed(singleShapeChan, griddedSrgChan,
@@ -135,44 +134,31 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		}
 	}
 
-	// first create a temporary file for the shapefile, and then copy it to the
-	// final location once it's done. Otherwise if there was an error before
-	// the file finished creating it would cause a problem during the next
-	// program run.
-	var tempdir, tempfilename string
-	var outShp *gis.Shapefile
-	tempdir, err = ioutil.TempDir("", "aep")
-	if err != nil {
-		return
-	}
-	tempfilename = filepath.Join(tempdir, OutName)
-	outShp, err = gis.CreateShapefile(tempfilename, gridData.Sr,
-		gdal.GT_Polygon,
-		[]string{"row", "col", "inputID", "shapeFraction", "coveredByGrid"},
-		0, 0, "", float64(0), true)
-
-	fid := 0 // index for output shapefile
+	srgsFinished := 0
+	griddedSrgs := make([]*GriddedSrgData, len(inputData))
 	for inputID, geomWKT := range inputData {
-		SrgProgress = float64(srgCompletion) / float64(len(inputData)) * 100.
-		srgCompletion++
 		singleShapeData := &GriddedSrgData{InputID: inputID, InputGeomWKT: geomWKT}
+		singleShapeChan <- singleShapeData
 		select {
-		case singleShapeChan <- singleShapeData:
-		case griddedSrg := <-griddedSrgChan:
-			err = griddedSrg.WriteToShp(outShp, fid)
-			if err != nil {
-				return
-			}
-			fid++
+		case griddedSrgs[srgsFinished] = <-griddedSrgChan:
+			SrgProgress += 100. / float64(len(inputData))
+			srgsFinished++
 		case err = <-errchan:
 			if err != nil {
 				return
 			}
 			workersRunning--
-			singleShapeChan <- singleShapeData
+		default:
+			continue
 		}
 	}
 	close(singleShapeChan)
+	// wait for remaining results
+	for i := srgsFinished; i < len(inputData); i++ {
+		griddedSrgs[i] = <-griddedSrgChan
+		SrgProgress = 100. / float64(len(inputData))
+		srgsFinished++
+	}
 	// wait for workers to finish
 	for i := 0; i < workersRunning; i++ {
 		err = <-errchan
@@ -180,16 +166,19 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			return
 		}
 	}
-
-	outShp.Close()
-	// move files to final directory.
-	for _, ext := range []string{".shp", ".dbf", ".prj", ".shx"} {
-		err = os.Rename(tempfilename+ext, OutFile+ext)
+	// Write data to file
+	var outShp *gis.Shapefile
+	outShp, err = gis.CreateShapefile(outputDir, OutName, gridData.Sr,
+		gdal.GT_Polygon,
+		[]string{"row", "col", "inputID", "shapeFrac", "allCovered"},
+		0, 0, "", float64(0), true)
+	defer outShp.Close()
+	for fid := 0; fid < len(griddedSrgs); fid++ {
+		err = griddedSrgs[fid].WriteToShp(outShp, fid)
 		if err != nil {
 			return
 		}
 	}
-	os.RemoveAll(tempdir)
 
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.",
 		OutName), 0)
@@ -199,16 +188,11 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 
 func (g *GriddedSrgData) WriteToShp(s *gis.Shapefile, fid int) error {
 	for _, cell := range g.Cells {
-		geom, err := gdal.CreateFromWKT(cell.WKT, s.Sr)
-		if err != nil {
-			return err
-		}
-		err = s.WriteFeature(fid, geom, []int{0, 1, 2, 3, 4},
+		err := s.WriteFeature(fid, cell.geom, []int{0, 1, 2, 3, 4},
 			cell.Row, cell.Col, g.InputID, cell.Weight, g.CoveredByGrid)
 		if err != nil {
 			return err
 		}
-		geom.Destroy()
 	}
 	return nil
 }
@@ -218,7 +202,7 @@ func getInputData(inputShapeFile, ShapeColumn string,
 	gridData *GridDef) (inputData map[string][]string,
 	err error) {
 	var inputShp *gis.Shapefile
-	inputShp, err = gis.OpenShapefile(inputShapeFile, 0)
+	inputShp, err = gis.OpenShapefile(inputShapeFile, true)
 	defer inputShp.Close()
 	ct := gdal.CreateCoordinateTransform(inputShp.Sr, gridData.Sr)
 	var id int
@@ -227,18 +211,12 @@ func getInputData(inputShapeFile, ShapeColumn string,
 		return
 	}
 	inputData = make(map[string][]string)
-	var g gdal.Geometry
 	var geom *geos.Geometry
-	var wkt string
 	var inputIDtemp []interface{}
 	var intersects bool
 	for i := 0; i < inputShp.NumFeatures; i++ {
-		g, inputIDtemp, err = inputShp.ReadFeature(i, id)
-		err = g.Transform(ct)
-		if err.Error() != "No Error" {
-			return
-		}
-		geom, err = gdal2rtree.GDALtoGEOS(g)
+		geom, inputIDtemp, err = inputShp.ReadFeature(i, id)
+		geom, err = gis.GeosTransform(geom, inputShp.Sr, ct)
 		if err != nil {
 			return
 		}
@@ -251,23 +229,23 @@ func getInputData(inputShapeFile, ShapeColumn string,
 			if _, ok := inputData[inputID]; !ok {
 				inputData[inputID] = make([]string, 0, 1)
 			}
-			wkt, err = g.ToWKT()
-			if err.Error() != "No Error" {
+			var wkt string
+			wkt, err = geom.ToWKT()
+			if err != nil {
 				return
 			}
 			inputData[inputID] = append(inputData[inputID], wkt)
 		}
-		g.Destroy()
 	}
 	return
 }
 
 // get surrogate shapes and weights
-func getSrgData(surrogateShapeFile string, WeightColumns string,
+func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	FilterFunction *SurrogateFilter, gridData *GridDef) (
 	srgData []*SrgHolder, srgType gdal.GeometryType, err error) {
 	var srgShp *gis.Shapefile
-	srgShp, err = gis.OpenShapefile(surrogateShapeFile, 0)
+	srgShp, err = gis.OpenShapefile(surrogateShapeFile, true)
 	if err != nil {
 		return
 	}
@@ -275,19 +253,24 @@ func getSrgData(surrogateShapeFile string, WeightColumns string,
 	srgType = srgShp.Type
 
 	ct := gdal.CreateCoordinateTransform(srgShp.Sr, gridData.Sr)
-	var filterId, weightId int
-	filterId, err = srgShp.GetColumnIndex(FilterFunction.Column)
-	if err != nil {
-		return
-	}
-	if WeightColumns != "" {
-		weightId, err = srgShp.GetColumnIndex(WeightColumns)
+	var filterId int
+	if FilterFunction != nil {
+		filterId, err = srgShp.GetColumnIndex(FilterFunction.Column)
 		if err != nil {
 			return
 		}
 	}
+	var weightIds []int
+	if WeightColumns != nil {
+		weightIds = make([]int, len(WeightColumns))
+		for i, col := range WeightColumns {
+			weightIds[i], err = srgShp.GetColumnIndex(col)
+			if err != nil {
+				return
+			}
+		}
+	}
 	srgData = make([]*SrgHolder, 0, srgShp.NumFeatures/4)
-	var wkt string
 	for i := 0; i < srgShp.NumFeatures; i++ {
 		feature := srgShp.Layer.NextFeature()
 
@@ -318,7 +301,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns string,
 			}
 			var geom *geos.Geometry
 			var intersects bool
-			geom, err = gdal2rtree.GDALtoGEOS(g)
+			geom, err = gis.GDALtoGEOS(g)
 			if err != nil {
 				return
 			}
@@ -327,14 +310,16 @@ func getSrgData(surrogateShapeFile string, WeightColumns string,
 				return
 			}
 			if intersects {
-				wkt, err = g.ToWKT()
+				srg := new(SrgHolder)
+				srg.WKT, err = g.ToWKT()
 				if err.Error() != "No Error" {
 					return
 				}
-				srg := new(SrgHolder)
-				srg.WKT = wkt
-				if WeightColumns != "" {
-					weightval := feature.FieldAsFloat64(weightId)
+				if weightIds != nil {
+					weightval := 0.
+					for _, id := range weightIds {
+						weightval += feature.FieldAsFloat64(id)
+					}
 					switch srgShp.Type {
 					case gdal.GT_Polygon, gdal.GT_MultiPolygon:
 						area := g.Area()
@@ -373,7 +358,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns string,
 			}
 			g.Destroy()
 		}
-		feature.Destroy()
+		//feature.Destroy()
 	}
 	return
 }
@@ -451,7 +436,7 @@ func (s *SrgGenWorker) Initialize(data *SrgGenWorkerInitData, _ *Empty) error {
 		if err != nil {
 			return err
 		}
-		srg.Extent, err = geos2rtree.GeosToRect(srg.geom)
+		srg.Extent, err = gis.GeosToRect(srg.geom)
 		if err != nil {
 			return err
 		}
@@ -577,7 +562,7 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	srgChan chan []*SrgHolder, weightChan chan float64, errChan chan error) {
 
 	inputGeomP := geos.PrepareGeometry(data.inputGeom)
-	inputBounds, err := geos2rtree.GeosToRect(data.inputGeom)
+	inputBounds, err := gis.GeosToRect(data.inputGeom)
 	if err != nil {
 		return
 	}
@@ -737,13 +722,13 @@ func readGriddingSurrogate(shapefileName string, grid *GridDef) (
 	srgMap map[string]*sparse.SparseArray, err error) {
 	srgMap = make(map[string]*sparse.SparseArray)
 	var shp *gis.Shapefile
-	shp, err = gis.OpenShapefile(shapefileName, 0)
+	shp, err = gis.OpenShapefile(shapefileName, true)
 	defer shp.Close()
 	if err != nil {
 		return
 	}
 	columnIDs := make([]int, 4)
-	for i, column := range []string{"row", "col", "inputID", "shapeFraction"} {
+	for i, column := range []string{"row", "col", "inputID", "shapeFrac"} {
 		columnIDs[i], err = shp.GetColumnIndex(column)
 		if err != nil {
 			return

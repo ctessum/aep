@@ -106,7 +106,7 @@ type RunData struct {
 	SpeciesGroupName       string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
 	specFrac               map[string]map[string]map[string]SpecHolder
 	PolsToKeep             map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
-	InputProj4             string                // Proj4 specification of the input projection
+	InputProj4             string                // Proj4 specification of the spatial projection of the input emissions data.
 	inputSr                gdal.SpatialReference
 	GridRefFile            string // Location of the gridding reference file
 	SrgSpecFile            string // Location of the surrogate specification file
@@ -171,6 +171,23 @@ func (p *configInput) setup(e *ErrCat) {
 		c.Sectors[sector].setup(e)
 		c.Sectors[sector].catPaths(c.Dirs, e)
 	}
+	// Check the surrogate shapefiles to make sure they're preseht and
+	// can be opened.
+	e.Add(c.DefaultSettings.SurrogateSpecification())
+	for _, srg := range srgSpec {
+		file := filepath.Join(
+			c.DefaultSettings.shapefiles, srg.DATASHAPEFILE+".shp")
+		shp, err := gis.OpenShapefile(file, true)
+		e.Add(err)
+		e.Add(shp.Close())
+		if srg.WEIGHTSHAPEFILE != "" {
+			file := filepath.Join(
+				c.DefaultSettings.shapefiles, srg.WEIGHTSHAPEFILE+".shp")
+			shp, err := gis.OpenShapefile(file, true)
+			e.Add(err)
+			e.Add(shp.Close())
+		}
+	}
 	*p = c
 }
 
@@ -194,6 +211,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.WRFnamelist = d.WRFnamelist
 	c.OldWRFout = d.OldWRFout
 	c.wrfData = d.wrfData
+	c.shapefiles = d.shapefiles
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
 	if d.SrgCacheExpirationTime == 0 {
@@ -361,6 +379,7 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 			e.statOS(*path, varnames[i])
 		}
 	}
+	c.shapefiles = d.Shapefiles
 	if c.Sector != "" {
 		sectorPath := filepath.Join(d.Input, c.CaseName, c.Sector)
 		e.statOS(sectorPath, "Sector "+c.Sector+" input")
