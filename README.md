@@ -21,6 +21,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 	* [proj4](http://trac.osgeo.org/proj/) 
 	* [GDAL](http://www.gdal.org/)
 		* To install using Ubuntu linux:
+
 				sudo apt-get libgdal-dev
 				curl -ks 'https://gist.github.com/nicerobot/5160658/raw/install-gdalpc.sh' | sudo bash -
 		Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
