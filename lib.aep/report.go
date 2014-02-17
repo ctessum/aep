@@ -149,7 +149,7 @@ func NewStatus() *StatusHolder {
 	return out
 }
 
-func (s *StatusHolder) GetSrgStatus(srg,srgfile string) string {
+func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
 		return "Generating"
 	} else if status, ok := s.Surrogates[srg]; ok &&
@@ -203,9 +203,10 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 			float64(grid.Nx)*grid.Dx})
 		h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
 		for pol, _ := range d1 {
-			h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
-			h.AddAttribute(pol, "units",
-				totals.InsideDomainTotals[grid.Name][pol].Units)
+			if d, ok := totals.InsideDomainTotals[grid.Name][pol]; ok {
+				h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
+				h.AddAttribute(pol, "units", d.Units)
+			}
 		}
 		h.Define()
 		errs := h.Check()
@@ -223,9 +224,11 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 			panic(err)
 		}
 		for pol, data := range d1 {
-			r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
-			if _, err = r.Write(data.ToDense32()); err != nil {
-				panic(err)
+			if data.Sum() != 0. {
+				r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
+				if _, err = r.Write(data.ToDense32()); err != nil {
+					panic(err)
+				}
 			}
 		}
 		err = cdf.UpdateNumRecs(f)

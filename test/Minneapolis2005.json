@@ -26,9 +26,9 @@
 		"SimulationName":"aep_Minneapolis2005",
         "DebugLevel": 0,
         "Ncpus": 8,
-        "RunSpeciate": false,
+        "RunSpeciate": true,
         "RunSpatialize": true,
-		"RunTemporal":false,
+		"RunTemporal":true,
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"PM2_5":{"SpecType":"PM2.5"},

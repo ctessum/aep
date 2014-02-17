@@ -7,6 +7,8 @@ import (
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
 	"github.com/paulsmith/gogeos/geos"
+	"github.com/twpayne/gogeom/geom"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -28,6 +30,7 @@ type GridDef struct {
 
 type GridCell struct {
 	geom           *geos.Geometry
+	ggeom          geom.T
 	WKT            string
 	Row, Col       int
 	OtherFieldData []interface{} // data for the other columns we want to keep
@@ -65,7 +68,6 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	grid.Nx, grid.Ny = Nx, Ny
 	grid.Dx, grid.Dy = Dx, Dy
 	grid.X0, grid.Y0 = X0, Y0
-	fmt.Println(grid)
 	grid.Sr = sr
 	grid.rtree = rtreego.NewTree(2, 25, 50)
 	// Create geometry
@@ -84,6 +86,11 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			if err != nil {
 				panic(err)
 			}
+			var tempGeom geom.Polygon
+			tempGeom.Rings = make([][]geom.Point, 1)
+			tempGeom.Rings[0] = []geom.Point{{x, y}, {x + grid.Dx, y},
+				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}
+			cell.ggeom = tempGeom
 			cell.rtreebounds, err = gis.GeosToRect(cell.geom)
 			if err != nil {
 				panic(err)
@@ -95,8 +102,6 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	}
 	grid.ExtentWKT = fmt.Sprintf("POLYGON ((%v %v, %v %v, %v %v, %v %v, %v %v))",
 		X0, Y0, X0+Dx*float64(Nx), Y0, X0+Dx*float64(Nx), Y0+Dy*float64(Ny),
-		X0, Y0+Dy*float64(Ny), X0, Y0)
-	fmt.Println(grid.X0, Y0, grid.X0+Dx*float64(Nx), Y0, X0+Dx*float64(Nx), Y0+Dy*float64(Ny),
 		X0, Y0+Dy*float64(Ny), X0, Y0)
 	grid.extent, err = geos.FromWKT(grid.ExtentWKT)
 	if err != nil {
@@ -129,16 +134,30 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 			return
 		}
 	}
-	ct := gdal.CreateCoordinateTransform(shp.Sr, grid.Sr)
+	var ct *gis.CoordinateTransform
+	ct, err = gis.NewCoordinateTransform(shp.Sr, grid.Sr)
+	if err != nil {
+		return
+	}
 	grid.rtree = rtreego.NewTree(2, 25, 50)
 	var w bool
-	for i := 0; i < shp.NumFeatures; i++ {
+	i := 0
+	for {
 		cell := new(GridCell)
-		cell.geom, cell.OtherFieldData, err = shp.ReadFeature(i, columnIndicies...)
+		cell.ggeom, cell.OtherFieldData, err =
+			shp.ReadNextFeature(columnIndicies...)
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return
+		}
+		cell.ggeom, err = ct.Reproject(cell.ggeom)
 		if err != nil {
 			return
 		}
-		cell.geom, err = gis.GeosTransform(cell.geom, shp.Sr, ct)
+		cell.geom, err = gis.GeomToGEOS(cell.ggeom)
 		if err != nil {
 			return
 		}
@@ -164,6 +183,7 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 			return
 		}
 		grid.rtree.Insert(cell)
+		i++
 	}
 	grid.ExtentWKT, err = grid.extent.ToWKT()
 	if err != nil {
@@ -250,10 +270,19 @@ func getTimeZones(tzFile, tzColumn string) (
 	if err != nil {
 		return
 	}
-	for i := 0; i < tzShp.NumFeatures; i++ {
+	for {
 		tzData := new(tzHolder)
 		var tzTemp []interface{}
-		tzData.geom, tzTemp, err = tzShp.ReadFeature(i, tzIndex)
+		var ggeom geom.T
+		ggeom, tzTemp, err = tzShp.ReadNextFeature(tzIndex)
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return
+		}
+		tzData.geom, err = gis.GeomToGEOS(ggeom)
 		if err != nil {
 			return
 		}
