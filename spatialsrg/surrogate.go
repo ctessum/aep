@@ -4,10 +4,13 @@ import (
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"fmt"
+	"github.com/ctessum/shapefile"
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
 	"github.com/paulsmith/gogeos/geos"
 	"github.com/pmylund/go-cache"
+	"github.com/twpayne/gogeom/geom"
+	"io"
 	"log"
 	"math"
 	"net/rpc"
@@ -86,7 +89,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	OutFile := filepath.Join(outputDir, OutName)
 	// if this surrogate was requested by more than one sector, make sure we
 	// don't create it twice.
-	if _, err = os.Stat(OutFile); err == nil {
+	if _, err = os.Stat(OutFile + ".shp"); err == nil {
 		// file already exists
 		return
 	}
@@ -201,26 +204,46 @@ func (g *GriddedSrgData) WriteToShp(s *gis.Shapefile, fid int) error {
 func getInputData(inputShapeFile, ShapeColumn string,
 	gridData *GridDef) (inputData map[string][]string,
 	err error) {
+	Log("Getting input shape data...", 1)
 	var inputShp *gis.Shapefile
 	inputShp, err = gis.OpenShapefile(inputShapeFile, true)
 	defer inputShp.Close()
-	ct := gdal.CreateCoordinateTransform(inputShp.Sr, gridData.Sr)
+	if err != nil {
+		return
+	}
+	var ct *gis.CoordinateTransform
+	ct, err = gis.NewCoordinateTransform(inputShp.Sr, gridData.Sr)
+	if err != nil {
+		return
+	}
 	var id int
 	id, err = inputShp.GetColumnIndex(ShapeColumn)
 	if err != nil {
 		return
 	}
 	inputData = make(map[string][]string)
-	var geom *geos.Geometry
+	var ggeom geom.T
+	var ggeos *geos.Geometry
 	var inputIDtemp []interface{}
 	var intersects bool
-	for i := 0; i < inputShp.NumFeatures; i++ {
-		geom, inputIDtemp, err = inputShp.ReadFeature(i, id)
-		geom, err = gis.GeosTransform(geom, inputShp.Sr, ct)
+	for {
+		ggeom, inputIDtemp, err = inputShp.ReadNextFeature(id)
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return
+		}
+		ggeom, err = ct.Reproject(ggeom)
 		if err != nil {
 			return
 		}
-		intersects, err = geom.Intersects(gridData.extent)
+		ggeos, err = gis.GeomToGEOS(ggeom)
+		if err != nil {
+			return
+		}
+		intersects, err = ggeos.Intersects(gridData.extent)
 		if err != nil {
 			return
 		}
@@ -230,7 +253,7 @@ func getInputData(inputShapeFile, ShapeColumn string,
 				inputData[inputID] = make([]string, 0, 1)
 			}
 			var wkt string
-			wkt, err = geom.ToWKT()
+			wkt, err = ggeos.ToWKT()
 			if err != nil {
 				return
 			}
@@ -244,6 +267,7 @@ func getInputData(inputShapeFile, ShapeColumn string,
 func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	FilterFunction *SurrogateFilter, gridData *GridDef) (
 	srgData []*SrgHolder, srgType gdal.GeometryType, err error) {
+	Log("Getting surrogate data...", 1)
 	var srgShp *gis.Shapefile
 	srgShp, err = gis.OpenShapefile(surrogateShapeFile, true)
 	if err != nil {
@@ -252,7 +276,11 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	defer srgShp.Close()
 	srgType = srgShp.Type
 
-	ct := gdal.CreateCoordinateTransform(srgShp.Sr, gridData.Sr)
+	var ct *gis.CoordinateTransform
+	ct, err = gis.NewCoordinateTransform(srgShp.Sr, gridData.Sr)
+	if err != nil {
+		return
+	}
 	var filterId int
 	if FilterFunction != nil {
 		filterId, err = srgShp.GetColumnIndex(FilterFunction.Column)
@@ -271,15 +299,34 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 		}
 	}
 	srgData = make([]*SrgHolder, 0, srgShp.NumFeatures/4)
-	for i := 0; i < srgShp.NumFeatures; i++ {
-		feature := srgShp.Layer.NextFeature()
+	var data []interface{}
+	var rec *shapefile.ShapefileRecord
+	var ggeom geom.T
+	var ggeos *geos.Geometry
+	var intersects bool
+	var keepFeature bool
+	var featureVal string
+	var size float64
+	//var g gdal.Geometry
+	for {
+		rec, err = srgShp.Shp2.NextRecord()
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return
+		}
+		data, err = srgShp.Dbf2.NextRecord()
+		if err != nil {
+			return
+		}
 
-		var keepFeature bool
 		if FilterFunction == nil {
 			keepFeature = true
 		} else {
 			keepFeature = false
-			featureVal := feature.FieldAsString(filterId)
+			featureVal = fmt.Sprintf("%v", data[filterId])
 			for _, filterVal := range FilterFunction.Values {
 				switch FilterFunction.EqualNotEqual {
 				case "NotEqual":
@@ -294,49 +341,63 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			}
 		}
 		if keepFeature {
-			g := feature.Geometry()
-			err = g.Transform(ct)
-			if err.Error() != "No Error" {
-				return
-			}
-			var geom *geos.Geometry
-			var intersects bool
-			geom, err = gis.GDALtoGEOS(g)
+			ggeom, err = ct.Reproject(rec.Geometry)
 			if err != nil {
 				return
 			}
-			intersects, err = geom.Intersects(gridData.extent)
+			ggeos, err = gis.GeomToGEOS(ggeom)
+			if err != nil {
+				return
+			}
+			intersects, err = ggeos.Intersects(gridData.extent)
 			if err != nil {
 				return
 			}
 			if intersects {
 				srg := new(SrgHolder)
-				srg.WKT, err = g.ToWKT()
-				if err.Error() != "No Error" {
+				srg.WKT, err = ggeos.ToWKT()
+				if err != nil {
 					return
 				}
 				if weightIds != nil {
 					weightval := 0.
 					for _, id := range weightIds {
-						weightval += feature.FieldAsFloat64(id)
+						switch t := data[id].(type) {
+						case float64:
+							weightval += data[id].(float64)
+						case int:
+							weightval += float64(data[id].(int))
+						case error: // can't parse value
+							Log(data[id].(error).Error(), 1)
+							//weightval += 0.
+						default:
+							err = fmt.Errorf("Can't deal with data type %t", t)
+							return
+						}
 					}
 					switch srgShp.Type {
 					case gdal.GT_Polygon, gdal.GT_MultiPolygon:
-						area := g.Area()
-						if area == 0. {
+						size, err = ggeos.Area()
+						if err != nil {
+							return
+						}
+						if size == 0. {
 							err = fmt.Errorf("Area should not equal "+
 								"zero in %v", surrogateShapeFile)
 							return
 						}
-						srg.Weight = weightval / area
+						srg.Weight = weightval / size
 					case gdal.GT_LineString, gdal.GT_MultiLineString:
-						length := g.Length()
-						if length == 0. {
+						size, err = ggeos.Length()
+						if err != nil {
+							return
+						}
+						if size == 0. {
 							err = fmt.Errorf("Length should not equal "+
 								"zero in %v", surrogateShapeFile)
 							return
 						}
-						srg.Weight = weightval / length
+						srg.Weight = weightval / size
 					case gdal.GT_Point:
 						srg.Weight = weightval
 					default:
@@ -356,9 +417,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 					srgData = append(srgData, srg)
 				}
 			}
-			g.Destroy()
 		}
-		//feature.Destroy()
 	}
 	return
 }
@@ -623,7 +682,7 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 			case gdal.GT_Point:
 				singleShapeSrgWeight += srg.Weight
 			default:
-				panic("problem!")
+				panic(fmt.Sprintf("Unknown shape type %v.", s.srgType))
 			}
 		}
 	}
@@ -638,16 +697,17 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 	InputShapeSrgs []*SrgHolder, GridCells []*GridCell,
 	errChan chan error) {
-	var GridCellP *geos.PGeometry
+	//var GridCellP *geos.PGeometry
 	var err error
 	for i := procnum; i < len(GridCells); i += nprocs {
 		cell := GridCells[i]
-		GridCellP = geos.PrepareGeometry(cell.geom)
+		//GridCellP = geos.PrepareGeometry(cell.geom)
 		var intersects bool
 		var intersection *geos.Geometry
 		var size, weight float64
 		for _, srg := range InputShapeSrgs {
-			intersects, err = GridCellP.Intersects(srg.geom)
+			//intersects, err = GridCellP.Intersects(srg.geom)
+			intersects, err = cell.geom.Intersects(srg.geom)
 			if err != nil {
 				errChan <- handle(err, "")
 				return
@@ -678,6 +738,8 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 					weight += srg.Weight * size / data.SingleShapeSrgWeight
 				case gdal.GT_Point:
 					weight += srg.Weight / data.SingleShapeSrgWeight
+				default:
+					panic(fmt.Sprintf("Unknown shape type %v.", s.srgType))
 				}
 			}
 		}
@@ -735,8 +797,15 @@ func readGriddingSurrogate(shapefileName string, grid *GridDef) (
 		}
 	}
 	var tempVals []interface{}
-	for i := 0; i < shp.NumFeatures; i++ {
-		_, tempVals, err = shp.ReadFeature(i, columnIDs...)
+	for {
+		_, tempVals, err = shp.ReadNextFeature(columnIDs...)
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+				break
+			}
+			return
+		}
 		row := tempVals[0].(int)
 		col := tempVals[1].(int)
 		inputID := tempVals[2].(string)

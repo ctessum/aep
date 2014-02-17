@@ -17,14 +17,15 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 1. Install the [Go compiler](http://golang.org/doc/install). Also make sure to set the [GOPATH](http://golang.org/doc/code.html#GOPATH) environment variable.
 
 2. Install the required (non-Go) dependencies. These are:
-	* [PostGIS](http://postgis.net/) and its dependencies.
-	* [GEOS](http://trac.osgeo.org/geos/) and [proj4](http://trac.osgeo.org/proj/). These libraries are requirements for PostGIS, but they are also directly used by the AEP program. If these libraries are in a nonstandard location, be sure to set the CGO\_CFLAGS and CGO\_LDFLAGS environment variables to ensure that the Go compiler can find the libraries.
-	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
-	* GDAL
+	* [GEOS](http://trac.osgeo.org/geos/) 
+	* [proj4](http://trac.osgeo.org/proj/) 
+	* [GDAL](http://www.gdal.org/)
 		* To install using Ubuntu linux:
 			sudo apt-get libgdal-dev
 			curl -ks 'https://gist.github.com/nicerobot/5160658/raw/install-gdalpc.sh' | sudo bash -
 		Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
+	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
+	If the above libraries and programs are in a nonstandard location, be sure to set the CGO\_CFLAGS and CGO\_LDFLAGS environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial.
 
 3. Download and install the main program:
 
@@ -34,31 +35,21 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 ## Use
 
-1. First, it is important for the PostGIS server to be up and running. 
+1. Obtain the necessary data. For the 2005 NEI, most of it can be obtained by running the script at [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp2.sh`](src/default/test/loadshp2.sh). The default download location is `$GOPATH/src/bitbucket.org/ctessum/aep/test/Minneapolis2005`. The required files are listed below:
+	* Obtain the necessary shapefiles for spatial allocation. For the 2005 NEI, most of them are v[here](ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/). The script at  will download these files automatically, plus add the missing .prj files.
+	* You may additionally need the shapefiles [here](https://bitbucket.org/ctessum/aep/downloads). These will need to be downloaded manually.
+	* Download the input emissions files for the test case from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into the directory above.
+	The file locations will need to match the locations specified in the configuration file described below.
+			
 
-2. Once PostGIS is up and running, you can load the shapefiles into your PostGIS database. 
-	To do this first run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp2.sh`](src/default/test/loadshp2.sh)
-	This script will download several shapefiles and load them automatically. Then, download some more shapefiles from [here](https://bitbucket.org/ctessum/aep/downloads), change to the directory where you downloaded the shapefiles to, and run: [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp.sh`](src/default/test/loadshp.sh)
-	Both of these scripts may need to be edited to specify the name of the PostGIS database you have created.
-
-3. Download the input emissions files for the test case from [here](https://bitbucket.org/ctessum/aep/downloads) and extract them into the directory 
-
-		$GOPATH/src/bitbucket.org/ctessum/aep/test/Minneapolis2005
-
-4. Run the program: 
+2. Run the program: 
 
 		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/test/Minneapolis2005.json. 
 	While the program is running, you can open a web browser and navigate to localhost:6060 to view status and diagnostic information.
 	After the program finishes running, output can be found in the directory 
 
 		$GOPATH/src/bitbucket.org/ctessum/aep/test/Output
-
-5. Once you have run the test case, you can try running the program for your domain and time period of interest.
-	* Because the test case emissions only have records specific to Minneapolis, you will need to Download the full emissions inventory files from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis).
-	* You can start with the configuration file at 
-
-			$GOPATH/src/bitbucket.org/ctessum/aep/test/2005_nei.json 
-		and edit it to point to the emissions files you have downloaded as well as the `namelist.input` and `namelist.wps` files for your WRF domain, and the WRF output files from a previous simulation which are required to calculate emissions plume rise.
+	After running the default scenario, you may need to edit the configuration file to point to the `namelist.input` and `namelist.wps` files for your WRF domain. The WRF output files from a previous simulation which are required to calculate emissions plume rise, which is not calculated in the default scenario.
 
 
 ## Additional information
