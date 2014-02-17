@@ -28,7 +28,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
 
-	If the above libraries and programs are in a nonstandard location, be sure to set the CGO\_CFLAGS and CGO\_LDFLAGS environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial.
+	If the above libraries and programs are in a nonstandard location, be sure to set the `$CGO_CFLAGS` and `$CGO_LDFLAGS` environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial.
 
 3. Download and install the main program:
 
@@ -38,21 +38,21 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 ## Use
 
-1. Obtain the necessary data. For the 2005 NEI, most of it can be obtained by running the script at [`$GOPATH/src/bitbucket.org/ctessum/aep/test/loadshp2.sh`](src/default/test/loadshp2.sh). The default download location is `$GOPATH/src/bitbucket.org/ctessum/aep/test/Minneapolis2005`. The required files are listed below:
-	* Obtain the necessary shapefiles for spatial allocation. For the 2005 NEI, most of them are v[here](ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/). The script at  will download these files automatically, plus add the missing .prj files.
-	* You may additionally need the shapefiles [here](https://bitbucket.org/ctessum/aep/downloads). These will need to be downloaded manually.
-	* Download the input emissions files for the test case from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into the directory above.
+1. Obtain the necessary shapefiles for spatial allocation. For the 2005 NEI, most of them can be obtained by running the script at [`$GOPATH/src/bitbucket.org/ctessum/aepscripts/downloadShapefiles.sh`](src/default/scripts/downloadShapefiles.sh). The default download location is `$GOPATH/src/bitbucket.org/ctessum/aep/test/inputdata/shapefiles`. Otherwise, most of them are [here](ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/). The script at  will download these files automatically, plus add the missing .prj files.
+	* You may additionally need the shapefiles [here](https://bitbucket.org/ctessum/aep/downloads/additionalShapefiles.tar.gz). These will need to be downloaded manually.
+
+2. Obtain the input emissions data. For the 2005 NEI, you can download them from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into `$GOPATH/src/bitbucket.org/ctessum/aep/test/inputdata/emissions`.
 	The file locations will need to match the locations specified in the configuration file described below.
 			
 
 2. Run the program: 
 
-		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/test/Minneapolis2005.json. 
-	While the program is running, you can open a web browser and navigate to localhost:6060 to view status and diagnostic information.
+		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/scripts/config2005nei.json 
+	While the program is running, you can open a web browser and navigate to `localhost:6060` to view status and diagnostic information.
 	After the program finishes running, output can be found in the directory 
 
 		$GOPATH/src/bitbucket.org/ctessum/aep/test/Output
-	After running the default scenario, you may need to edit the configuration file to point to the `namelist.input` and `namelist.wps` files for your WRF domain. The WRF output files from a previous simulation which are required to calculate emissions plume rise, which is not calculated in the default scenario.
+	After running the default scenario, you can edit the configuration file to your specific needs by setting it to point to the `namelist.input` and `namelist.wps` files for your WRF domain, and changing the starting and ending dates. Additionally, the WRF output files from a previous simulation which are required to calculate emissions plume rise, which is not calculated in the default scenario.
 
 
 ## Additional information
