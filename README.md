@@ -98,4 +98,4 @@ to see the functions available in the API and investigate how they work.
 
 ### Distributed computing
 
-AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](src/default/test/run_distributed.pbs).
+AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](src/default/scripts/run_distributed.pbs).
