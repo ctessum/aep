@@ -1,0 +1,39 @@
+&share
+ wrf_core = 'ARW',
+ max_dom = 1
+ start_date = '2004-12-25_00:00:00','2004-12-25_00:00:00','2004-12-25_00:00:00','2004-12-25_00:00:00','2004-12-25_00:00:00','2004-12-25_00:00:00',
+ end_date   = '2006-01-01_00:00:00','2006-01-01_00:00:00','2006-01-01_00:00:00','2006-01-01_00:00:00','2006-01-01_00:00:00','2006-01-01_00:00:00',
+ interval_seconds = 21600
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id =  1, 1, 1, 1, 1, 1,
+ parent_grid_ratio =  1, 6, 6, 6, 6, 6,
+ i_parent_start =  1, 249, 320, 236, 55, 382,
+ j_parent_start =  1, 211, 116, 73, 132, 196,
+ e_we =  445, 73, 73, 79, 163, 91,
+ e_sn =  337, 91, 103, 85, 79, 91,
+ geog_data_res     = '2m','2m','2m','2m','2m','2m',
+ dx = 12000,
+ dy = 12000,
+ map_proj = 'lambert',
+ ref_lat   =  40.0,
+ ref_lon   = -97.0,
+ truelat1  =  33.0,
+ truelat2  =  45.0,
+ stand_lon = -97.0,
+ ref_x = 228.5
+ ref_y = 174.5
+ geog_data_path = '/home/marshall/tessumcm/WRFinputs/geogV3.4'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'FILE',
+/
+
+&metgrid
+ fg_name = 'FILE'
+ io_form_metgrid = 2, 
+/
