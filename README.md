@@ -24,7 +24,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 				sudo apt-get libgdal-dev
 				curl -ks 'https://gist.github.com/nicerobot/5160658/raw/install-gdalpc.sh' | sudo bash -
-		Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
+			Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
 	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
 	If the above libraries and programs are in a nonstandard location, be sure to set the CGO\_CFLAGS and CGO\_LDFLAGS environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial.
 
