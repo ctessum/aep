@@ -208,34 +208,36 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 				h.AddAttribute(pol, "units", d.Units)
 			}
 		}
-		h.Define()
-		errs := h.Check()
-		for _, err := range errs {
-			if err != nil {
-				panic(err)
-			}
-		}
-		f, err := os.Create(filename)
-		if err != nil {
-			panic(err)
-		}
-		ff, err := cdf.Create(f, h)
-		if err != nil {
-			panic(err)
-		}
-		for pol, data := range d1 {
-			if data.Sum() != 0. {
-				r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
-				if _, err = r.Write(data.ToDense32()); err != nil {
+		if len(h.Variables()) > 0 {
+			h.Define()
+			errs := h.Check()
+			for _, err := range errs {
+				if err != nil {
 					panic(err)
 				}
 			}
+			f, err := os.Create(filename)
+			if err != nil {
+				panic(err)
+			}
+			ff, err := cdf.Create(f, h)
+			if err != nil {
+				panic(err)
+			}
+			for pol, data := range d1 {
+				if data.Sum() != 0. {
+					r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
+					if _, err = r.Write(data.ToDense32()); err != nil {
+						panic(err)
+					}
+				}
+			}
+			err = cdf.UpdateNumRecs(f)
+			if err != nil {
+				panic(err)
+			}
+			f.Close()
 		}
-		err = cdf.UpdateNumRecs(f)
-		if err != nil {
-			panic(err)
-		}
-		f.Close()
 	}
 }
 
