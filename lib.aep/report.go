@@ -4,7 +4,7 @@ import (
 	"bitbucket.org/ctessum/aep/spatialsrg"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
-	"code.google.com/p/lvd.go/cdf"
+	"bitbucket.org/ctessum/cdf"
 	"encoding/json"
 	"errors"
 	"fmt"
