@@ -45,7 +45,6 @@
 			"108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
 			"106423":{"SpecNames":["P-xylene","Isomers of xylene"]}
         },
-        "SpecSynonyms": "[Ancilliary]/SpeciationSynonyms.txt",
         "SpecRefFile": "[Ancilliary]/gsref_cmaq_cb05_soa_2005cr_05b_16jun2010.txt",
         "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
         "SpecProFile": "[Ancilliary]/SPECIATE 4.3 9-28-2011-FINAL.sqlite",
