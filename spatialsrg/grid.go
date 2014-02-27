@@ -168,6 +168,9 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 		cell.Row = i
 		grid.Cells[i] = cell
 
+		if grid.extent == nil {
+			grid.extent = cell.geom
+		}
 		w, err = cell.geom.Within(grid.extent)
 		if err != nil {
 			return
