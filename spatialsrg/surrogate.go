@@ -825,6 +825,7 @@ func IntersectionFaultTolerant(g1, g2 *geos.Geometry) (g3 *geos.Geometry,
 	if err != nil { // If there is a problem, try a 0 buffer
 		err = handle(err, "")
 		Log(err.Error(), 3)
+		err = nil
 		buf1, err = g1.Buffer(0.)
 		if err != nil {
 			return
