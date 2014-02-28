@@ -647,7 +647,10 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	var size, singleShapeSrgWeight float64
 	var intersection *geos.Geometry
 	srgs := make([]*SrgHolder, 0, 500)
-	for _, srgI := range s.surrogates.SearchIntersect(inputBounds) {
+	srgsWithinBounds := s.surrogates.SearchIntersect(inputBounds)
+	for i := procnum; i < len(srgsWithinBounds); i += nprocs {
+		srgI := srgsWithinBounds[i]
+		Log(fmt.Sprintf("intersections1 surrogate shape %v out of %v", i, len(srgsWithinBounds)), 4)
 		srg := srgI.(*SrgHolder)
 		intersects, err = inputGeomP.Intersects(srg.geom)
 		if err != nil {
@@ -700,6 +703,7 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 	//var GridCellP *geos.PGeometry
 	var err error
 	for i := procnum; i < len(GridCells); i += nprocs {
+		Log(fmt.Sprintf("intersections2 grid cell %v out of %v", i, len(GridCells)), 4)
 		cell := GridCells[i]
 		//GridCellP = geos.PrepareGeometry(cell.geom)
 		var intersects bool
