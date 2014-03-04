@@ -318,7 +318,6 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			return
 		}
 		data, err = srgShp.Dbf2.NextRecord()
-		fmt.Println(data)
 		if err != nil {
 			return
 		}
