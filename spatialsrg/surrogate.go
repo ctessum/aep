@@ -318,6 +318,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			return
 		}
 		data, err = srgShp.Dbf2.NextRecord()
+		fmt.Println(data)
 		if err != nil {
 			return
 		}
@@ -340,7 +341,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 				}
 			}
 		}
-		if keepFeature {
+		if keepFeature && rec.Geometry != nil {
 			ggeom, err = ct.Reproject(rec.Geometry)
 			if err != nil {
 				return
