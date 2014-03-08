@@ -212,6 +212,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.OldWRFout = d.OldWRFout
 	c.wrfData = d.wrfData
 	c.shapefiles = d.shapefiles
+	d.SimulationName = os.ExpandEnv(d.SimulationName)
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
 	if d.SrgCacheExpirationTime == 0 {
