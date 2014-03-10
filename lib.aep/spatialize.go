@@ -28,7 +28,6 @@ var (
 
 func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log("Setting up spatial environment...", 1)
-	gis.DebugLevel = c.DebugLevel
 	spatialsrg.DebugLevel = c.DebugLevel
 	var err error
 	x := c.wrfData
