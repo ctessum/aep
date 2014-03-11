@@ -17,10 +17,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 )
 
-var SrgProgress float64
+var (
+	SrgProgress     float64
+	SrgProgressLock sync.RWMutex
+)
 
 var (
 	DebugLevel = 3 // amount of output to print to the screen. A higher number means more messages.
@@ -159,7 +163,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	// wait for remaining results
 	for i := srgsFinished; i < len(inputData); i++ {
 		griddedSrgs[i] = <-griddedSrgChan
-		SrgProgress = 100. / float64(len(inputData))
+		SrgProgress += 100. / float64(len(inputData))
 		srgsFinished++
 	}
 	// wait for workers to finish
@@ -433,6 +437,7 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 	first := true
 	for data = range singleShapeChan {
 		if first {
+			Log("Initializing SrgGenWorkerLocal", 3)
 			d := &SrgGenWorkerInitData{srgData, gridData, srgType}
 			e := new(Empty)
 			err = s.Initialize(d, e) // Load data (only do once)
@@ -488,9 +493,19 @@ func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgDat
 }
 
 func (s *SrgGenWorker) Initialize(data *SrgGenWorkerInitData, _ *Empty) error {
-	s.surrogates = rtreego.NewTree(2, 50, 100)
+	s.surrogates = rtreego.NewTree(2, 25, 50)
 	var err error
-	for _, srg := range data.Surrogates {
+	SrgProgressLock.Lock()
+	SrgProgress = 0.
+	SrgProgressLock.Unlock()
+	nprocs := runtime.GOMAXPROCS(0)
+	progressTotal := float64(len(data.Surrogates)) * float64(nprocs)
+	for i, srg := range data.Surrogates {
+		if i%1000 == 0 {
+			SrgProgressLock.Lock()
+			SrgProgress += 100000. / progressTotal
+			SrgProgressLock.Unlock()
+		}
 		srg.geom, err = geos.FromWKT(srg.WKT)
 		if err != nil {
 			return err
@@ -501,6 +516,10 @@ func (s *SrgGenWorker) Initialize(data *SrgGenWorkerInitData, _ *Empty) error {
 		}
 		s.surrogates.Insert(srg)
 	}
+	SrgProgressLock.Lock()
+	SrgProgress = 0.
+	SrgProgressLock.Unlock()
+
 	s.GridCells = data.GridCells
 	var g *geos.Geometry
 	for i := 0; i < len(s.GridCells.Cells); i++ {
