@@ -297,9 +297,9 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
 	MergeFunction := srgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
-		shapefileName := filepath.Join(c.griddedSrgs, grid.Name+"_"+srgNum+".shp")
+		dataFileName := filepath.Join(c.griddedSrgs, grid.Name+"_"+srgNum+".dbf")
 		srg, err = spatialsrg.RetrieveGriddingSurrogate(
-			shapefileName, FIPS, grid)
+			dataFileName, FIPS, grid)
 		if err != nil {
 			panic(err)
 		}

@@ -43,7 +43,7 @@ type SrgGenWorker struct {
 }
 
 type SrgGenWorkerInitData struct {
-	Surrogates []*SrgHolder
+	Surrogates *rtreego.Rtree
 	GridCells  *GridDef
 	srgType    gdal.GeometryType
 }
@@ -113,7 +113,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	if err != nil {
 		return
 	}
-	var srgData []*SrgHolder
+	var srgData *rtreego.Rtree
 	var srgType gdal.GeometryType
 	srgData, srgType, err = getSrgData(surrogateFile, WeightColumns,
 		FilterFunction, gridData)
@@ -270,8 +270,11 @@ func getInputData(inputShapeFile, ShapeColumn string,
 // get surrogate shapes and weights
 func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	FilterFunction *SurrogateFilter, gridData *GridDef) (
-	srgData []*SrgHolder, srgType gdal.GeometryType, err error) {
+	srgData *rtreego.Rtree, srgType gdal.GeometryType, err error) {
 	Log("Getting surrogate data...", 1)
+	SrgProgressLock.Lock()
+	SrgProgress = 0.
+	SrgProgressLock.Unlock()
 	var srgShp *gis.Shapefile
 	srgShp, err = gis.OpenShapefile(surrogateShapeFile, true)
 	if err != nil {
@@ -302,11 +305,10 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			}
 		}
 	}
-	srgData = make([]*SrgHolder, 0, srgShp.NumFeatures/4)
+	srgData = rtreego.NewTree(2, 25, 50)
 	var data []interface{}
 	var rec *shapefile.ShapefileRecord
 	var ggeom geom.T
-	var ggeos *geos.Geometry
 	var intersects bool
 	var keepFeature bool
 	var featureVal string
@@ -325,6 +327,9 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 		if err != nil {
 			return
 		}
+		SrgProgressLock.Lock()
+		SrgProgress += 100. / float64(srgShp.NumFeatures)
+		SrgProgressLock.Unlock()
 
 		if FilterFunction == nil {
 			keepFeature = true
@@ -349,17 +354,17 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			if err != nil {
 				return
 			}
-			ggeos, err = gis.GeomToGEOS(ggeom)
+			srg := new(SrgHolder)
+			srg.geom, err = gis.GeomToGEOS(ggeom)
 			if err != nil {
 				return
 			}
-			intersects, err = ggeos.Intersects(gridData.extent)
+			intersects, err = srg.geom.Intersects(gridData.extent)
 			if err != nil {
 				return
 			}
 			if intersects {
-				srg := new(SrgHolder)
-				srg.WKT, err = ggeos.ToWKT()
+				srg.WKT, err = srg.geom.ToWKT()
 				if err != nil {
 					return
 				}
@@ -381,7 +386,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 					}
 					switch srgShp.Type {
 					case gdal.GT_Polygon, gdal.GT_MultiPolygon:
-						size, err = ggeos.Area()
+						size, err = srg.geom.Area()
 						if err != nil {
 							return
 						}
@@ -392,7 +397,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 						}
 						srg.Weight = weightval / size
 					case gdal.GT_LineString, gdal.GT_MultiLineString:
-						size, err = ggeos.Length()
+						size, err = srg.geom.Length()
 						if err != nil {
 							return
 						}
@@ -418,16 +423,23 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 						"is not acceptable.", srg.Weight)
 					return
 				} else if srg.Weight != 0. {
-					srgData = append(srgData, srg)
+					srg.Extent, err = gis.GeosToRect(srg.geom)
+					if err != nil {
+						return
+					}
+					srgData.Insert(srg)
 				}
 			}
 		}
 	}
+	SrgProgressLock.Lock()
+	SrgProgress = 0.
+	SrgProgressLock.Unlock()
 	return
 }
 
 func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
-	errchan chan error, gridData *GridDef, srgData []*SrgHolder,
+	errchan chan error, gridData *GridDef, srgData *rtreego.Rtree,
 	srgType gdal.GeometryType) {
 	var err error
 
@@ -460,7 +472,7 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 
 func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 	errchan chan error, slaveAddress string, gridData *GridDef,
-	srgData []*SrgHolder, srgType gdal.GeometryType) {
+	srgData *rtreego.Rtree, srgType gdal.GeometryType) {
 
 	client, err := rpc.DialHTTP("tcp", slaveAddress+":"+RPCport)
 	if err != nil {
@@ -493,32 +505,8 @@ func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgDat
 }
 
 func (s *SrgGenWorker) Initialize(data *SrgGenWorkerInitData, _ *Empty) error {
-	s.surrogates = rtreego.NewTree(2, 25, 50)
 	var err error
-	SrgProgressLock.Lock()
-	SrgProgress = 0.
-	SrgProgressLock.Unlock()
-	nprocs := runtime.GOMAXPROCS(0)
-	progressTotal := float64(len(data.Surrogates)) * float64(nprocs)
-	for i, srg := range data.Surrogates {
-		if i%1000 == 0 {
-			SrgProgressLock.Lock()
-			SrgProgress += 100000. / progressTotal
-			SrgProgressLock.Unlock()
-		}
-		srg.geom, err = geos.FromWKT(srg.WKT)
-		if err != nil {
-			return err
-		}
-		srg.Extent, err = gis.GeosToRect(srg.geom)
-		if err != nil {
-			return err
-		}
-		s.surrogates.Insert(srg)
-	}
-	SrgProgressLock.Lock()
-	SrgProgress = 0.
-	SrgProgressLock.Unlock()
+	s.surrogates = data.Surrogates
 
 	s.GridCells = data.GridCells
 	var g *geos.Geometry
@@ -671,6 +659,11 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 		srgI := srgsWithinBounds[i]
 		Log(fmt.Sprintf("intersections1 surrogate shape %v out of %v", i, len(srgsWithinBounds)), 4)
 		srg := srgI.(*SrgHolder)
+		srg.geom, err = geos.FromWKT(srg.WKT)
+		if err != nil {
+			errChan <- handle(err, "")
+			return
+		}
 		intersects, err = inputGeomP.Intersects(srg.geom)
 		if err != nil {
 			errChan <- handle(err, "")
@@ -783,19 +776,19 @@ func handle(err error, cmd string) error {
 var srgMapCache *cache.Cache
 
 func SetupSrgMapCache(t time.Duration) {
-	srgMapCache = cache.New(t*time.Minute, t*time.Minute)
+	srgMapCache = cache.New(10*time.Second, 10*time.Second)
 }
 
-func RetrieveGriddingSurrogate(shapefileName string, inputID string,
+func RetrieveGriddingSurrogate(dataFileName string, inputID string,
 	grid *GridDef) (srg *sparse.SparseArray, err error) {
 
-	cacheKey := shapefileName + inputID
+	cacheKey := dataFileName + inputID
 	// Check if surrogate is already in the cache.
 	if srgMap, found := srgMapCache.Get(cacheKey); found {
 		srg = srgMap.(map[string]*sparse.SparseArray)[inputID] // srg may be nil
 	} else {
 		var srgMap map[string]*sparse.SparseArray
-		srgMap, err = readGriddingSurrogate(shapefileName, grid)
+		srgMap, err = readGriddingSurrogate(dataFileName, grid)
 		// store surrogate map in cache for faster access.
 		srgMapCache.Set(cacheKey, srgMap, 0)
 		srg = srgMap[inputID] // srg may be nil
@@ -803,25 +796,33 @@ func RetrieveGriddingSurrogate(shapefileName string, inputID string,
 	return
 }
 
-func readGriddingSurrogate(shapefileName string, grid *GridDef) (
+func readGriddingSurrogate(dataFileName string, grid *GridDef) (
 	srgMap map[string]*sparse.SparseArray, err error) {
 	srgMap = make(map[string]*sparse.SparseArray)
-	var shp *gis.Shapefile
-	shp, err = gis.OpenShapefile(shapefileName, true)
-	defer shp.Close()
+	var f *os.File
+	f, err = os.Open(dataFileName)
+	defer f.Close()
+	if err != nil {
+		return
+	}
+	var data *shapefile.DBFFile
+	data, err = shapefile.OpenDBFFile(f)
 	if err != nil {
 		return
 	}
 	columnIDs := make([]int, 4)
 	for i, column := range []string{"row", "col", "inputID", "shapeFrac"} {
-		columnIDs[i], err = shp.GetColumnIndex(column)
-		if err != nil {
+		var ok bool
+		columnIDs[i], ok = data.FieldIndicies[column]
+		if !ok {
+			err = fmt.Errorf("Column %v not found in %v. Column options are %v",
+				column, dataFileName, data.FieldIndicies)
 			return
 		}
 	}
 	var tempVals []interface{}
 	for {
-		_, tempVals, err = shp.ReadNextFeature(columnIDs...)
+		tempVals, err = data.NextRecord()
 		if err != nil {
 			if err == io.EOF {
 				err = nil
@@ -829,10 +830,10 @@ func readGriddingSurrogate(shapefileName string, grid *GridDef) (
 			}
 			return
 		}
-		row := tempVals[0].(int)
-		col := tempVals[1].(int)
-		inputID := tempVals[2].(string)
-		shapeFraction := tempVals[3].(float64)
+		row := tempVals[columnIDs[0]].(int)
+		col := tempVals[columnIDs[1]].(int)
+		inputID := tempVals[columnIDs[2]].(string)
+		shapeFraction := tempVals[columnIDs[3]].(float64)
 		if _, ok := srgMap[inputID]; !ok {
 			srgMap[inputID] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
