@@ -10,6 +10,7 @@ import (
 	"github.com/paulsmith/gogeos/geos"
 	"github.com/pmylund/go-cache"
 	"github.com/twpayne/gogeom/geom"
+	"github.com/ctessum/geomop"
 	"io"
 	"log"
 	"math"
@@ -653,6 +654,7 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	// shape, and save only the intersecting parts.
 	var size, singleShapeSrgWeight float64
 	var intersection *geos.Geometry
+	var a,b,c geom.T
 	srgs := make([]*SrgHolder, 0, 500)
 	srgsWithinBounds := s.surrogates.SearchIntersect(inputBounds)
 	for i := procnum; i < len(srgsWithinBounds); i += nprocs {
@@ -670,12 +672,22 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 			return
 		}
 		if intersects {
-			intersection, err = IntersectionFaultTolerant(
-				data.inputGeom, srg.geom)
+			a, err = gis.GEOStoGeom(data.inputGeom)
 			if err != nil {
 				errChan <- handle(err, "")
 				return
 			}
+			b, err = gis.GEOStoGeom(srg.geom)
+			if err != nil {
+				errChan <- handle(err, "")
+				return
+			}
+			c, err = geomop.Intersect(a,b)
+			if err != nil {
+				errChan <- handle(err, "")
+				return
+			}
+			intersection,err = gis.GeomToGEOS(c)
 			srgs = append(srgs, srg)
 			// Add the individual surrogate weight to the total
 			// weight for the input shape.
@@ -721,6 +733,7 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 		var intersects bool
 		var intersection *geos.Geometry
 		var size, weight float64
+		var a,b,c geom.T
 		for _, srg := range InputShapeSrgs {
 			//intersects, err = GridCellP.Intersects(srg.geom)
 			intersects, err = cell.geom.Intersects(srg.geom)
@@ -729,8 +742,22 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 				return
 			}
 			if intersects {
-				intersection, err = IntersectionFaultTolerant(
-					cell.geom, srg.geom)
+			a, err = gis.GEOStoGeom(cell.geom)
+				if err != nil {
+					errChan <- handle(err, "")
+					return
+				}
+			b, err = gis.GEOStoGeom(srg.geom)
+				if err != nil {
+					errChan <- handle(err, "")
+					return
+				}
+			c, err = geomop.Intersect(a,b)
+				if err != nil {
+					errChan <- handle(err, "")
+					return
+				}
+			intersection, err = gis.GeomToGEOS(c)
 				if err != nil {
 					errChan <- handle(err, "")
 					return
@@ -838,30 +865,6 @@ func readGriddingSurrogate(dataFileName string, grid *GridDef) (
 			srgMap[inputID] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
 		srgMap[inputID].Set(shapeFraction, row, col)
-	}
-	return
-}
-
-func IntersectionFaultTolerant(g1, g2 *geos.Geometry) (g3 *geos.Geometry,
-	err error) {
-	var buf1, buf2 *geos.Geometry
-	g3, err = g1.Intersection(g2)
-	if err != nil { // If there is a problem, try a 0 buffer
-		err = handle(err, "")
-		Log(err.Error(), 3)
-		err = nil
-		buf1, err = g1.Buffer(0.)
-		if err != nil {
-			return
-		}
-		buf2, err = g2.Buffer(0.)
-		if err != nil {
-			return
-		}
-		g3, err = buf1.Intersection(buf2)
-		if err != nil {
-			return
-		}
 	}
 	return
 }
