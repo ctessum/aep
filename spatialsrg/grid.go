@@ -1,12 +1,32 @@
+/*
+Copyright (C) 2012-2014 Regents of the University of Minnesota.
+This file is part of AEP.
+
+AEP is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+AEP is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with AEP.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package spatialsrg
 
 import (
 	"bitbucket.org/ctessum/gis"
+	"bitbucket.org/ctessum/gisconversions"
 	"bitbucket.org/ctessum/sparse"
 	"fmt"
+	"github.com/ctessum/geomop"
+	"github.com/ctessum/gogeos/geos"
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
-	"github.com/paulsmith/gogeos/geos"
 	"github.com/twpayne/gogeom/geom"
 	"io"
 	"os"
@@ -21,17 +41,14 @@ type GridDef struct {
 	TimeZones       map[int]*sparse.SparseArray
 	Cells           []*GridCell
 	Sr              gdal.SpatialReference
-	extent          *geos.Geometry
-	ExtentWKT       string
+	Extent          geom.T
 	IrregularGrid   bool     // whether the grid is a regular grid
 	OtherFieldNames []string // names of other columns we want to keep
 	rtree           *rtreego.Rtree
 }
 
 type GridCell struct {
-	geom           *geos.Geometry
-	ggeom          geom.T
-	WKT            string
+	Geom           geom.T
 	Row, Col       int
 	OtherFieldData []interface{} // data for the other columns we want to keep
 	Weight         float64
@@ -78,20 +95,11 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			cell := new(GridCell)
 			x := grid.X0 + float64(ix)*grid.Dx
 			y := grid.Y0 + float64(iy)*grid.Dy
-			cell.WKT = fmt.Sprintf("POLYGON ((%v %v, %v %v, %v %v, %v %v, %v %v))",
-				x, y, x+grid.Dx, y, x+grid.Dx, y+grid.Dy,
-				x, y+grid.Dy, x, y)
 			cell.Row, cell.Col = iy, ix
-			cell.geom, err = geos.FromWKT(cell.WKT)
-			if err != nil {
-				panic(err)
-			}
-			var tempGeom geom.Polygon
-			tempGeom.Rings = make([][]geom.Point, 1)
-			tempGeom.Rings[0] = []geom.Point{{x, y}, {x + grid.Dx, y},
-				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}
-			cell.ggeom = tempGeom
-			cell.rtreebounds, err = gis.GeosToRect(cell.geom)
+			cell.Geom = geom.T(geom.Polygon{[][]geom.Point{{
+				{x, y}, {x + grid.Dx, y},
+				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}}})
+			cell.rtreebounds, err = gisconversions.GeomToRect(cell.Geom)
 			if err != nil {
 				panic(err)
 			}
@@ -100,13 +108,10 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			i++
 		}
 	}
-	grid.ExtentWKT = fmt.Sprintf("POLYGON ((%v %v, %v %v, %v %v, %v %v, %v %v))",
-		X0, Y0, X0+Dx*float64(Nx), Y0, X0+Dx*float64(Nx), Y0+Dy*float64(Ny),
-		X0, Y0+Dy*float64(Ny), X0, Y0)
-	grid.extent, err = geos.FromWKT(grid.ExtentWKT)
-	if err != nil {
-		panic(err)
-	}
+	grid.Extent = geom.T(geom.Polygon{[][]geom.Point{{{X0, Y0},
+		{X0 + Dx*float64(Nx), Y0},
+		{X0 + Dx*float64(Nx), Y0 + Dy*float64(Ny)},
+		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}}})
 	return
 }
 
@@ -134,17 +139,16 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 			return
 		}
 	}
-	var ct *gis.CoordinateTransform
-	ct, err = gis.NewCoordinateTransform(shp.Sr, grid.Sr)
+	var ct *gisconversions.CoordinateTransform
+	ct, err = gisconversions.NewCoordinateTransform(shp.Sr, grid.Sr)
 	if err != nil {
 		return
 	}
 	grid.rtree = rtreego.NewTree(2, 25, 50)
-	var w bool
 	i := 0
 	for {
 		cell := new(GridCell)
-		cell.ggeom, cell.OtherFieldData, err =
+		cell.Geom, cell.OtherFieldData, err =
 			shp.ReadNextFeature(columnIndicies...)
 		if err != nil {
 			if err == io.EOF {
@@ -153,44 +157,24 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 			}
 			return
 		}
-		cell.ggeom, err = ct.Reproject(cell.ggeom)
-		if err != nil {
-			return
-		}
-		cell.geom, err = gis.GeomToGEOS(cell.ggeom)
-		if err != nil {
-			return
-		}
-		cell.WKT, err = cell.geom.ToWKT()
+		cell.Geom, err = ct.Reproject(cell.Geom)
 		if err != nil {
 			return
 		}
 		cell.Row = i
 		grid.Cells[i] = cell
 
-		if grid.extent == nil {
-			grid.extent = cell.geom
+		if grid.Extent == nil {
+			grid.Extent = cell.Geom
+		} else {
+			grid.Extent = geomop.Construct(grid.Extent, cell.Geom, geomop.UNION)
 		}
-		w, err = cell.geom.Within(grid.extent)
-		if err != nil {
-			return
-		}
-		if !w {
-			grid.extent, err = grid.extent.Union(cell.geom)
-			if err != nil {
-				return
-			}
-		}
-		cell.rtreebounds, err = gis.GeosToRect(cell.geom)
+		cell.rtreebounds, err = gisconversions.GeomToRect(cell.Geom)
 		if err != nil {
 			return
 		}
 		grid.rtree.Insert(cell)
 		i++
-	}
-	grid.ExtentWKT, err = grid.extent.ToWKT()
-	if err != nil {
-		return
 	}
 	return
 }
@@ -208,17 +192,21 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 
 	ct := gdal.CreateCoordinateTransform(grid.Sr, tzShp.Sr)
 
-	var cellCenter *geos.Geometry
+	var cellCenter, geosCell *geos.Geometry
 	for _, cell := range grid.Cells {
 		// find timezone nearest to the center of the cell.
 		// Need to project grid to timezone projection rather than the
 		// other way around because the timezones include the north
 		// and south poles which don't convert well to other projections.
-		cellCenter, err = cell.geom.Centroid()
+		geosCell, err = gisconversions.GeomToGEOS(cell.Geom)
 		if err != nil {
 			return
 		}
-		cellCenter, err = gis.GeosTransform(cellCenter, grid.Sr, ct)
+		cellCenter, err = geosCell.Centroid()
+		if err != nil {
+			return
+		}
+		cellCenter, err = gisconversions.GeosTransform(cellCenter, grid.Sr, ct)
 		if err != nil {
 			return
 		}
@@ -285,7 +273,7 @@ func getTimeZones(tzFile, tzColumn string) (
 			}
 			return
 		}
-		tzData.geom, err = gis.GeomToGEOS(ggeom)
+		tzData.geom, err = gisconversions.GeomToGEOS(ggeom)
 		if err != nil {
 			return
 		}
@@ -296,27 +284,16 @@ func getTimeZones(tzFile, tzColumn string) (
 }
 
 func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
-	ct *gdal.CoordinateTransform) (
+	ct *gisconversions.CoordinateTransform) (
 	X, Y float64, row, col int, withinGrid bool, err error) {
-	var g gdal.Geometry
-	g, err = gdal.CreateFromWKT(fmt.Sprintf("POINT (%v %v)", x, y), *inputSr)
-	if err.Error() != "No Error" {
-		return
-	}
-	err = g.Transform(*ct)
-	if err.Error() != "No Error" {
-		return
-	}
-	X, Y, _ = g.Point(0) // coordinates transformed to output projection
-	var geosPoint *geos.Geometry
-	geosPoint, err = geos.NewPoint(geos.NewCoord(X, Y))
+	g := geom.T(geom.Point{x, y})
+	g, err = ct.Reproject(g)
 	if err != nil {
 		return
 	}
-	withinGrid, err = geosPoint.Within(grid.extent)
-	if err != nil {
-		return
-	}
+	gp := g.(geom.Point)
+	X, Y = gp.X, gp.Y // coordinates transformed to output projection
+	withinGrid = geomop.Within(g, grid.Extent)
 	if !withinGrid {
 		return
 	}
@@ -325,7 +302,6 @@ func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
 	cell := gridCellTemp.(*GridCell)
 	row = cell.Row
 	col = cell.Col
-	g.Destroy()
 	return
 }
 
@@ -358,7 +334,7 @@ func (g *GridDef) WriteToShp(outdir string) error {
 			data = append(data, d)
 			index = append(index, i+2)
 		}
-		err = shp.WriteFeature(fid, cell.geom, index, data...)
+		err = shp.WriteFeature(fid, cell.Geom, index, data...)
 		if err != nil {
 			return err
 		}
