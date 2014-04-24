@@ -17,7 +17,6 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 1. Install the [Go compiler](http://golang.org/doc/install). Make sure you install the correct version (32 or 64 bit) for your system. Also make sure to set the [`$GOPATH`](http://golang.org/doc/code.html#GOPATH) environment variable to a different directory than the `$GOROOT` environment variable.
 
 2. Install the required (non-Go) dependencies. These are:
-	* [GEOS](http://trac.osgeo.org/geos/) 
 	* [proj4](http://trac.osgeo.org/proj/) 
 	* [GDAL](http://www.gdal.org/)
 		* To install using Ubuntu linux:
@@ -32,11 +31,8 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 3. Download and install the main program:
 
-		# download the main program
-		hg clone https://bitbucket.org/ctessum/aep $GOPATH/src/bitbucket.org/ctessum/aep 
-		# download its (Go-language) dependencies and compile and install it.
 		go get bitbucket.org/ctessum/aep 
-	Normally we could skip the first command, but since the AEP program is in a password protected repository, it needs to be downloaded separately. The Go language has an automatic system for finding and installing library dependencies; you may want to refer [here](http://golang.org/doc/code.html) to understand how it works.
+	The Go language has an automatic system for finding and installing library dependencies; you may want to refer [here](http://golang.org/doc/code.html) to understand how it works.
 
 ## Use
 
