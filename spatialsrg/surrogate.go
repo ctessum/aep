@@ -1,16 +1,40 @@
+/*
+Copyright (C) 2012-2014 Regents of the University of Minnesota.
+This file is part of AEP.
+
+AEP is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+AEP is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with AEP.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package spatialsrg
 
 import (
 	"bitbucket.org/ctessum/gis"
+	"bitbucket.org/ctessum/gisconversions"
 	"bitbucket.org/ctessum/sparse"
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"strings"
+	//	"github.com/ctessum/carto"
+	"github.com/ctessum/geomop"
 	"github.com/ctessum/shapefile"
+	"github.com/cznic/kv"
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
-	"github.com/paulsmith/gogeos/geos"
-	"github.com/pmylund/go-cache"
 	"github.com/twpayne/gogeom/geom"
-	"github.com/ctessum/geomop"
+	//"github.com/twpayne/gogeom/geom/encoding/wkt"
+	//	"image/color"
 	"io"
 	"log"
 	"math"
@@ -19,8 +43,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-	"time"
 )
+
+var Multiplier = 1000
 
 var (
 	SrgProgress     float64
@@ -40,19 +65,16 @@ func Log(msg string, debug int) {
 type SrgGenWorker struct {
 	surrogates *rtreego.Rtree
 	GridCells  *GridDef
-	srgType    gdal.GeometryType
 }
 
 type SrgGenWorkerInitData struct {
 	Surrogates *rtreego.Rtree
 	GridCells  *GridDef
-	srgType    gdal.GeometryType
 }
 type GriddedSrgData struct {
 	InputID              string
-	inputGeom            *geos.Geometry
-	InputGeomWKT         []string
-	GridCellGeom         []*geos.Geometry
+	InputGeom            geom.T
+	GridCellGeom         []geom.T
 	Cells                []*GridCell
 	SingleShapeSrgWeight float64
 	CoveredByGrid        bool
@@ -60,8 +82,7 @@ type GriddedSrgData struct {
 
 type SrgHolder struct {
 	Weight float64
-	geom   *geos.Geometry
-	WKT    string
+	Geom   geom.T
 	Extent *rtreego.Rect
 }
 
@@ -109,14 +130,13 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 
 	Log("Creating gridding surrogate "+OutName+"...", 0)
 
-	var inputData map[string][]string
+	var inputData map[string]geom.T
 	inputData, err = getInputData(inputShapeFile, ShapeColumn, gridData)
 	if err != nil {
 		return
 	}
 	var srgData *rtreego.Rtree
-	var srgType gdal.GeometryType
-	srgData, srgType, err = getSrgData(surrogateFile, WeightColumns,
+	srgData, err = getSrgData(surrogateFile, WeightColumns,
 		FilterFunction, gridData)
 	if err != nil {
 		return
@@ -126,38 +146,42 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	nprocs := runtime.GOMAXPROCS(0)
 	singleShapeChan := make(chan *GriddedSrgData, nprocs*2)
 	griddedSrgChan := make(chan *GriddedSrgData, nprocs*2)
-	errchan := make(chan error)
+	errchan := make(chan error, nprocs*2)
 	workersRunning := 0
 	if len(slaves) == 0 { // not distributed computing
 		for i := 0; i < nprocs; i++ {
 			go srgGenWorkerLocal(singleShapeChan, griddedSrgChan, errchan,
-				gridData, srgData, srgType)
+				gridData, srgData)
 			workersRunning++
 		}
 	} else { // distributed computing
 		for i := 0; i < len(slaves); i++ {
 			go srgGenWorkerDistributed(singleShapeChan, griddedSrgChan,
-				errchan, slaves[i], gridData, srgData, srgType)
+				errchan, slaves[i], gridData, srgData)
 			workersRunning++
 		}
 	}
 
 	srgsFinished := 0
 	griddedSrgs := make([]*GriddedSrgData, len(inputData))
-	for inputID, geomWKT := range inputData {
-		singleShapeData := &GriddedSrgData{InputID: inputID, InputGeomWKT: geomWKT}
-		singleShapeChan <- singleShapeData
+	for inputID, geom := range inputData {
+		singleShapeData := &GriddedSrgData{InputID: inputID, InputGeom: geom}
 		select {
-		case griddedSrgs[srgsFinished] = <-griddedSrgChan:
-			SrgProgress += 100. / float64(len(inputData))
-			srgsFinished++
 		case err = <-errchan:
 			if err != nil {
 				return
 			}
 			workersRunning--
+			singleShapeChan <- singleShapeData
 		default:
-			continue
+			select {
+			case griddedSrgs[srgsFinished] = <-griddedSrgChan:
+				SrgProgress += 100. / float64(len(inputData))
+				srgsFinished++
+				singleShapeChan <- singleShapeData
+			default:
+				singleShapeChan <- singleShapeData
+			}
 		}
 	}
 	close(singleShapeChan)
@@ -174,7 +198,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			return
 		}
 	}
-	// Write data to file
+	// Write data to files (shapefile and srgMapCache)
 	var outShp *gis.Shapefile
 	outShp, err = gis.CreateShapefile(outputDir, OutName, gridData.Sr,
 		gdal.GT_Polygon,
@@ -183,6 +207,24 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	defer outShp.Close()
 	for fid := 0; fid < len(griddedSrgs); fid++ {
 		err = griddedSrgs[fid].WriteToShp(outShp, fid)
+		if err != nil {
+			return
+		}
+		// store surrogate map in cache for faster access.
+		srg := griddedSrgs[fid]
+		cacheKey := []byte(fmt.Sprintf("%v%v%v", gridData.Name,
+			srgCode, srg.InputID))
+		srgOut := sparse.ZerosSparse(gridData.Ny, gridData.Nx)
+		for _, cell := range srg.Cells {
+			srgOut.Set(cell.Weight, cell.Row, cell.Col)
+		}
+		buf := new(bytes.Buffer)
+		e := gob.NewEncoder(buf)
+		err = e.Encode(srgOut)
+		if err != nil {
+			return
+		}
+		err = srgMapCache.Set(cacheKey, buf.Bytes())
 		if err != nil {
 			return
 		}
@@ -196,7 +238,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 
 func (g *GriddedSrgData) WriteToShp(s *gis.Shapefile, fid int) error {
 	for _, cell := range g.Cells {
-		err := s.WriteFeature(fid, cell.geom, []int{0, 1, 2, 3, 4},
+		err := s.WriteFeature(fid, cell.Geom, []int{0, 1, 2, 3, 4},
 			cell.Row, cell.Col, g.InputID, cell.Weight, g.CoveredByGrid)
 		if err != nil {
 			return err
@@ -207,7 +249,7 @@ func (g *GriddedSrgData) WriteToShp(s *gis.Shapefile, fid int) error {
 
 // Get input shapes
 func getInputData(inputShapeFile, ShapeColumn string,
-	gridData *GridDef) (inputData map[string][]string,
+	gridData *GridDef) (inputData map[string]geom.T,
 	err error) {
 	Log("Getting input shape data...", 1)
 	var inputShp *gis.Shapefile
@@ -216,8 +258,8 @@ func getInputData(inputShapeFile, ShapeColumn string,
 	if err != nil {
 		return
 	}
-	var ct *gis.CoordinateTransform
-	ct, err = gis.NewCoordinateTransform(inputShp.Sr, gridData.Sr)
+	var ct *gisconversions.CoordinateTransform
+	ct, err = gisconversions.NewCoordinateTransform(inputShp.Sr, gridData.Sr)
 	if err != nil {
 		return
 	}
@@ -226,11 +268,11 @@ func getInputData(inputShapeFile, ShapeColumn string,
 	if err != nil {
 		return
 	}
-	inputData = make(map[string][]string)
+	inputData = make(map[string]geom.T)
 	var ggeom geom.T
-	var ggeos *geos.Geometry
 	var inputIDtemp []interface{}
 	var intersects bool
+	gridBounds := gridData.Extent.Bounds(nil)
 	for {
 		ggeom, inputIDtemp, err = inputShp.ReadNextFeature(id)
 		if err != nil {
@@ -244,25 +286,16 @@ func getInputData(inputShapeFile, ShapeColumn string,
 		if err != nil {
 			return
 		}
-		ggeos, err = gis.GeomToGEOS(ggeom)
-		if err != nil {
-			return
-		}
-		intersects, err = ggeos.Intersects(gridData.extent)
-		if err != nil {
-			return
-		}
+		intersects = ggeom.Bounds(nil).Overlaps(gridBounds)
 		if intersects {
 			inputID := inputIDtemp[0].(string)
+			// Extend existing polygon if one already exists for this InputID
 			if _, ok := inputData[inputID]; !ok {
-				inputData[inputID] = make([]string, 0, 1)
+				inputData[inputID] = ggeom
+			} else {
+				inputData[inputID] = geomop.Construct(ggeom,
+					inputData[inputID], geomop.UNION)
 			}
-			var wkt string
-			wkt, err = ggeos.ToWKT()
-			if err != nil {
-				return
-			}
-			inputData[inputID] = append(inputData[inputID], wkt)
 		}
 	}
 	return
@@ -271,7 +304,7 @@ func getInputData(inputShapeFile, ShapeColumn string,
 // get surrogate shapes and weights
 func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	FilterFunction *SurrogateFilter, gridData *GridDef) (
-	srgData *rtreego.Rtree, srgType gdal.GeometryType, err error) {
+	srgData *rtreego.Rtree, err error) {
 	Log("Getting surrogate data...", 1)
 	SrgProgressLock.Lock()
 	SrgProgress = 0.
@@ -282,10 +315,9 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 		return
 	}
 	defer srgShp.Close()
-	srgType = srgShp.Type
 
-	var ct *gis.CoordinateTransform
-	ct, err = gis.NewCoordinateTransform(srgShp.Sr, gridData.Sr)
+	var ct *gisconversions.CoordinateTransform
+	ct, err = gisconversions.NewCoordinateTransform(srgShp.Sr, gridData.Sr)
 	if err != nil {
 		return
 	}
@@ -309,12 +341,11 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	srgData = rtreego.NewTree(2, 25, 50)
 	var data []interface{}
 	var rec *shapefile.ShapefileRecord
-	var ggeom geom.T
 	var intersects bool
 	var keepFeature bool
 	var featureVal string
 	var size float64
-	//var g gdal.Geometry
+	gridBounds := gridData.Extent.Bounds(nil)
 	for {
 		rec, err = srgShp.Shp2.NextRecord()
 		if err != nil {
@@ -351,24 +382,13 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			}
 		}
 		if keepFeature && rec.Geometry != nil {
-			ggeom, err = ct.Reproject(rec.Geometry)
-			if err != nil {
-				return
-			}
 			srg := new(SrgHolder)
-			srg.geom, err = gis.GeomToGEOS(ggeom)
+			srg.Geom, err = ct.Reproject(rec.Geometry)
 			if err != nil {
 				return
 			}
-			intersects, err = srg.geom.Intersects(gridData.extent)
-			if err != nil {
-				return
-			}
+			intersects = srg.Geom.Bounds(nil).Overlaps(gridBounds)
 			if intersects {
-				srg.WKT, err = srg.geom.ToWKT()
-				if err != nil {
-					return
-				}
 				if weightIds != nil {
 					weightval := 0.
 					for _, id := range weightIds {
@@ -385,34 +405,27 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 							return
 						}
 					}
-					switch srgShp.Type {
-					case gdal.GT_Polygon, gdal.GT_MultiPolygon:
-						size, err = srg.geom.Area()
-						if err != nil {
-							return
-						}
+					switch srg.Geom.(type) {
+					case geom.Polygon, geom.MultiPolygon:
+						size = geomop.Area(srg.Geom)
 						if size == 0. {
 							err = fmt.Errorf("Area should not equal "+
 								"zero in %v", surrogateShapeFile)
 							return
 						}
 						srg.Weight = weightval / size
-					case gdal.GT_LineString, gdal.GT_MultiLineString:
-						size, err = srg.geom.Length()
-						if err != nil {
-							return
-						}
+					case geom.LineString, geom.MultiLineString:
+						size = geomop.Length(srg.Geom)
 						if size == 0. {
 							err = fmt.Errorf("Length should not equal "+
 								"zero in %v", surrogateShapeFile)
 							return
 						}
 						srg.Weight = weightval / size
-					case gdal.GT_Point:
+					case geom.Point:
 						srg.Weight = weightval
 					default:
-						err = fmt.Errorf("Can't handle shape type %v in %v",
-							srgShp.Type, surrogateShapeFile)
+						err = geomop.NewError(srg.Geom)
 						return
 					}
 				} else {
@@ -424,7 +437,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 						"is not acceptable.", srg.Weight)
 					return
 				} else if srg.Weight != 0. {
-					srg.Extent, err = gis.GeosToRect(srg.geom)
+					srg.Extent, err = gisconversions.GeomToRect(srg.Geom)
 					if err != nil {
 						return
 					}
@@ -440,8 +453,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 }
 
 func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
-	errchan chan error, gridData *GridDef, srgData *rtreego.Rtree,
-	srgType gdal.GeometryType) {
+	errchan chan error, gridData *GridDef, srgData *rtreego.Rtree) {
 	var err error
 
 	s := new(SrgGenWorker)
@@ -451,7 +463,7 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 	for data = range singleShapeChan {
 		if first {
 			Log("Initializing SrgGenWorkerLocal", 3)
-			d := &SrgGenWorkerInitData{srgData, gridData, srgType}
+			d := &SrgGenWorkerInitData{srgData, gridData}
 			e := new(Empty)
 			err = s.Initialize(d, e) // Load data (only do once)
 			if err != nil {
@@ -464,7 +476,7 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 		err = s.Calculate(data, result)
 		if err != nil {
 			errchan <- err
-			return
+			//return
 		}
 		griddedSrgChan <- result
 	}
@@ -473,7 +485,7 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 
 func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 	errchan chan error, slaveAddress string, gridData *GridDef,
-	srgData *rtreego.Rtree, srgType gdal.GeometryType) {
+	srgData *rtreego.Rtree) {
 
 	client, err := rpc.DialHTTP("tcp", slaveAddress+":"+RPCport)
 	if err != nil {
@@ -486,7 +498,7 @@ func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgDat
 	first := true
 	for data = range singleShapeChan {
 		if first { // Load data (only  once)
-			d := SrgGenWorkerInitData{srgData, gridData, srgType}
+			d := SrgGenWorkerInitData{srgData, gridData}
 			err = client.Call("SrgGenWorker.Initialize", d, e)
 			if err != nil {
 				errchan <- handle(err, "")
@@ -506,23 +518,8 @@ func srgGenWorkerDistributed(singleShapeChan, griddedSrgChan chan *GriddedSrgDat
 }
 
 func (s *SrgGenWorker) Initialize(data *SrgGenWorkerInitData, _ *Empty) error {
-	var err error
 	s.surrogates = data.Surrogates
-
 	s.GridCells = data.GridCells
-	var g *geos.Geometry
-	for i := 0; i < len(s.GridCells.Cells); i++ {
-		g, err = geos.FromWKT(s.GridCells.Cells[i].WKT)
-		if err != nil {
-			return err
-		}
-		s.GridCells.Cells[i].geom = g
-	}
-	s.GridCells.extent, err = geos.FromWKT(s.GridCells.ExtentWKT)
-	if err != nil {
-		return err
-	}
-	s.srgType = data.srgType
 	return nil
 }
 
@@ -533,35 +530,15 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 
 	Log(fmt.Sprintf("Working on shape %v.", data.InputID), 1)
 
-	// convert input shape to geos (there can be more than one geometry
-	// per input ID
-	data.inputGeom, err = geos.FromWKT(data.InputGeomWKT[0])
-	if err != nil {
-		err = handle(err, "")
-		return
-	}
-	if len(data.InputGeomWKT) > 1 {
-		var g *geos.Geometry
-		for _, wkt := range data.InputGeomWKT[1:] {
-			g, err = geos.FromWKT(wkt)
-			if err != nil {
-				err = handle(err, "")
-				return
-			}
-			data.inputGeom, err = data.inputGeom.Union(g)
-			if err != nil {
-				err = handle(err, "")
-				return
-			}
-		}
-	}
-
 	// Figure out if inputShape is completely within the grid
-	result.CoveredByGrid, err = data.inputGeom.Within(s.GridCells.extent)
+	result.CoveredByGrid = geomop.Within(data.InputGeom, s.GridCells.Extent)
+
+	var inputBounds *rtreego.Rect
+	inputBounds, err = gisconversions.GeomToRect(data.InputGeom)
 	if err != nil {
-		err = handle(err, "")
 		return
 	}
+	srgsWithinBounds := s.surrogates.SearchIntersect(inputBounds)
 
 	GridCellChan := make(chan []*GridCell)
 	srgChan := make(chan []*SrgHolder)
@@ -571,7 +548,7 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	thingsWaitingFor := 0
 	// run subroutines for concurrent processing
 	for p := 0; p < nprocs; p++ {
-		go s.intersections1(p, nprocs, data,
+		go s.intersections1(p, nprocs, data, srgsWithinBounds,
 			GridCellChan, srgChan, weightChan, errChan)
 		thingsWaitingFor += 4
 	}
@@ -583,13 +560,9 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	for {
 		select {
 		case cells := <-GridCellChan:
-			for _, cell := range cells {
-				GridCells = append(GridCells, cell)
-			}
+			GridCells = append(GridCells, cells...)
 		case srgs := <-srgChan:
-			for _, srg := range srgs {
-				InputShapeSrgs = append(InputShapeSrgs, srg)
-			}
+			InputShapeSrgs = append(InputShapeSrgs, srgs...)
 		case srgWeight := <-weightChan:
 			data.SingleShapeSrgWeight += srgWeight
 		case err = <-errChan:
@@ -602,19 +575,21 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 			break
 		}
 	}
-	for p := 0; p < nprocs; p++ {
-		go s.intersections2(p, nprocs, data, InputShapeSrgs, GridCells, errChan)
-	}
-	for p := 0; p < nprocs; p++ {
-		err = <-errChan
-		if err != nil {
-			return
+	if data.SingleShapeSrgWeight != 0. {
+		for p := 0; p < nprocs; p++ {
+			go s.intersections2(p, nprocs, data, InputShapeSrgs, GridCells, errChan)
 		}
-	}
-	result.Cells = make([]*GridCell, 0, len(GridCells))
-	for _, cell := range GridCells {
-		if cell.Weight > 0. {
-			result.Cells = append(result.Cells, cell)
+		for p := 0; p < nprocs; p++ {
+			err = <-errChan
+			if err != nil {
+				return
+			}
+		}
+		result.Cells = make([]*GridCell, 0, len(GridCells))
+		for _, cell := range GridCells {
+			if cell.Weight > 0. {
+				result.Cells = append(result.Cells, cell)
+			}
 		}
 	}
 	return
@@ -625,25 +600,18 @@ var RPCport = "6061" // Port for RPC communications for distributed computing
 // Calculate the intersections between the grid cells and the input shape,
 // and between the surrogate shapes and the input shape
 func (s *SrgGenWorker) intersections1(procnum, nprocs int,
-	data *GriddedSrgData, GridCellChan chan []*GridCell,
-	srgChan chan []*SrgHolder, weightChan chan float64, errChan chan error) {
+	data *GriddedSrgData, srgsWithinBounds []rtreego.Spatial,
+	GridCellChan chan []*GridCell, srgChan chan []*SrgHolder,
+	weightChan chan float64, errChan chan error) {
+	var err error
 
-	inputGeomP := geos.PrepareGeometry(data.inputGeom)
-	inputBounds, err := gis.GeosToRect(data.inputGeom)
-	if err != nil {
-		return
-	}
-
-	// Figure out which grid cells intersect with the input shape
+	// Figure out which grid cells might intersect with the input shape
+	inputBounds := data.InputGeom.Bounds(nil)
 	GridCells := make([]*GridCell, 0, 30)
 	var intersects bool
 	for i := procnum; i < len(s.GridCells.Cells); i += nprocs {
 		cell := s.GridCells.Cells[i]
-		intersects, err = inputGeomP.Intersects(s.GridCells.Cells[i].geom)
-		if err != nil {
-			errChan <- handle(err, "")
-			return
-		}
+		intersects = cell.Geom.Bounds(nil).Overlaps(inputBounds)
 		if intersects {
 			GridCells = append(GridCells, cell)
 		}
@@ -653,64 +621,81 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	// get all of the surrogates which intersect with the input
 	// shape, and save only the intersecting parts.
 	var size, singleShapeSrgWeight float64
-	var intersection *geos.Geometry
-	var a,b,c geom.T
+	var intersection geom.T
 	srgs := make([]*SrgHolder, 0, 500)
-	srgsWithinBounds := s.surrogates.SearchIntersect(inputBounds)
+	//if data.InputID == "31041" {
+	//	w, err := wkt.Encode(data.InputGeom)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	fmt.Println("\ninput\n", string(w))
+	//}
 	for i := procnum; i < len(srgsWithinBounds); i += nprocs {
 		srgI := srgsWithinBounds[i]
-		Log(fmt.Sprintf("intersections1 surrogate shape %v out of %v", i, len(srgsWithinBounds)), 4)
+		Log(fmt.Sprintf("intersections1 surrogate shape %v out of %v", i,
+			len(srgsWithinBounds)), 4)
 		srg := srgI.(*SrgHolder)
-		srg.geom, err = geos.FromWKT(srg.WKT)
-		if err != nil {
-			errChan <- handle(err, "")
-			return
+		switch srg.Geom.(type) {
+		case geom.Point:
+			if geomop.PointInPolygon(srg.Geom.(geom.Point), data.InputGeom) {
+				intersection = srg.Geom
+			} else {
+				continue
+			}
+		default:
+			//if data.InputID == "31041" {
+			//		w, err := wkt.Encode(srg.Geom)
+			//		if err != nil {
+			//			panic(err)
+			//		}
+			//		fmt.Println("srg", string(w))
+			//}
+			intersection = geomop.Construct(srg.Geom,
+				data.InputGeom, geomop.INTERSECTION)
+			if intersection == nil {
+				continue
+			}
+			//if data.InputID == "31041" {
+			//			w, err = wkt.Encode(intersection)
+			//			if err != nil {
+			//				panic(err)
+			//			}
+			//			fmt.Println("intersection", string(w))
+			//}
 		}
-		intersects, err = inputGeomP.Intersects(srg.geom)
-		if err != nil {
-			errChan <- handle(err, "")
-			return
-		}
-		if intersects {
-			a, err = gis.GEOStoGeom(data.inputGeom)
+		//if geomop.Area(intersection) > geomop.Area(srg.Geom)*1.01 &&
+		//	geomop.Area(intersection) > 1000. {
+		//	fmt.Println("input", data.InputGeom.(geom.Polygon).Rings)
+		//	fmt.Println("srg", srg.Geom.(geom.Polygon).Rings)
+		//	fmt.Println("intersection", intersection.(geom.Polygon).Rings)
+		//	fmt.Println(geomop.Area(intersection), geomop.Area(srg.Geom), "xxxxxxxxxxxxxxxxxxxxxxxxxx")
+		//	f, _ := os.Create("intersectionError1.png")
+		//	carto.DrawShapes(f,
+		//		[]color.NRGBA{{0, 0, 0, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+		//		[]color.NRGBA{{255, 0, 0, 127}, {0, 255, 0, 127},
+		//			{0, 0, 0, 200}},
+		//		5, 0, data.InputGeom, srg.Geom, intersection)
+		//	f.Close()
+		//	fmt.Println("intersections1 area bigger than source polygon")
+		//}
+		srgs = append(srgs, &SrgHolder{Weight: srg.Weight, Geom: intersection})
+		// Add the individual surrogate weight to the total
+		// weight for the input shape.
+		switch srg.Geom.(type) {
+		case geom.Polygon, geom.MultiPolygon:
+			size = geomop.Area(intersection)
+			singleShapeSrgWeight += srg.Weight * size
+		case geom.LineString, geom.MultiLineString:
+			size = geomop.Length(intersection)
 			if err != nil {
 				errChan <- handle(err, "")
 				return
 			}
-			b, err = gis.GEOStoGeom(srg.geom)
-			if err != nil {
-				errChan <- handle(err, "")
-				return
-			}
-			c, err = geomop.Intersect(a,b)
-			if err != nil {
-				errChan <- handle(err, "")
-				return
-			}
-			intersection,err = gis.GeomToGEOS(c)
-			srgs = append(srgs, srg)
-			// Add the individual surrogate weight to the total
-			// weight for the input shape.
-			switch s.srgType {
-			case gdal.GT_Polygon, gdal.GT_MultiPolygon:
-				size, err = intersection.Area()
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-				singleShapeSrgWeight += srg.Weight * size
-			case gdal.GT_LineString, gdal.GT_MultiLineString:
-				size, err = intersection.Length()
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-				singleShapeSrgWeight += srg.Weight * size
-			case gdal.GT_Point:
-				singleShapeSrgWeight += srg.Weight
-			default:
-				panic(fmt.Sprintf("Unknown shape type %v.", s.srgType))
-			}
+			singleShapeSrgWeight += srg.Weight * size
+		case geom.Point:
+			singleShapeSrgWeight += srg.Weight
+		default:
+			panic(geomop.NewError(intersection))
 		}
 	}
 	srgChan <- srgs
@@ -725,67 +710,91 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 	InputShapeSrgs []*SrgHolder, GridCells []*GridCell,
 	errChan chan error) {
 	//var GridCellP *geos.PGeometry
-	var err error
 	for i := procnum; i < len(GridCells); i += nprocs {
 		Log(fmt.Sprintf("intersections2 grid cell %v out of %v", i, len(GridCells)), 4)
 		cell := GridCells[i]
-		//GridCellP = geos.PrepareGeometry(cell.geom)
-		var intersects bool
-		var intersection *geos.Geometry
+		//	if data.InputID == "31041" {
+		//w, err := wkt.Encode(cell.Geom)
+		//if err != nil {
+		//		panic(err)
+		//	}
+		//	fmt.Println("\ncell\n", string(w))
+		//	}
 		var size, weight float64
-		var a,b,c geom.T
+		//var size3, sizeSum float64
+		var intersection geom.T
 		for _, srg := range InputShapeSrgs {
-			//intersects, err = GridCellP.Intersects(srg.geom)
-			intersects, err = cell.geom.Intersects(srg.geom)
-			if err != nil {
-				errChan <- handle(err, "")
-				return
+			//		if data.InputID == "31041" {
+			//		w, err := wkt.Encode(srg.Geom)
+			//		if err != nil {
+			//			panic(err)
+			//		}
+			//		fmt.Println("srg", string(w))
+			//		}
+			switch srg.Geom.(type) {
+			case geom.Point:
+				if geomop.PointInPolygon(srg.Geom.(geom.Point), cell.Geom) {
+					intersection = srg.Geom
+				} else {
+					continue
+				}
+			default:
+				intersection = geomop.Construct(srg.Geom,
+					cell.Geom, geomop.INTERSECTION)
+				if intersection == nil {
+					continue
+				}
+				//			if data.InputID == "31041" {
+				//				w, err := wkt.Encode(intersection)
+				//				if err != nil {
+				//					panic(err)
+				//				}
+				//				fmt.Println("intersection", string(w))
+				//		}
 			}
-			if intersects {
-			a, err = gis.GEOStoGeom(cell.geom)
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-			b, err = gis.GEOStoGeom(srg.geom)
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-			c, err = geomop.Intersect(a,b)
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-			intersection, err = gis.GeomToGEOS(c)
-				if err != nil {
-					errChan <- handle(err, "")
-					return
-				}
-				// Add the individual surrogate weight to the total
-				// weight fraction for the grid cell.
-				switch s.srgType {
-				case gdal.GT_Polygon, gdal.GT_MultiPolygon:
-					size, err = intersection.Area()
-					if err != nil {
-						errChan <- handle(err, "")
-						return
-					}
-					weight += srg.Weight * size / data.SingleShapeSrgWeight
-				case gdal.GT_LineString, gdal.GT_MultiLineString:
-					size, err = intersection.Length()
-					if err != nil {
-						errChan <- handle(err, "")
-						return
-					}
-					weight += srg.Weight * size / data.SingleShapeSrgWeight
-				case gdal.GT_Point:
-					weight += srg.Weight / data.SingleShapeSrgWeight
-				default:
-					panic(fmt.Sprintf("Unknown shape type %v.", s.srgType))
-				}
+			//if geomop.Area(intersection) > geomop.Area(srg.Geom)*1.01 &&
+			//	geomop.Area(intersection) > 1000. {
+			//	fmt.Println("cell", cell.Geom.(geom.Polygon).Rings)
+			//	fmt.Println("srg", srg.Geom.(geom.Polygon).Rings)
+			//	fmt.Println("intersection", intersection.(geom.Polygon).Rings)
+			//	fmt.Println(geomop.Area(intersection), geomop.Area(srg.Geom), "yyyyyyyyyyyyyyyyyyyyyyyyyyyyy")
+			//	f, _ := os.Create("intersectionError2.png")
+			//	carto.DrawShapes(f,
+			//		[]color.NRGBA{{0, 0, 0, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
+			//		[]color.NRGBA{{255, 0, 0, 127}, {0, 255, 0, 127},
+			//			{0, 0, 0, 200}},
+			//		5, 0, cell.Geom, srg.Geom, intersection)
+			//	f.Close()
+			//	fmt.Println("intersections2 area bigger than source polygon")
+			//}
+			// Add the individual surrogate weight to the total
+			// weight fraction for the grid cell.
+			switch srg.Geom.(type) {
+			case geom.Polygon, geom.MultiPolygon:
+				size = geomop.Area(intersection)
+				weight += srg.Weight * size / data.SingleShapeSrgWeight
+			case geom.LineString, geom.MultiLineString:
+				size = geomop.Length(intersection)
+				weight += srg.Weight * size / data.SingleShapeSrgWeight
+			case geom.Point:
+				weight += srg.Weight / data.SingleShapeSrgWeight
+			default:
+				panic(geomop.NewError(intersection))
 			}
+			//	sizeSum += size
 		}
+		//if weight > 1.1 {
+		//	err = fmt.Errorf("Surrogate weight (%g) > 1. This is illegal."+
+		//		"InputID=%v, SingleShapeSrgWeight=%g", weight, data.InputID,
+		//		data.SingleShapeSrgWeight)
+		//	errChan <- handle(err, "")
+		//	return
+		//}
+		//size3 = geomop.Area(a)
+		//	if (sizeSum-size3)/size3 > 0.05 {
+		//		fmt.Println(sizeSum, size3)
+		//		panic("intersection2 too bigxxxx")
+		//	}
 		GridCells[i].Weight = weight
 	}
 	errChan <- nil
@@ -800,32 +809,56 @@ func handle(err error, cmd string) error {
 	return err3
 }
 
-var srgMapCache *cache.Cache
+var srgMapCache *kv.DB
 
-func SetupSrgMapCache(t time.Duration) {
-	srgMapCache = cache.New(10*time.Second, 10*time.Second)
+func SetupSrgMapCache(dir string) (err error) {
+	// delete existing cache and write-ahead logs
+	err = filepath.Walk(dir,
+		func(path string, info os.FileInfo, err error) error {
+			if strings.HasSuffix(path, ".kv") ||
+				strings.HasPrefix(info.Name(), ".") {
+				os.Remove(path)
+			}
+			return err
+		})
+	if err != nil {
+		return
+	}
+	// Create new cache
+	fname := filepath.Join(dir, "srgMapCache.kv")
+	srgMapCache, err = kv.Create(fname, &kv.Options{})
+	return
 }
 
-func RetrieveGriddingSurrogate(dataFileName string, inputID string,
+func CloseSrgMapCache() {
+	srgMapCache.Close()
+}
+
+// Returned srg may be nil
+func RetrieveGriddingSurrogate(srgCode string, inputID string,
 	grid *GridDef) (srg *sparse.SparseArray, err error) {
 
-	cacheKey := dataFileName + inputID
-	// Check if surrogate is already in the cache.
-	if srgMap, found := srgMapCache.Get(cacheKey); found {
-		srg = srgMap.(map[string]*sparse.SparseArray)[inputID] // srg may be nil
-	} else {
-		var srgMap map[string]*sparse.SparseArray
-		srgMap, err = readGriddingSurrogate(dataFileName, grid)
-		// store surrogate map in cache for faster access.
-		srgMapCache.Set(cacheKey, srgMap, 0)
-		srg = srgMap[inputID] // srg may be nil
+	cacheKey := []byte(fmt.Sprintf("%v%v%v", grid.Name, srgCode, inputID))
+	var srgByte []byte
+	srgByte, err = srgMapCache.Get(nil, cacheKey)
+	if err != nil {
+		return
+	}
+	if srgByte != nil {
+		buf := bytes.NewReader(srgByte)
+		d := gob.NewDecoder(buf)
+		err = d.Decode(&srg)
+		if err != nil {
+			return
+		}
+		srg.Fix()
 	}
 	return
 }
 
-func readGriddingSurrogate(dataFileName string, grid *GridDef) (
-	srgMap map[string]*sparse.SparseArray, err error) {
-	srgMap = make(map[string]*sparse.SparseArray)
+func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
+	err error) {
+	srgMap := make(map[string]*sparse.SparseArray)
 	var f *os.File
 	f, err = os.Open(dataFileName)
 	defer f.Close()
@@ -847,6 +880,18 @@ func readGriddingSurrogate(dataFileName string, grid *GridDef) (
 			return
 		}
 	}
+
+	//Figure out which grid this is.
+	s := strings.Split(srgName, "_")
+	gridName := s[0]
+	srgCode := s[1]
+	var grid *GridDef
+	for _, g := range grids {
+		if gridName == g.Name {
+			grid = g
+		}
+	}
+
 	var tempVals []interface{}
 	for {
 		tempVals, err = data.NextRecord()
@@ -865,6 +910,19 @@ func readGriddingSurrogate(dataFileName string, grid *GridDef) (
 			srgMap[inputID] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
 		srgMap[inputID].Set(shapeFraction, row, col)
+	}
+	for inputID, data := range srgMap {
+		cacheKey := []byte(fmt.Sprintf("%v%v%v", gridName, srgCode, inputID))
+		buf := new(bytes.Buffer)
+		e := gob.NewEncoder(buf)
+		err = e.Encode(data)
+		if err != nil {
+			return
+		}
+		err = srgMapCache.Set(cacheKey, buf.Bytes())
+		if err != nil {
+			return
+		}
 	}
 	return
 }

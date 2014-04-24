@@ -1,8 +1,27 @@
+/*
+Copyright (C) 2012-2014 Regents of the University of Minnesota.
+This file is part of AEP.
+
+AEP is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+AEP is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with AEP.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package aep
 
 import (
 	"bitbucket.org/ctessum/aep/spatialsrg"
 	"bitbucket.org/ctessum/gis"
+	"bitbucket.org/ctessum/gisconversions"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/csv"
@@ -60,6 +79,13 @@ func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log(msg, 0)
 	sr, err = gis.CreateSpatialReference(projInfo.ToString())
 	e.Add(err)
+	e.Add(c.GridRef())
+	return
+}
+
+func (c *RunData) setupSrgCache(e *ErrCat) {
+	c.Log("Setting up surrogate generation...", 1)
+	e.Add(spatialsrg.SetupSrgMapCache(c.griddedSrgs))
 	if c.RegenerateSpatialData {
 		// delete spatial surrogates
 		e.Add(filepath.Walk(c.griddedSrgs,
@@ -72,11 +98,24 @@ func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 				}
 				return err
 			}))
+	} else {
+		// Add spatial surrogates to the cache.
+		e.Add(filepath.Walk(c.griddedSrgs,
+			func(path string, info os.FileInfo, err error) error {
+				if strings.HasSuffix(path, ".dbf") {
+					fname := info.Name()
+					//e.Add(
+					// ignore errors because it always fails
+					// trying to copy the grid shapefiles
+					// into the cache.
+					spatialsrg.AddSurrogateToCache(path,
+						fname[0:len(fname)-4], grids) //)
+				}
+				return err
+			}))
 	}
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
-	spatialsrg.SetupSrgMapCache(t)
-	e.Add(c.GridRef())
 	go c.SurrogateGenerator()
 	return
 }
@@ -96,6 +135,7 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 		e.Add(grid.WriteToShp(c.griddedSrgs))
 		grids = append(grids, grid)
 	}
+	c.setupSrgCache(e)
 }
 
 // Use a spatial table (which needs to be already loaded into PostGIS
@@ -112,6 +152,7 @@ func (c *RunData) SpatialSetupIrregularGrid(name, shapeFilePath string,
 			filepath.Join(c.shapefiles, "timezone"), "zone"))
 	}
 	grids = append(grids, grid)
+	c.setupSrgCache(e)
 }
 
 type SpatialTotals struct {
@@ -162,7 +203,8 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 	switch c.SectorType {
 	case "point":
-		ct := gdal.CreateCoordinateTransform(c.inputSr, grids[0].Sr)
+		var ct *gisconversions.CoordinateTransform
+		ct, err = gisconversions.NewCoordinateTransform(c.inputSr, grids[0].Sr)
 		for record := range InputChan {
 			emisInRecord := false
 			for pol, data := range record.ANN_EMIS {
@@ -181,7 +223,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 					var withinGrid bool
 					record.PointXcoord, record.PointYcoord, row, col,
 						withinGrid, err = grid.GetIndex(record.XLOC,
-						record.YLOC, &c.inputSr, &ct)
+						record.YLOC, &c.inputSr, ct)
 					if err != nil {
 						panic(err)
 					}
@@ -297,9 +339,8 @@ func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
 	MergeFunction := srgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
-		dataFileName := filepath.Join(c.griddedSrgs, grid.Name+"_"+srgNum+".dbf")
 		srg, err = spatialsrg.RetrieveGriddingSurrogate(
-			dataFileName, FIPS, grid)
+			srgNum, FIPS, grid)
 		if err != nil {
 			panic(err)
 		}
