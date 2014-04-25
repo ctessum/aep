@@ -27,7 +27,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
 
-	If the above libraries and programs are in a nonstandard location, be sure to set the `$CGO_CFLAGS` and `$CGO_LDFLAGS` environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial.
+	If the above libraries and programs are in a nonstandard location, be sure to set the `$CGO_CFLAGS` and `$CGO_LDFLAGS` environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial, as well as the `$GOROOT/bin` and `$GOPATH/bin` directories.
 
 3. Download and install the main program:
 
@@ -81,7 +81,7 @@ and [RunData](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep#RunData) data h
 
 Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run. In the emissions files, you can use the variable [month] to represent the current month.
 
-Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
+Some of the fields in the configuration file have automatic default values associated with them. Additionally, some can only be specified in the `DefaultSettings` section of the file; for these variables, settings specified for individual sectors will be ignored. Refer to the [source code](aep/src/default/lib.aep/configure.go#cl-177) to further understand this behavior.
 
 ### API
 
@@ -92,4 +92,4 @@ to see the functions available in the API and investigate how they work.
 
 ### Distributed computing
 
-AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](src/default/scripts/run_distributed.pbs).
+AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script shows how to run the program on 10 nodes with 8 processors each is available [here](aep/src/default/scripts/run_distributed.pbs).
