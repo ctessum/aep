@@ -19,8 +19,10 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
-	"bitbucket.org/ctessum/aep/gis"
-	"bitbucket.org/ctessum/aep/sparse"
+	"bitbucket.org/ctessum/aep/lib.aep"
+	"fmt"
+	"github.com/ctessum/shapefile"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -32,22 +34,23 @@ const (
 	Tolerance = 1.e-5
 )
 
-var (
-	testFIPS = []string{"27123"}
-)
+var gopath string
+
+func init() {
+	gopath = os.Getenv("GOPATH")
+}
 
 func TestModelRun(t *testing.T) {
-	gopath := os.Getenv("GOPATH")
-	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep", "test", "Minneapolis2005.json")
-	//config := "/media/chris/data/2005_nei_data/2005_nei.json"
-	os.Args = append(os.Args, "-config="+config, "-testmode=true") //, "-sectors=ptipm")
+	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep",
+		"scripts", "config2005nei.json")
+	os.Args = append(os.Args, "-config="+config, "-testmode=true")//, "-sectors=othon")
 	main()
 }
 
 // Check whether the total mass of all pollutants in inventory matches
 // total mass of all pollutants after speciation.
 func TestSpeciation(t *testing.T) {
-	for sector, data1 := range Report.SectorResults {
+	for sector, data1 := range aep.Report.SectorResults {
 		for period, results := range data1 {
 			var inventoryTotal, speciationTotal float64
 			for _, vals := range results.SpeciationResults.Kept {
@@ -78,51 +81,79 @@ func TestSpeciation(t *testing.T) {
 	}
 }
 
-// Check whether the sums of gridding surrogates for counties known to fall
-// completely within all of the gridding domains are equal to one.
-// This test might fail if there are surrogates for more than one country
+// Check whether the sums of gridding surrogates for counties that fall
+// completely within the gridding domains are equal to one.
 func TestGriddingSurrogates(t *testing.T) {
-	pg, err := gis.Connect(Report.Config.PostGISuser,
-		Report.Config.PostGISdatabase, Report.Config.PostGISpassword,
-		Report.Config.OtherLibpqConnectionParameters)
-	defer pg.Disconnect()
-	if err != nil {
-		panic(err)
-	}
-	var passfail string
-	for _, FIPS := range testFIPS {
-		for tableName, status := range Status.Surrogates {
-			if status == "Ready" {
-				splitSrg := strings.Split(tableName, "_")
-				var srg *sparse.SparseArray
-				for _, grid := range grids {
-					if grid.Name == splitSrg[0] {
-						srg = Report.Config.retrieveSurrogate(splitSrg[1],
-							FIPS, grid, pg, make([]string, 0))
+	srgDir := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep",
+		"test", "Output", "srgs")
+	err := filepath.Walk(srgDir,
+		func(path string, info os.FileInfo, err error) error {
+			fname := info.Name()
+			if strings.HasSuffix(path, ".dbf") && strings.Contains(fname, "_") {
+				f, err := os.Open(path)
+				defer f.Close()
+				if err != nil {
+					return err
+				}
+				data, err := shapefile.OpenDBFFile(f)
+				if err != nil {
+					return err
+				}
+				columnIDs := make([]int, 4)
+				for i, column := range []string{"inputID",
+					"shapeFrac", "allCovered"} {
+					var ok bool
+					columnIDs[i], ok = data.FieldIndicies[column]
+					if !ok {
+						err = fmt.Errorf("Column %v not found in %v. "+
+							"Column options are %v",
+							column, path, data.FieldIndicies)
+						return err
 					}
 				}
-				sum := srg.Sum()
-				difference := diff(sum, 1.0)
-				if difference > Tolerance || math.IsNaN(difference) {
-					t.Fail()
-					passfail = "FAIL"
-				} else {
-					passfail = "PASS"
+
+				srgSums := make(map[string]float64)
+				for {
+					tempVals, err := data.NextRecord()
+					if err != nil {
+						if err == io.EOF {
+							err = nil
+							break
+						}
+						return err
+					}
+					inputID := tempVals[columnIDs[0]].(string)
+					shapeFraction := tempVals[columnIDs[1]].(float64)
+					allCovered := tempVals[columnIDs[2]].(int)
+					if allCovered == 1 {
+						srgSums[inputID] += shapeFraction
+					}
 				}
-				t.Logf("%v, %v, surrogate error=%.1e: %v\n",
-					tableName, FIPS, difference, passfail)
-			} else {
-				t.Logf("%v, %v, %v, Surrogate did not generate "+
-					"correctly. Status=%v\n", tableName, FIPS, status)
+				for inputID, sum := range srgSums {
+					var passfail string
+					difference := diff(sum, 1.0)
+					if difference > Tolerance || math.IsNaN(difference) {
+						t.Fail()
+						passfail = "FAIL"
+					} else {
+						passfail = "PASS"
+					}
+					t.Logf("%v, %v, surrogate total=%.3f: %v\n",
+						fname, inputID, sum, passfail)
+				}
+				return err
 			}
-		}
+			return err
+		})
+	if err != nil {
+		panic(err)
 	}
 }
 
 // Check whether the total mass of each pollutant after speciation matches
 // the mass of the same pollutant after gridding.
 func TestSpatialization(t *testing.T) {
-	for sector, data1 := range Report.SectorResults {
+	for sector, data1 := range aep.Report.SectorResults {
 		for period, results := range data1 {
 			for pol, specVal := range results.SpeciationResults.Kept {
 				for grid, _ := range results.SpatialResults.InsideDomainTotals {
