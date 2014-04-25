@@ -43,7 +43,7 @@ func init() {
 func TestModelRun(t *testing.T) {
 	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep",
 		"scripts", "config2005nei.json")
-	os.Args = append(os.Args, "-config="+config, "-testmode=true")//, "-sectors=othon")
+	os.Args = append(os.Args, "-config="+config, "-testmode=true") //, "-sectors=othon")
 	main()
 }
 
@@ -157,8 +157,15 @@ func TestSpatialization(t *testing.T) {
 		for period, results := range data1 {
 			for pol, specVal := range results.SpeciationResults.Kept {
 				for grid, _ := range results.SpatialResults.InsideDomainTotals {
-					in := results.SpatialResults.InsideDomainTotals[grid][pol].Val
-					out := results.SpatialResults.OutsideDomainTotals[grid][pol].Val
+					var in, out float64
+					if x, ok := results.SpatialResults.
+						InsideDomainTotals[grid][pol]; ok {
+						in = x.Val
+					}
+					if x, ok := results.SpatialResults.
+						OutsideDomainTotals[grid][pol]; ok {
+						out = x.Val
+					}
 					spatialTotal := in + out
 					difference := diff(specVal.Val, spatialTotal)
 					t.Logf("%v, %v, %v, %v:\nspeciation=%.5e, "+
