@@ -25,16 +25,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"strings"
-	//	"github.com/ctessum/carto"
 	"github.com/ctessum/geomop"
 	"github.com/ctessum/shapefile"
 	"github.com/cznic/kv"
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
 	"github.com/twpayne/gogeom/geom"
-	//"github.com/twpayne/gogeom/geom/encoding/wkt"
-	//	"image/color"
 	"io"
 	"log"
 	"math"
@@ -42,10 +38,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 )
-
-var Multiplier = 1000
 
 var (
 	SrgProgress     float64
@@ -75,7 +70,7 @@ type GriddedSrgData struct {
 	InputID              string
 	InputGeom            geom.T
 	GridCellGeom         []geom.T
-	Cells                []*GridCell
+	Cells                []GridCell
 	SingleShapeSrgWeight float64
 	CoveredByGrid        bool
 }
@@ -476,7 +471,6 @@ func srgGenWorkerLocal(singleShapeChan, griddedSrgChan chan *GriddedSrgData,
 		err = s.Calculate(data, result)
 		if err != nil {
 			errchan <- err
-			//return
 		}
 		griddedSrgChan <- result
 	}
@@ -585,10 +579,10 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 				return
 			}
 		}
-		result.Cells = make([]*GridCell, 0, len(GridCells))
+		result.Cells = make([]GridCell, 0, len(GridCells))
 		for _, cell := range GridCells {
 			if cell.Weight > 0. {
-				result.Cells = append(result.Cells, cell)
+				result.Cells = append(result.Cells, *cell)
 			}
 		}
 	}
@@ -623,18 +617,10 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	var size, singleShapeSrgWeight float64
 	var intersection geom.T
 	srgs := make([]*SrgHolder, 0, 500)
-	//if data.InputID == "31041" {
-	//	w, err := wkt.Encode(data.InputGeom)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	fmt.Println("\ninput\n", string(w))
-	//}
 	for i := procnum; i < len(srgsWithinBounds); i += nprocs {
-		srgI := srgsWithinBounds[i]
+		srg := srgsWithinBounds[i].(*SrgHolder)
 		Log(fmt.Sprintf("intersections1 surrogate shape %v out of %v", i,
 			len(srgsWithinBounds)), 4)
-		srg := srgI.(*SrgHolder)
 		switch srg.Geom.(type) {
 		case geom.Point:
 			if geomop.PointInPolygon(srg.Geom.(geom.Point), data.InputGeom) {
@@ -643,41 +629,12 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 				continue
 			}
 		default:
-			//if data.InputID == "31041" {
-			//		w, err := wkt.Encode(srg.Geom)
-			//		if err != nil {
-			//			panic(err)
-			//		}
-			//		fmt.Println("srg", string(w))
-			//}
 			intersection = geomop.Construct(srg.Geom,
 				data.InputGeom, geomop.INTERSECTION)
 			if intersection == nil {
 				continue
 			}
-			//if data.InputID == "31041" {
-			//			w, err = wkt.Encode(intersection)
-			//			if err != nil {
-			//				panic(err)
-			//			}
-			//			fmt.Println("intersection", string(w))
-			//}
 		}
-		//if geomop.Area(intersection) > geomop.Area(srg.Geom)*1.01 &&
-		//	geomop.Area(intersection) > 1000. {
-		//	fmt.Println("input", data.InputGeom.(geom.Polygon).Rings)
-		//	fmt.Println("srg", srg.Geom.(geom.Polygon).Rings)
-		//	fmt.Println("intersection", intersection.(geom.Polygon).Rings)
-		//	fmt.Println(geomop.Area(intersection), geomop.Area(srg.Geom), "xxxxxxxxxxxxxxxxxxxxxxxxxx")
-		//	f, _ := os.Create("intersectionError1.png")
-		//	carto.DrawShapes(f,
-		//		[]color.NRGBA{{0, 0, 0, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
-		//		[]color.NRGBA{{255, 0, 0, 127}, {0, 255, 0, 127},
-		//			{0, 0, 0, 200}},
-		//		5, 0, data.InputGeom, srg.Geom, intersection)
-		//	f.Close()
-		//	fmt.Println("intersections1 area bigger than source polygon")
-		//}
 		srgs = append(srgs, &SrgHolder{Weight: srg.Weight, Geom: intersection})
 		// Add the individual surrogate weight to the total
 		// weight for the input shape.
@@ -709,28 +666,13 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 	InputShapeSrgs []*SrgHolder, GridCells []*GridCell,
 	errChan chan error) {
-	//var GridCellP *geos.PGeometry
 	for i := procnum; i < len(GridCells); i += nprocs {
-		Log(fmt.Sprintf("intersections2 grid cell %v out of %v", i, len(GridCells)), 4)
+		Log(fmt.Sprintf("intersections2 grid cell %v out of %v", i,
+			len(GridCells)), 4)
 		cell := GridCells[i]
-		//	if data.InputID == "31041" {
-		//w, err := wkt.Encode(cell.Geom)
-		//if err != nil {
-		//		panic(err)
-		//	}
-		//	fmt.Println("\ncell\n", string(w))
-		//	}
 		var size, weight float64
-		//var size3, sizeSum float64
 		var intersection geom.T
 		for _, srg := range InputShapeSrgs {
-			//		if data.InputID == "31041" {
-			//		w, err := wkt.Encode(srg.Geom)
-			//		if err != nil {
-			//			panic(err)
-			//		}
-			//		fmt.Println("srg", string(w))
-			//		}
 			switch srg.Geom.(type) {
 			case geom.Point:
 				if geomop.PointInPolygon(srg.Geom.(geom.Point), cell.Geom) {
@@ -744,31 +686,7 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 				if intersection == nil {
 					continue
 				}
-				//			if data.InputID == "31041" {
-				//				w, err := wkt.Encode(intersection)
-				//				if err != nil {
-				//					panic(err)
-				//				}
-				//				fmt.Println("intersection", string(w))
-				//		}
 			}
-			//if geomop.Area(intersection) > geomop.Area(srg.Geom)*1.01 &&
-			//	geomop.Area(intersection) > 1000. {
-			//	fmt.Println("cell", cell.Geom.(geom.Polygon).Rings)
-			//	fmt.Println("srg", srg.Geom.(geom.Polygon).Rings)
-			//	fmt.Println("intersection", intersection.(geom.Polygon).Rings)
-			//	fmt.Println(geomop.Area(intersection), geomop.Area(srg.Geom), "yyyyyyyyyyyyyyyyyyyyyyyyyyyyy")
-			//	f, _ := os.Create("intersectionError2.png")
-			//	carto.DrawShapes(f,
-			//		[]color.NRGBA{{0, 0, 0, 255}, {0, 0, 0, 255}, {0, 0, 0, 255}},
-			//		[]color.NRGBA{{255, 0, 0, 127}, {0, 255, 0, 127},
-			//			{0, 0, 0, 200}},
-			//		5, 0, cell.Geom, srg.Geom, intersection)
-			//	f.Close()
-			//	fmt.Println("intersections2 area bigger than source polygon")
-			//}
-			// Add the individual surrogate weight to the total
-			// weight fraction for the grid cell.
 			switch srg.Geom.(type) {
 			case geom.Polygon, geom.MultiPolygon:
 				size = geomop.Area(intersection)
@@ -781,20 +699,7 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 			default:
 				panic(geomop.NewError(intersection))
 			}
-			//	sizeSum += size
 		}
-		//if weight > 1.1 {
-		//	err = fmt.Errorf("Surrogate weight (%g) > 1. This is illegal."+
-		//		"InputID=%v, SingleShapeSrgWeight=%g", weight, data.InputID,
-		//		data.SingleShapeSrgWeight)
-		//	errChan <- handle(err, "")
-		//	return
-		//}
-		//size3 = geomop.Area(a)
-		//	if (sizeSum-size3)/size3 > 0.05 {
-		//		fmt.Println(sizeSum, size3)
-		//		panic("intersection2 too bigxxxx")
-		//	}
 		GridCells[i].Weight = weight
 	}
 	errChan <- nil

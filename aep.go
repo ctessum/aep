@@ -29,11 +29,11 @@ import (
 
 func main() {
 	log.Println("\n",
-		"-------------------------------------------------------------\n",
-		"                           Welcome!\n",
-		"                Program (A)ir (E)missions (P)rocessor\n",
-		"   Copyright 2012-2014 Regents of the University of Minnesota\n",
-		"-------------------------------------------------------------\n")
+		"----------------------------------------------------------\n",
+		"                        Welcome!\n",
+		"             Program (A)ir (E)missions (P)rocessor\n",
+		"Copyright 2012-2014 Regents of the University of Minnesota\n",
+		"----------------------------------------------------------\n")
 
 	// Read from configuration file and prepare sectors for processing
 	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")

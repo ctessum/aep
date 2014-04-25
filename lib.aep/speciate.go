@@ -91,8 +91,8 @@ func (c *RunData) SpecRef() (specRef map[string]interface{}, err error) {
 
 // SpecRefCombo reads the SMOKE gspro_combo file, which maps location
 // codes to chemical speciation profiles for mobile sources.
-func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]map[string]float64, err error) {
-	specRef = make(map[string]map[string]map[string]float64)
+func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]interface{}, err error) {
+	specRef = make(map[string]map[string]interface{})
 	// map[pol][FIPS][code]frac
 	var record string
 	fid, err := os.Open(c.SpecRefComboFile)
@@ -144,7 +144,7 @@ func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 			}
 			if period == runPeriod {
 				if _, ok := specRef[pol]; !ok {
-					specRef[pol] = make(map[string]map[string]float64)
+					specRef[pol] = make(map[string]interface{})
 				}
 				if _, ok := specRef[pol][FIPS]; !ok {
 					specRef[pol][FIPS] = make(map[string]float64)
@@ -155,7 +155,7 @@ func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 					if err != nil {
 						panic(err)
 					}
-					specRef[pol][FIPS][code] = frac
+					specRef[pol][FIPS].(map[string]float64)[code] = frac
 				}
 			}
 		}
@@ -495,8 +495,8 @@ func (c *RunData) handleGroupString(specName string, groupString sql.NullString)
 }
 
 type SpecRef struct {
-	sRef      map[string]interface{}                   // map[SCC][pol]code
-	sRefCombo map[string]map[string]map[string]float64 // map[pol][FIPS][code]frac
+	sRef      map[string]interface{}            // map[SCC][pol]code
+	sRefCombo map[string]map[string]interface{} // map[pol][FIPS][code]frac
 }
 
 func (c *RunData) NewSpecRef() (sp *SpecRef, err error) {
@@ -648,7 +648,13 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 						}
 					}
 					countryCode := getCountryCode(record.Country)
-					codes := sp.sRefCombo[pol][countryCode+record.FIPS]
+					_, _, codesI, err := MatchCodeDouble(pol, countryCode+record.FIPS, sp.sRefCombo)
+					if err != nil {
+						err := fmt.Errorf("In GSPRO COMBO file, missing record: %v",
+							err.Error())
+						panic(err)
+					}
+					codes := codesI.(map[string]float64)
 					specFactors = make(map[string]*SpecHolder)
 					doubleCountSpecFactors = make(map[string]*SpecHolder)
 					ungroupedSpecFactors = make(map[string]*SpecHolder)
@@ -738,7 +744,8 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 		}
 		if absBias(fracSum, 1.0) > tolerance {
 			err = fmt.Errorf("Sum of speciation fractions (%v) for pollutant %v "+
-				"is not equal to 1.", fracSum, pol)
+				"is not equal to 1. SpecType is %v", fracSum, pol,
+				c.PolsToKeep[cleanPol(pol)].SpecType)
 			panic(err)
 		}
 	}
