@@ -102,14 +102,11 @@ func (c *RunData) setupSrgCache(e *ErrCat) {
 		// Add spatial surrogates to the cache.
 		e.Add(filepath.Walk(c.griddedSrgs,
 			func(path string, info os.FileInfo, err error) error {
-				if strings.HasSuffix(path, ".dbf") {
+				if strings.HasSuffix(path, ".dbf") &&
+					strings.Contains(info.Name(), "_") {
 					fname := info.Name()
-					//e.Add(
-					// ignore errors because it always fails
-					// trying to copy the grid shapefiles
-					// into the cache.
-					spatialsrg.AddSurrogateToCache(path,
-						fname[0:len(fname)-4], grids) //)
+					e.Add(spatialsrg.AddSurrogateToCache(path,
+						fname[0:len(fname)-4], grids))
 				}
 				return err
 			}))
@@ -271,11 +268,13 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 					srg := c.getSurrogate(srgNum, record.FIPS, grid,
 						make([]string, 0))
+					val.Gridded[i] = sparse.ZerosSparse(grid.Ny,
+						grid.Nx)
 					if srg != nil {
 						val.Gridded[i] = srg.ScaleCopy(val.Val)
 						TotalGrid[grid][pol].AddSparse(val.Gridded[i])
-						totals.Add(pol, grid.Name, val, i)
 					}
+					totals.Add(pol, grid.Name, val, i)
 				}
 			}
 			OutputChan <- record

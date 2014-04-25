@@ -763,7 +763,6 @@ func RetrieveGriddingSurrogate(srgCode string, inputID string,
 
 func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
 	err error) {
-	srgMap := make(map[string]*sparse.SparseArray)
 	var f *os.File
 	f, err = os.Open(dataFileName)
 	defer f.Close()
@@ -775,8 +774,9 @@ func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
 	if err != nil {
 		return
 	}
-	columnIDs := make([]int, 4)
-	for i, column := range []string{"row", "col", "inputID", "shapeFrac"} {
+	columnIDs := make([]int, 5)
+	for i, column := range []string{"row", "col", "inputID", "shapeFrac",
+		"allCovered"} {
 		var ok bool
 		columnIDs[i], ok = data.FieldIndicies[column]
 		if !ok {
@@ -797,6 +797,8 @@ func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
 		}
 	}
 
+	srgMap := make(map[string]*sparse.SparseArray)
+	allCovered := make(map[string]int)
 	var tempVals []interface{}
 	for {
 		tempVals, err = data.NextRecord()
@@ -811,12 +813,21 @@ func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
 		col := tempVals[columnIDs[1]].(int)
 		inputID := tempVals[columnIDs[2]].(string)
 		shapeFraction := tempVals[columnIDs[3]].(float64)
+		allCovered[inputID] = tempVals[columnIDs[4]].(int)
 		if _, ok := srgMap[inputID]; !ok {
 			srgMap[inputID] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
 		srgMap[inputID].Set(shapeFraction, row, col)
 	}
 	for inputID, data := range srgMap {
+		// normalize so sum = 1 if the input shape is completely covered by the
+		// grid.
+		if allCovered[inputID] == 1 {
+			sum := data.Sum()
+			if sum != 0. {
+				data.Scale(1. / sum)
+			}
+		}
 		cacheKey := []byte(fmt.Sprintf("%v%v%v", gridName, srgCode, inputID))
 		buf := new(bytes.Buffer)
 		e := gob.NewEncoder(buf)
