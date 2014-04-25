@@ -75,9 +75,9 @@ The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/J
 			}
 		}
 	}
-Refer directly to the source code for the fields that make up the 
-[DirInfo](src/default/lib.aep/configure.go#cl-71)
-and [RunData](src/default/lib.aep/configure.go#cl-78) data holders. Only fields where the first letter is capitalized are valid options for the configuration file.
+Refer directly to the source code documentation for the fields that make up the 
+[DirInfo](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep#DirInfo)
+and [RunData](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep#RunData) data holders.
 
 Within the configuration file, you can use the variables `[Home]`, `[Input]`, and `[Ancilliary]` to refer to the directories specified in the `Dirs` section of the file.You can also use environment variables such as `$GOPATH`. When specifiying the locations of the `OldWRFout` files, you can use the variables `[DATE]` and `[DOMAIN]` which will be replaced with the relevant dates and domains while the program is being run. In the emissions files, you can use the variable [month] to represent the current month.
 
@@ -85,13 +85,9 @@ Some of the fields in the configuration file have automatic default values assoc
 
 ### API
 
-The AEP package is split into an executable program and an application programming interface (API). To see what capabilities are available in the API, you can start a `godoc` server:
+The AEP package is split into an executable program and an application programming interface (API). To see what capabilities are available in the API refer to the online [source code documentation](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep).
 	
-	godoc -http=:8080
 
-and then open a web browser and navigate to 
-
-	http://localhost:8080/pkg/bitbucket.org/ctessum/aep/lib.aep/
 to see the functions available in the API and investigate how they work.
 
 ### Distributed computing
