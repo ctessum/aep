@@ -24,7 +24,6 @@ import (
 	"bitbucket.org/ctessum/sparse"
 	"fmt"
 	"github.com/ctessum/geomop"
-	"github.com/ctessum/gogeos/geos"
 	"github.com/dhconnelly/rtreego"
 	"github.com/lukeroth/gdal"
 	"github.com/twpayne/gogeom/geom"
@@ -190,33 +189,27 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 	grid.AddOtherFieldNames("timezone")
 	grid.TimeZones = make(map[int]*sparse.SparseArray)
 
-	ct := gdal.CreateCoordinateTransform(grid.Sr, tzShp.Sr)
+	var ct *gisconversions.CoordinateTransform
+	ct, err = gisconversions.NewCoordinateTransform(grid.Sr, tzShp.Sr)
+	if err != nil {
+		return
+	}
 
-	var cellCenter, geosCell *geos.Geometry
+	var cellCenter geom.T
 	for _, cell := range grid.Cells {
 		// find timezone nearest to the center of the cell.
 		// Need to project grid to timezone projection rather than the
 		// other way around because the timezones include the north
 		// and south poles which don't convert well to other projections.
-		geosCell, err = gisconversions.GeomToGEOS(cell.Geom)
-		if err != nil {
-			return
-		}
-		cellCenter, err = geosCell.Centroid()
-		if err != nil {
-			return
-		}
-		cellCenter, err = gisconversions.GeosTransform(cellCenter, grid.Sr, ct)
+		cellCenter = geomop.Centroid(cell.Geom)
+		cellCenter, err = ct.Reproject(cellCenter)
 		if err != nil {
 			return
 		}
 		var tz float64
 		var foundtz, intersects bool
 		for _, tzData := range timezones {
-			intersects, err = tzData.geom.Intersects(cellCenter)
-			if err != nil {
-				return
-			}
+			intersects = geomop.Within(cellCenter, tzData.Geom)
 			if intersects {
 				if foundtz {
 					err = fmt.Errorf("In spatialsrg.GetTimeZones, there is a " +
@@ -245,7 +238,7 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 
 type tzHolder struct {
 	tz   float64
-	geom *geos.Geometry
+	Geom geom.T
 }
 
 func getTimeZones(tzFile, tzColumn string) (
@@ -264,17 +257,12 @@ func getTimeZones(tzFile, tzColumn string) (
 	for {
 		tzData := new(tzHolder)
 		var tzTemp []interface{}
-		var ggeom geom.T
-		ggeom, tzTemp, err = tzShp.ReadNextFeature(tzIndex)
+		tzData.Geom, tzTemp, err = tzShp.ReadNextFeature(tzIndex)
 		if err != nil {
 			if err == io.EOF {
 				err = nil
 				break
 			}
-			return
-		}
-		tzData.geom, err = gisconversions.GeomToGEOS(ggeom)
-		if err != nil {
 			return
 		}
 		tzData.tz = tzTemp[0].(float64)
