@@ -1,0 +1,34 @@
+<div class="container">
+	<h3>Default configuration settings for simulation {{.Config.SimulationName}} </h3>
+	<h4>(Settings for individual sectors may be different)</h4>
+	<div class="row">
+		<div class="span12">
+			<table class="table table-striped">
+<tr><td>StartDate			</td><td>{{.Config.StartDate}}</td></tr>
+<tr><td>EndDate				</td><td>{{.Config.EndDate}}</td></tr>
+<tr><td>OutputType			</td><td>{{.Config.OutputType}}</td></tr>
+<tr><td>Speciate			</td><td>{{.Config.RunSpeciate}}</td></tr>
+<tr><td>Spatialize			</td><td>{{.Config.RunSpatialize}}</td></tr>
+<tr><td>Temporal			</td><td>{{.Config.RunTemporal}}</td></tr>
+<tr><td>SpecRefFile			</td><td>{{.Config.SpecRefFile}}</td></tr>
+<tr><td>SpecRefComboFile	</td><td>{{.Config.SpecRefComboFile}}</td></tr>
+<tr><td>SpecProFile			</td><td>{{.Config.SpecProFile}}</td></tr>
+<tr><td>SpecType			</td><td>{{.Config.SpecType}}</td></tr>
+<tr><td>SpeciesGroupName	</td><td>{{.Config.SpeciesGroupName}}</td></tr>
+<tr><td>GridRefFile			</td><td>{{.Config.GridRefFile}}</td></tr>
+<tr><td>SrgSpecFile			</td><td>{{.Config.SrgSpecFile}}</td></tr>
+<tr><td>TemporalRefFile		</td><td>{{.Config.TemporalRefFile}}</td></tr>
+<tr><td>MatchFullSCC		</td><td>{{.Config.MatchFullSCC}}</td></tr>
+<tr><td>EarthRadius			</td><td>{{.Config.EarthRadius}} meters</td></tr>
+<tr><td>WPSnamelist			</td><td>{{.Config.WPSnamelist}}</td></tr>
+<tr><td>WRFnamelist			</td><td>{{.Config.WRFnamelist}}</td></tr>
+<tr><td>RegenerateSpatialData</td><td>{{.Config.RegenerateSpatialData}}</td></tr>
+<tr><td>PostGISuser</td><td>{{.Config.PostGISuser}}</td></tr>
+<tr><td>PostGISdatabase</td><td>{{.Config.PostGISdatabase}}</td></tr>
+<tr><td>ShapefileSchema</td><td>{{.Config.ShapefileSchema}}</td></tr>
+<tr><td>SRID</td><td>{{.Config.SRID}}</td></tr>
+<tr><td>LineMap</td><td>{{.Config.LineMap}}</td></tr>
+			</table>
+		</div>
+	</div>
+</div>
