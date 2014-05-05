@@ -792,7 +792,7 @@ func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
 	srgCode := s[1]
 	var grid *GridDef
 	for _, g := range grids {
-		if gridName == g.Name {
+		if strings.Contains(g.Name, gridName) {
 			grid = g
 		}
 	}
