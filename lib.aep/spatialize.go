@@ -293,7 +293,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 func (c *RunData) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	upstreamSrgs []string) (srg *sparse.SparseArray) {
 
-	tableName := grid.Name + "_" + srgNum
+	tableName := grid.Name + "___" + srgNum
 	status := Status.GetSrgStatus(tableName,
 		filepath.Join(c.griddedSrgs, tableName+".shp"))
 	switch {
@@ -468,7 +468,7 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 			err = fmt.Errorf("No match for surrogate named %v.", mrgval.name)
 			return
 		}
-		tableName := grid.Name + "_" + newSrgNum
+		tableName := grid.Name + "___" + newSrgNum
 		filename := filepath.Join(c.griddedSrgs, tableName+".shp")
 		status := Status.GetSrgStatus(tableName, filename)
 		switch {
