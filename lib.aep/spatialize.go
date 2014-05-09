@@ -436,7 +436,7 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
-	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
 	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
 	err = spatialsrg.CreateGriddingSurrogate(srgNum, inputFilePath,
@@ -461,7 +461,7 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 	grid := srgData.grid
 	c.Log(srgSpec[srgNum], 2)
 	MergeFunction := srgSpec[srgNum].MergeFunction
-	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	for _, mrgval := range MergeFunction {
 		newSrgNum, ok := srgCodes[mrgval.name]
 		if !ok {
