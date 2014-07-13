@@ -107,7 +107,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 
 	SrgProgress = 0.
 
-	OutName := fmt.Sprintf("%v_%v", gridData.Name, srgCode)
+	OutName := fmt.Sprintf("%v___%v", gridData.Name, srgCode)
 	OutFile := filepath.Join(outputDir, OutName)
 	// if this surrogate was requested by more than one sector, make sure we
 	// don't create it twice.
@@ -194,7 +194,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			return
 		}
 	}
-	// Write data to shapefiles (shapefile and srgMapCache)
+	// Write data to files (shapefile and srgMapCache)
 	var outShp *gis.Shapefile
 	outShp, err = gis.CreateShapefile(outputDir, OutName, gridData.Sr,
 		gdal.GT_Polygon,
@@ -211,6 +211,14 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		srgOut := sparse.ZerosSparse(gridData.Ny, gridData.Nx)
 		for _, cell := range srg.Cells {
 			srgOut.Set(cell.Weight, cell.Row, cell.Col)
+		}
+		// normalize so sum = 1 if the input shape is completely covered by the
+		// grid.
+		if srg.CoveredByGrid {
+			sum := srgOut.Sum()
+			if sum != 0. {
+				srgOut.Scale(1. / sum)
+			}
 		}
 		buf := new(bytes.Buffer)
 		e := gob.NewEncoder(buf)
