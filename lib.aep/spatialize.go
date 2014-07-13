@@ -296,7 +296,7 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 func (c *RunData) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	upstreamSrgs []string) (srg *sparse.SparseArray) {
 
-	tableName := grid.Name + "_" + srgNum
+	tableName := grid.Name + "___" + srgNum
 	status := Status.GetSrgStatus(tableName,
 		filepath.Join(c.griddedSrgs, tableName+".shp"))
 	switch {
@@ -439,7 +439,7 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
 	WeightColumns := srgSpec[srgNum].WeightColumns
 	FilterFunction := srgSpec[srgNum].FilterFunction
-	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
 	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
 	err = spatialsrg.CreateGriddingSurrogate(srgNum, inputFilePath,
@@ -464,14 +464,14 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 	grid := srgData.grid
 	c.Log(srgSpec[srgNum], 2)
 	MergeFunction := srgSpec[srgNum].MergeFunction
-	Status.Surrogates[grid.Name+"_"+srgNum] = "Generating"
+	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	for _, mrgval := range MergeFunction {
 		newSrgNum, ok := srgCodes[mrgval.name]
 		if !ok {
 			err = fmt.Errorf("No match for surrogate named %v.", mrgval.name)
 			return
 		}
-		tableName := grid.Name + "_" + newSrgNum
+		tableName := grid.Name + "___" + newSrgNum
 		filename := filepath.Join(c.griddedSrgs, tableName+".shp")
 		status := Status.GetSrgStatus(tableName, filename)
 		switch {
