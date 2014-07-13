@@ -416,7 +416,7 @@ func (c *RunData) SurrogateGenerator() {
 		if _, ok := srgSpec[srgNum]; !ok {
 			err := fmt.Errorf("There is no surrogate specification for surrogate "+
 				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
-			Status.Surrogates[srgData.grid.Name+"_"+srgNum] = "Failed!"
+			Status.Surrogates[srgData.grid.Name+"___"+srgNum] = "Failed!"
 			srgData.finishedChan <- err
 			continue
 		}
@@ -446,10 +446,10 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
 		grid, c.griddedSrgs, c.slaves)
 	if err == nil {
-		Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
+		Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
 		return
 	} else {
-		Status.Surrogates[grid.Name+"_"+srgNum] = "Failed!"
+		Status.Surrogates[grid.Name+"___"+srgNum] = "Failed!"
 		err = fmt.Errorf("Surrogate %v_%v Failed!\n%v",
 			grid.Name, srgNum, err.Error())
 		return
@@ -493,7 +493,7 @@ func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
 			return
 		}
 	}
-	Status.Surrogates[grid.Name+"_"+srgNum] = "Ready"
+	Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
 	return
 }
 

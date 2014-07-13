@@ -733,7 +733,11 @@ func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
 	if err != nil {
 		panic(err)
 	}
-	_, err = g.srgMapCache.db.Exec("CREATE TABLE srgs (code TEXT, " +
+	err = g.srgMapCache.db.Ping()
+	if err != nil {
+		return
+	}
+	g.srgMapCache.db.Exec("CREATE TABLE srgs (code TEXT, " +
 		"inputid TEXT, val BLOB)")
 	return
 }
@@ -747,101 +751,21 @@ func RetrieveGriddingSurrogate(srgCode string, inputID string,
 		"SELECT val FROM srgs WHERE "+
 			"code=? AND inputid=?", srgCode, inputID)
 	var tempResult interface{}
-	err = tempRow.Scan(tempResult)
+	err = tempRow.Scan(&tempResult)
 	if err != nil {
+		// No result found, return nil
+		if err == sql.ErrNoRows {
+			err = nil
+		}
 		return
 	}
 	srgByte := tempResult.([]byte)
-	if srgByte != nil {
-		buf := bytes.NewReader(srgByte)
-		d := gob.NewDecoder(buf)
-		err = d.Decode(&srg)
-		if err != nil {
-			return
-		}
-		srg.Fix()
+	buf := bytes.NewReader(srgByte)
+	d := gob.NewDecoder(buf)
+	err = d.Decode(&srg)
+	if err != nil {
+		return
 	}
+	srg.Fix()
 	return
 }
-
-//func AddSurrogateToCache(dataFileName, srgName string, grids []*GridDef) (
-//	err error) {
-//	var f *os.File
-//	f, err = os.Open(dataFileName)
-//	defer f.Close()
-//	if err != nil {
-//		return
-//	}
-//	var data *shapefile.DBFFile
-//	data, err = shapefile.OpenDBFFile(f)
-//	if err != nil {
-//		return
-//	}
-//	columnIDs := make([]int, 5)
-//	for i, column := range []string{"row", "col", "inputID", "shapeFrac",
-//		"allCovered"} {
-//		var ok bool
-//		columnIDs[i], ok = data.FieldIndicies[column]
-//		if !ok {
-//			err = fmt.Errorf("Column %v not found in %v. Column options are %v",
-//				column, dataFileName, data.FieldIndicies)
-//			return
-//		}
-//	}
-//
-//	//Figure out which grid this is.
-//	s := strings.Split(srgName, "_")
-//	gridName := s[0]
-//	srgCode := s[1]
-//	var grid *GridDef
-//	for _, g := range grids {
-//		if gridName == g.Name {
-//			grid = g
-//		}
-//	}
-//
-//	srgMap := make(map[string]*sparse.SparseArray)
-//	allCovered := make(map[string]int)
-//	var tempVals []interface{}
-//	for {
-//		tempVals, err = data.NextRecord()
-//		if err != nil {
-//			if err == io.EOF {
-//				err = nil
-//				break
-//			}
-//			return
-//		}
-//		row := tempVals[columnIDs[0]].(int)
-//		col := tempVals[columnIDs[1]].(int)
-//		inputID := tempVals[columnIDs[2]].(string)
-//		shapeFraction := tempVals[columnIDs[3]].(float64)
-//		allCovered[inputID] = tempVals[columnIDs[4]].(int)
-//		if _, ok := srgMap[inputID]; !ok {
-//			srgMap[inputID] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-//		}
-//		srgMap[inputID].Set(shapeFraction, row, col)
-//	}
-//	for inputID, data := range srgMap {
-//		// normalize so sum = 1 if the input shape is completely covered by the
-//		// grid.
-//		if allCovered[inputID] == 1 {
-//			sum := data.Sum()
-//			if sum != 0. {
-//				data.Scale(1. / sum)
-//			}
-//		}
-//		//cacheKey := []byte(fmt.Sprintf("%v%v%v", gridName, srgCode, inputID))
-//		buf := new(bytes.Buffer)
-//		e := gob.NewEncoder(buf)
-//		err = e.Encode(data)
-//		if err != nil {
-//			return
-//		}
-//		//err = srgMapCache.Set(cacheKey, buf.Bytes())
-//		if err != nil {
-//			return
-//		}
-//	}
-//	return
-//}
