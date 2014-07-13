@@ -44,6 +44,7 @@ type GridDef struct {
 	IrregularGrid   bool     // whether the grid is a regular grid
 	OtherFieldNames []string // names of other columns we want to keep
 	rtree           *rtreego.Rtree
+	srgMapCache     cacheDB
 }
 
 type GridCell struct {

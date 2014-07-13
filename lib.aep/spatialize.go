@@ -83,9 +83,8 @@ func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	return
 }
 
-func (c *RunData) setupSrgCache(e *ErrCat) {
+func (c *RunData) setupSrgs(e *ErrCat) {
 	c.Log("Setting up surrogate generation...", 1)
-	e.Add(spatialsrg.SetupSrgMapCache(c.griddedSrgs))
 	if c.RegenerateSpatialData {
 		// delete spatial surrogates
 		e.Add(filepath.Walk(c.griddedSrgs,
@@ -93,23 +92,27 @@ func (c *RunData) setupSrgCache(e *ErrCat) {
 				if strings.HasSuffix(path, ".shp") ||
 					strings.HasSuffix(path, ".shx") ||
 					strings.HasSuffix(path, ".dbf") ||
-					strings.HasSuffix(path, ".prj") {
+					strings.HasSuffix(path, ".prj") ||
+					strings.HasSuffix(path, ".sqlite") {
 					os.Remove(path)
 				}
 				return err
 			}))
-	} else {
-		// Add spatial surrogates to the cache.
-		e.Add(filepath.Walk(c.griddedSrgs,
-			func(path string, info os.FileInfo, err error) error {
-				if strings.HasSuffix(path, ".dbf") &&
-					strings.Contains(info.Name(), "_") {
-					fname := info.Name()
-					e.Add(spatialsrg.AddSurrogateToCache(path,
-						fname[0:len(fname)-4], grids))
-				}
-				return err
-			}))
+		//} else {
+		//	// Add spatial surrogates to the cache.
+		//	e.Add(filepath.Walk(c.griddedSrgs,
+		//		func(path string, info os.FileInfo, err error) error {
+		//			if strings.HasSuffix(path, ".dbf") &&
+		//				strings.Contains(info.Name(), "_") {
+		//				fname := info.Name()
+		//				e.Add(spatialsrg.AddSurrogateToCache(path,
+		//					fname[0:len(fname)-4], grids))
+		//			}
+		//			return err
+		//		}))
+	}
+	for _, grid := range grids {
+		e.Add(grid.SetupSrgMapCache(c.griddedSrgs))
 	}
 	t := c.SrgCacheExpirationTime
 	srgCache = cache.New(t*time.Minute, t*time.Minute)
@@ -132,7 +135,7 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 		e.Add(grid.WriteToShp(c.griddedSrgs))
 		grids = append(grids, grid)
 	}
-	c.setupSrgCache(e)
+	c.setupSrgs(e)
 }
 
 // Use a spatial table (which needs to be already loaded into PostGIS
@@ -149,7 +152,7 @@ func (c *RunData) SpatialSetupIrregularGrid(name, shapeFilePath string,
 			filepath.Join(c.shapefiles, "timezone"), "zone"))
 	}
 	grids = append(grids, grid)
-	c.setupSrgCache(e)
+	c.setupSrgs(e)
 }
 
 type SpatialTotals struct {
