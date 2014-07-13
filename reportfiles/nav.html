@@ -1,0 +1,34 @@
+
+<div class="navbar navbar-fixed-top">
+	<div class="navbar-inner">
+		<div class="container">
+			<button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<a class="brand" href="#">AEP html report</a>
+			<div class="nav-collapse collapse">
+				<ul class="nav">
+					{{if .IncludeStatus}}{{if .IsStatus}}
+					<li class="active"><a href="#">Status</a></li>{{else}}
+					<li><a href="/staus">Status</a></li>{{end}}{{end}}
+					{{if .IsConfigure}}
+					<li class="active"><a href="#">Configuration</a></li>{{else}}
+					<li><a href="/config">Configuration</a></li>{{end}}
+					{{if .IsInv}}
+					<li class="active"><a href="#">Inventory</a></li>{{else}}
+					<li><a href="/inventory">Inventory</a></li>{{end}}
+					{{if .IsSpec}}
+					<li class="active"><a href="#">Speciation</a></li>{{else}}
+					<li><a href="/speciate">Speciation</a></li>{{end}}
+					{{if .IsSpatial}}
+					<li class="active"><a href="#">Spatialization</a></li>{{else}}
+					<li><a href="/spatial">Spatialization</a></li>{{end}}
+					<li><a href="/debug/pprof">pprof</a></li>
+            </ul>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
