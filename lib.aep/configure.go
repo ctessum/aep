@@ -141,7 +141,7 @@ type RunData struct {
 	ForceWesternHemisphere bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
 	InvFileNames           []string      // List of input files.
 	EarthRadius            float64       // in meters
-	SrgCacheExpirationTime time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 5 minutes.
+	SrgCacheExpirationTime time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 1 minute.
 	WPSnamelist            string        // Path to WPS namelist file
 	WRFnamelist            string        // Path to WPS namelist file
 	OldWRFout              string        // Path to old WRF output files for plume rise calculations.
@@ -234,7 +234,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
 	if d.SrgCacheExpirationTime == 0 {
-		d.SrgCacheExpirationTime = 5
+		d.SrgCacheExpirationTime = 1
 	}
 	c.SrgCacheExpirationTime = d.SrgCacheExpirationTime
 	c.testMode = d.testMode

@@ -201,6 +201,17 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		[]string{"row", "col", "inputID", "shapeFrac", "allCovered"},
 		0, 0, "", float64(0), true)
 	defer outShp.Close()
+	var tx *sql.Tx
+	tx, err = gridData.srgMapCache.db.Begin()
+	if err != nil {
+		return
+	}
+	var stmt *sql.Stmt
+	stmt, err = tx.Prepare("INSERT INTO srgs " +
+		"(code, inputid, val) VALUES (?, ?, ?)")
+	if err != nil {
+		return
+	}
 	for fid := 0; fid < len(griddedSrgs); fid++ {
 		err = griddedSrgs[fid].WriteToShp(outShp, fid)
 		if err != nil {
@@ -226,12 +237,16 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		if err != nil {
 			return
 		}
-		_, err = gridData.srgMapCache.db.Exec("INSERT INTO srgs "+
-			"(code, inputid, val) VALUES (?, ?, ?)",
-			srgCode, srg.InputID, buf.Bytes())
+		_, err = stmt.Exec(srgCode, srg.InputID, buf.Bytes())
 		if err != nil {
 			return
 		}
+	}
+	gridData.srgMapCache.mutex.Lock()
+	err = tx.Commit()
+	gridData.srgMapCache.mutex.Unlock()
+	if err != nil {
+		return
 	}
 
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.",
@@ -724,7 +739,8 @@ func handle(err error, cmd string) error {
 }
 
 type cacheDB struct {
-	db *sql.DB
+	db    *sql.DB
+	mutex sync.Mutex
 }
 
 func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
@@ -747,11 +763,13 @@ func RetrieveGriddingSurrogate(srgCode string, inputID string,
 	grid *GridDef) (srg *sparse.SparseArray, err error) {
 
 	var tempRow *sql.Row
+	grid.srgMapCache.mutex.Lock()
 	tempRow = grid.srgMapCache.db.QueryRow(
 		"SELECT val FROM srgs WHERE "+
 			"code=? AND inputid=?", srgCode, inputID)
 	var tempResult interface{}
 	err = tempRow.Scan(&tempResult)
+	grid.srgMapCache.mutex.Unlock()
 	if err != nil {
 		// No result found, return nil
 		if err == sql.ErrNoRows {
