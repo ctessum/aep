@@ -38,7 +38,7 @@ var (
 )
 
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *RunData) SpecRef() (specRef map[string]interface{}, err error) {
+func (c *Context) SpecRef() (specRef map[string]interface{}, err error) {
 	specRef = make(map[string]interface{})
 	// map[SCC][pol]code
 	var record string
@@ -91,7 +91,7 @@ func (c *RunData) SpecRef() (specRef map[string]interface{}, err error) {
 
 // SpecRefCombo reads the SMOKE gspro_combo file, which maps location
 // codes to chemical speciation profiles for mobile sources.
-func (c *RunData) SpecRefCombo(runPeriod string) (specRef map[string]map[string]interface{}, err error) {
+func (c *Context) SpecRefCombo(runPeriod string) (specRef map[string]map[string]interface{}, err error) {
 	specRef = make(map[string]map[string]interface{})
 	// map[pol][FIPS][code]frac
 	var record string
@@ -177,7 +177,7 @@ func newSpecProfRequest(spectype, name string) *SpecProfRequest {
 	return data
 }
 
-func (c *RunData) SpecProfiles(e *ErrCat) {
+func (c *Context) SpecProfiles(e *ErrCat) {
 	db, err := sql.Open("sqlite3", c.SpecProFile)
 	if err != nil {
 		e.Add(err)
@@ -374,7 +374,7 @@ func (c *RunData) SpecProfiles(e *ErrCat) {
 	}
 }
 
-func (c *RunData) getVOCtoTOGfactor(db *sql.DB, ProfileNumber string) (
+func (c *Context) getVOCtoTOGfactor(db *sql.DB, ProfileNumber string) (
 	total, convFac float64) {
 	var tempConvFac sql.NullFloat64
 	cmd := fmt.Sprintf("select TOTAL,VOCtoTOG from GAS_PROFILE where"+
@@ -396,7 +396,7 @@ func (c *RunData) getVOCtoTOGfactor(db *sql.DB, ProfileNumber string) (
 	return
 }
 
-func (c *RunData) getPM25Total(db *sql.DB, ProfileNumber string) (
+func (c *Context) getPM25Total(db *sql.DB, ProfileNumber string) (
 	total float64) {
 	cmd := fmt.Sprintf("select TOTAL from PM_PROFILE where"+
 		" P_NUMBER=%v", ProfileNumber)
@@ -408,7 +408,7 @@ func (c *RunData) getPM25Total(db *sql.DB, ProfileNumber string) (
 	return
 }
 
-func (c *RunData) getNOxTotal(db *sql.DB, ProfileNumber string) (
+func (c *Context) getNOxTotal(db *sql.DB, ProfileNumber string) (
 	total float64) {
 	cmd := fmt.Sprintf("select TOTAL from \"OTHER GASES_PROFILE\" where"+
 		" P_NUMBER=%v and MASTER_POL=\"NOx\"", ProfileNumber)
@@ -420,7 +420,7 @@ func (c *RunData) getNOxTotal(db *sql.DB, ProfileNumber string) (
 	return
 }
 
-func (c *RunData) getSpeciesInfoFromID(db *sql.DB, specID int) (
+func (c *Context) getSpeciesInfoFromID(db *sql.DB, specID int) (
 	specName string, tempMW sql.NullFloat64, groupString sql.NullString) {
 	err := db.QueryRow(fmt.Sprintf("SELECT name,spec_mw,%v_group "+
 		"FROM species_properties WHERE ID=%v", c.SpeciesGroupName, specID)).
@@ -433,7 +433,7 @@ func (c *RunData) getSpeciesInfoFromID(db *sql.DB, specID int) (
 	return
 }
 
-func (c *RunData) getSpeciesInfoFromName(db *sql.DB, specName string) (
+func (c *Context) getSpeciesInfoFromName(db *sql.DB, specName string) (
 	tempMW sql.NullFloat64, groupString sql.NullString) {
 	err := db.QueryRow(fmt.Sprintf("SELECT spec_mw,%v_group "+
 		"FROM species_properties WHERE name=\"%v\"", c.SpeciesGroupName, specName)).
@@ -463,7 +463,7 @@ func handleMW(specName string, tempMW sql.NullFloat64, weightPercent float64) (
 	return
 }
 
-func (c *RunData) handleGroupString(specName string, groupString sql.NullString) (
+func (c *Context) handleGroupString(specName string, groupString sql.NullString) (
 	groupFactors map[string]float64) {
 	if groupString.Valid && groupString.String != "" {
 		groupFactors = make(map[string]float64)
@@ -499,7 +499,7 @@ type SpecRef struct {
 	sRefCombo map[string]map[string]interface{} // map[pol][FIPS][code]frac
 }
 
-func (c *RunData) NewSpecRef() (sp *SpecRef, err error) {
+func (c *Context) NewSpecRef() (sp *SpecRef, err error) {
 	sp = new(SpecRef)
 	SpecRefFileLock.Lock()
 	sp.sRef, err = c.SpecRef()
@@ -528,7 +528,7 @@ func (sp *SpecRef) DefaultProfile(pol string) (profile map[string]*SpecHolder) {
 	return
 }
 
-func (sp *SpecRef) GetProfileSingleSpecies(pol string, c *RunData) (
+func (sp *SpecRef) GetProfileSingleSpecies(pol string, c *Context) (
 	profile map[string]*SpecHolder, droppedNotInGroup map[string]*SpecHolder) {
 
 	request := newSpecProfRequest("individualGas", pol)
@@ -556,7 +556,7 @@ func (sp *SpecRef) GetProfileSingleSpecies(pol string, c *RunData) (
 }
 
 func (sp *SpecRef) GetProfileAggregateSpecies(number, specType string,
-	doubleCountPols []string, c *RunData) (
+	doubleCountPols []string, c *Context) (
 	profile map[string]*SpecHolder,
 	droppedDoubleCount map[string]*SpecHolder,
 	droppedNotInGroup map[string]*SpecHolder) {
@@ -599,7 +599,7 @@ func (sp *SpecRef) GetProfileAggregateSpecies(number, specType string,
 
 // Match SCC in record to speciation profile. If none matches exactly, find a
 // more general SCC that matches.
-func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
+func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
 	period string) (
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*SpecHolder) {
@@ -627,6 +627,8 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 	ref = matchedVal.(map[string]string)
 
 	if c.PolsToKeep[cleanPol(pol)].SpecProf != nil {
+		// Handle species where the speciation profile is specified in
+		// the configuration file.
 		specFactors = c.PolsToKeep[cleanPol(pol)].SpecProf
 	} else if c.PolsToKeep[cleanPol(pol)].SpecNames != nil {
 		// For explicit species, convert the value to moles
@@ -635,6 +637,7 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *RunData,
 		specFactors, ungroupedSpecFactors = sp.GetProfileSingleSpecies(
 			c.PolsToKeep[cleanPol(pol)].SpecNames[0], c)
 	} else {
+		// Use the speciate database for speciation.
 		specType := c.PolsToKeep[cleanPol(pol)].SpecType
 		switch specType {
 		case "VOC":
@@ -823,7 +826,7 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 // annual emissions by the speciation factors. Multiply all
 // speciated emissions by a conversion factor from the input
 // units to g/year.
-func (c *RunData) Speciate(InputChan chan *ParsedRecord,
+func (c *Context) Speciate(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
 	c.Log("Speciating "+period+" "+c.Sector+"...", 1)
@@ -848,12 +851,14 @@ func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 						" pollutant %v SCC %v", newpol, record.SCC)
 					panic(err)
 				}
-				newAnnEmis[newpol] = new(SpecValUnits)
-				newAnnEmis[newpol].Val = AnnEmis.Val *
+				s := new(SpecValUnits)
+				s.Val = AnnEmis.Val *
 					c.InputConv * factor.Factor
-				newAnnEmis[newpol].Units = strings.Replace(
+				s.Units = strings.Replace(
 					factor.Units, "/gram", "/year", -1)
-				totals.AddKept(newpol, newAnnEmis[newpol])
+				s.PolType = c.PolsToKeep[pol]
+				totals.AddKept(newpol, s)
+				newAnnEmis[newpol] = s
 			}
 			for droppedpol, factor := range doubleCountPolFracs {
 				totals.AddDoubleCounted(droppedpol, AnnEmis.Val*
@@ -869,8 +874,10 @@ func (c *RunData) Speciate(InputChan chan *ParsedRecord,
 		record.ANN_EMIS = newAnnEmis
 		OutputChan <- record
 	}
+	reportMx.Lock()
 	Report.SectorResults[c.Sector][period].
 		SpeciationResults = totals
+	reportMx.Unlock()
 
 	c.msgchan <- "Finished speciating " + period + " " + c.Sector
 	close(OutputChan)

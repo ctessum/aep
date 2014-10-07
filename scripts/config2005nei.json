@@ -11,6 +11,7 @@
 		"StartDate": "2005/01/01",
 		"EndDate": "2005/02/28",
 		"Tstep":"1h",
+		"TstepsPerFile":24,
         "OutputType": "WRF",
         "SpecType": "mol",
         "InputUnits": "tons/year",
@@ -59,166 +60,166 @@
     },
     "sectors": {
         "othpt": {
-            "CaseName": "2005cr_05b",
             "SectorType": "point",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_othpt_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
-                "ptinv_canada_point_2006_orl_09mar2009_v2_orl.txt",
-                "ptinv_canada_point_cb5_2006_orl_10mar2009_v0_orl.txt",
-                "ptinv_canada_point_uog_2006_orl_02mar2009_v0_orl.txt",
-                "ptinv_mexico_border99_03mar2008_v1_ida.txt",
-                "ptinv_mexico_interior99_05feb2007_v0_ida.txt",
-                "ptinv_ptnonipm_offshore_oil_cap2005v2_20nov2008_20nov2008_v0_orl.txt"
+                "[Input]/2005cr_05b/othpt/ptinv_canada_point_2006_orl_09mar2009_v2_orl.txt",
+                "[Input]/2005cr_05b/othpt/ptinv_canada_point_cb5_2006_orl_10mar2009_v0_orl.txt",
+                "[Input]/2005cr_05b/othpt/ptinv_canada_point_uog_2006_orl_02mar2009_v0_orl.txt",
+                "[Input]/2005cr_05b/othpt/ptinv_mexico_border99_03mar2008_v1_ida.txt",
+                "[Input]/2005cr_05b/othpt/ptinv_mexico_interior99_05feb2007_v0_ida.txt",
+                "[Input]/2005cr_05b/othpt/ptinv_ptnonipm_offshore_oil_cap2005v2_20nov2008_20nov2008_v0_orl.txt"
             ]
         },
         "ptnonipm": {
-            "CaseName": "2005cs_05b",
             "SectorType": "point",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
-                "ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
-                "ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt",
-                "ptinv_ptnonipm_caphap_ethanol_plant_additions_2005_30jun2010_v3_orl.txt",
-                "ptinv_ptnonipm_xportfrac_2005cap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt",
-                "ptinv_ptnonipm_2005hap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt"
+                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
+                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt",
+                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_caphap_ethanol_plant_additions_2005_30jun2010_v3_orl.txt",
+                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_2005cap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt",
+                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_2005hap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt"
             ]
         },
         "seca_c3": {
-            "CaseName": "2005cs_05b",
             "SectorType": "point",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_seca_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
-                "ptinv_eca_imo_fixFIPS_US_wDE_andSCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "ptinv_eca_imo_fixFIPS_US_andSCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "ptinv_eca_imo_CANADA_SCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "ptinv_eca_imo_CANADA_SCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt"
+                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_wDE_andSCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
+                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_andSCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt",
+                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
+                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt"
             ]
         },
         "ag": {
-            "CaseName": "2005ah_tox_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
             "InvFileNames": [
-                "arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
+                "[Input]/2005ah_tox_05b/ag/arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
             ]
         },
         "ptipm": {
-            "CaseName": "2005as_05b",
             "SectorType": "point",
-            "InventoryFreq": "annual",
+            "InventoryFreq": "cem",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
             "InvFileNames": [
-                "ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
-                "ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
-            ]
+                "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
+                "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
+            ],
+			"CEMFileNames": [
+				"[Input]/cem/2005/HOUR_UNIT_2005_01_jan.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_02_feb.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_03_mar.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_04_apr.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_05_may.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_06_jun.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_07_jul.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_08_aug.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_09_sep.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_10_oct.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_11_nov.txt",
+				"[Input]/cem/2005/HOUR_UNIT_2005_12_dec.txt"
+			]
         },
         "afdust": {
-            "CaseName": "2005cr_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
-                "arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
+                "[Input]/2005cr_05b/afdust/arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
             ]
         },
         "nonroad": {
-            "CaseName": "2005cr_05b",
             "SectorType": "area",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
 			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
-                "arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
-                "arinv_nonroad_calif_caphap_2005v2_revised_[month]_23jun2010_v0_orl.txt",
-                "arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
+                "[Input]/2005cr_05b/nonroad/arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
+                "[Input]/2005cr_05b/nonroad/arinv_nonroad_calif_caphap_2005v2_revised_[month]_23jun2010_v0_orl.txt",
+                "[Input]/2005cr_05b/nonroad/arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
             ]
         },
         "on_moves_runpm": {
-            "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
 			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
-                "mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+                "[Input]/2005cr_05b/on_moves_runpm/mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
         },
         "on_moves_startpm": {
-            "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
 			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
-                "mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+                "[Input]/2005cr_05b/on_moves_startpm/mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
         },
         "on_noadj": {
-            "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "monthly",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
 			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
             "InvFileNames": [
-                "mbinv_onroad_calif_caphap_2005v2_revised_[month]_29jun2010_v0_orl.txt",
-                "mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
-                "mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+                "[Input]/2005cr_05b/on_noadj/mbinv_onroad_calif_caphap_2005v2_revised_[month]_29jun2010_v0_orl.txt",
+                "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
+                "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
             ]
         },
         "othon": {
-            "CaseName": "2005cr_05b",
             "SectorType": "mobile",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_othon_cmaq_cb05_soa_2005cr_05b_05b.txt",
             "InvFileNames": [
-                "mbinv_canada_onroad_cap_2006_04feb2009_v0_orl.txt",
-                "mbinv_onroad_mexico_border1999_21dec2006_v0_ida.txt",
-                "mbinv_onroad_mexico_interior1999_21dec2006_v0_ida.txt"
+                "[Input]/2005cr_05b/othon/mbinv_canada_onroad_cap_2006_04feb2009_v0_orl.txt",
+                "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_border1999_21dec2006_v0_ida.txt",
+                "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_interior1999_21dec2006_v0_ida.txt"
             ]
         },
         "alm_no_c3": {
-            "CaseName": "2005cs_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
-                "arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
-                "arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
+                "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
             ]
         },
         "nonpt": {
-            "CaseName": "2005cs_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
-                "arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
-                "arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",
-                "arinv_pfc_2002_caphap_27dec2007_v0_orl.txt",
-                "arinv_nonpt_cap_2005_WRAP_OilGas_04feb2009_v0_orl.txt",
-                "arinv_nonpt_cap_2005_TCEQ_Oklahoma_OilGas_28may2010_v0_orl.txt"
+                "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
+                "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",
+                "[Input]/2005cs_05b/nonpt/arinv_pfc_2002_caphap_27dec2007_v0_orl.txt",
+                "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_WRAP_OilGas_04feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_TCEQ_Oklahoma_OilGas_28may2010_v0_orl.txt"
             ]
         },
         "othar": {
-            "CaseName": "2005cs_05b",
             "SectorType": "area",
             "InventoryFreq": "annual",
             "SpecRefFile": "[Ancilliary]/speciation/gsref_othar_cmaq_cb05_soa_2005cs_05b_05b.txt",
             "InvFileNames": [
-                "arinv_nonroad_mexico_interior1999_21dec2006_v0_ida.txt",
-                "arinv_nonroad_mexico_border1999_21dec2006_v0_ida.txt",
-                "arinv_nonpt_mexico_interior1999_21dec2006_v0_ida.txt",
-                "arinv_nonpt_mexico_border1999_21dec2006_v0_ida.txt",
-                "arinv_canada_offroad_cap_2006_04feb2009_v0_orl.txt",
-                "arinv_canada_marine_cap_2006_03feb2009_v0_orl.txt",
-                "arinv_canada_oarea_cap_2006_02mar2009_v3_orl.txt",
-                "arinv_canada_aircraft_cap_2006_04feb2009_v0_orl.txt",
-                "arinv_canada_rail_cap_2006_03feb2009_v0_orl.txt",
-                "arinv_canada_ag_cap_2006_03feb2009_v0_orl.txt",
-                "arinv_canada_afdust_xportfrac_cap_2006_03feb2009_v0_orl.txt"
+                "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_interior1999_21dec2006_v0_ida.txt",
+                "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_border1999_21dec2006_v0_ida.txt",
+                "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_interior1999_21dec2006_v0_ida.txt",
+                "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_border1999_21dec2006_v0_ida.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_offroad_cap_2006_04feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_marine_cap_2006_03feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_oarea_cap_2006_02mar2009_v3_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_aircraft_cap_2006_04feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_rail_cap_2006_03feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_ag_cap_2006_03feb2009_v0_orl.txt",
+                "[Input]/2005cs_05b/othar/arinv_canada_afdust_xportfrac_cap_2006_03feb2009_v0_orl.txt"
             ]
         }
     }

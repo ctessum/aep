@@ -96,40 +96,33 @@ func main() {
 		ConfigAll.DefaultSettings.SpatialSetupRegularGrid(e)
 	}
 
-	// Set up temporal environment
+	// Set up temporal and output processors
+	var temporal *aep.TemporalProcessor
 	if ConfigAll.DefaultSettings.RunTemporal {
-		ConfigAll.DefaultSettings.TemporalSetup(e)
+		temporal = ConfigAll.DefaultSettings.NewTemporalProcessor()
 	}
 
 	e.Report() // Print errors, if any
 
 	// run sector subroutines
-	var n, numAnnualSectors, numMonthlySectors int
+	n := 0
 	for sector, c := range ConfigAll.Sectors {
 		if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
-			go Run(c, runChan)
-			switch c.InventoryFreq {
-			case "annual":
-				numAnnualSectors++
-			case "monthly":
-				numMonthlySectors++
-			}
+			go Run(c, runChan, temporal)
 			n++
 		}
-	}
-	// run temporal and output subroutines
-	if ConfigAll.DefaultSettings.RunTemporal {
-		outchan := make(chan *aep.OutputDataChan)
-		go ConfigAll.DefaultSettings.Temporal(numAnnualSectors, numMonthlySectors,
-			outchan, runChan)
-		go ConfigAll.DefaultSettings.Output(outchan, runChan)
-		n += 2
 	}
 
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
 		message := <-runChan
 		log.Println(message)
+	}
+
+	// run output subroutines
+	if ConfigAll.DefaultSettings.RunTemporal {
+		outputter := ConfigAll.DefaultSettings.NewOutputter(temporal)
+		outputter.Output()
 	}
 
 	log.Println("\n",
@@ -139,15 +132,20 @@ func main() {
 		"------------------------------------\n")
 }
 
-func Run(c *aep.RunData, runChan chan string) {
-	if c.InventoryFreq == "annual" {
-		RunPeriod(c, "annual")
+func Run(c *aep.Context, runChan chan string,
+	temporal *aep.TemporalProcessor) {
+	periodChan := make(chan string)
+	n := 0
+	if c.InventoryFreq == "annual" || c.InventoryFreq == "cem" {
+		go RunPeriod(c, c.InventoryFreq, temporal, periodChan)
+		n++
 	} else {
 		var inventoryMonth string
 		for {
 			month := c.CurrentMonth()
 			if c.InventoryFreq == "monthly" && month != inventoryMonth {
-				RunPeriod(c, month)
+				go RunPeriod(c, month, temporal, periodChan)
+				n++
 				inventoryMonth = month
 			}
 			// either advance to next date or end loop
@@ -157,7 +155,10 @@ func Run(c *aep.RunData, runChan chan string) {
 			}
 		}
 	}
-
+	for i := 0; i < n-1; i++ {
+		fmt.Println(c.Sector, i, n)
+		<-periodChan
+	}
 	if aep.Status.Sectors[c.Sector] != "Failed!" {
 		aep.Status.Sectors[c.Sector] = "Finished"
 	}
@@ -165,7 +166,8 @@ func Run(c *aep.RunData, runChan chan string) {
 }
 
 // Set up the correct subroutines to run for each sector and period
-func RunPeriod(c *aep.RunData, period string) {
+func RunPeriod(c *aep.Context, period string,
+	temporal *aep.TemporalProcessor, periodChan chan string) {
 	log.Println("Running " + c.Sector + " " + period + "...")
 	aep.Status.Sectors[c.Sector] = "Running " + period
 	msgchan := c.MessageChan()
@@ -197,7 +199,7 @@ func RunPeriod(c *aep.RunData, period string) {
 		if c.RunTemporal { // only run temporal if spatializing
 			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
 			go c.Spatialize(SpecSpatialChan, SpatialTemporalChan, period)
-			go c.SectorTemporal(SpatialTemporalChan, discardChan, period)
+			temporal.NewSector(c, SpatialTemporalChan, discardChan, period)
 			n++
 		} else {
 			go c.Spatialize(SpecSpatialChan, discardChan, period)
@@ -211,7 +213,7 @@ func RunPeriod(c *aep.RunData, period string) {
 		if c.RunTemporal { // only run temporal if spatializing
 			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
 			go c.Spatialize(ChanFromInventory, SpatialTemporalChan, period)
-			go c.SectorTemporal(SpatialTemporalChan, discardChan, period)
+			temporal.NewSector(c, SpatialTemporalChan, discardChan, period)
 			n++
 		} else {
 			go c.Spatialize(ChanFromInventory, discardChan, period)
@@ -224,7 +226,7 @@ func RunPeriod(c *aep.RunData, period string) {
 		message := <-msgchan
 		c.Log(message, 1)
 	}
-
+	periodChan <- "Done"
 	return
 }
 

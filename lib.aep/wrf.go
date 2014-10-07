@@ -19,18 +19,19 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/cdf"
-	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"runtime"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"bitbucket.org/ctessum/cdf"
+	"bitbucket.org/ctessum/sparse"
 )
 
 const (
@@ -40,7 +41,59 @@ const (
 	kappa        = 0.2854  // related to von karman's constant
 )
 
-type WrfFiles struct {
+type WRFOutputter struct {
+	tp         *TemporalProcessor
+	c          *Context
+	filebase   string
+	dateFormat string
+	files      *wrfFiles
+}
+
+// Create new output WRF files
+func (c *Context) NewWRFOutputter(tp *TemporalProcessor) *WRFOutputter {
+	w := new(WRFOutputter)
+	w.tp = tp
+	w.c = c
+	w.filebase = filepath.Join(c.outputDir, c.OutputType,
+		"wrfchemi_[DOMAIN]_[DATE]")
+	if c.wrfData.Nocolons == true {
+		w.dateFormat = "2006-01-02_15_04_05"
+	} else {
+		w.dateFormat = "2006-01-02_15:04:05"
+	}
+	return w
+}
+
+func (w *WRFOutputter) Output() {
+	tstepsInFile := 0
+	firstStep := true
+	for {
+		w.c.Log(fmt.Sprintf("Waiting for temporal data for %v...",
+			w.c.currentTime), 3)
+		ts := w.tp.EmisAtTime(w.c.currentTime)
+		w.c.Log(fmt.Sprintf("Writing WRF output for %v...", w.c.currentTime), 0)
+		if tstepsInFile == w.c.TstepsPerFile || firstStep {
+			// open new set of files
+			if !firstStep {
+				w.closeFiles()
+			}
+			w.newFiles(w.tp.Units, ts.Time)
+			tstepsInFile = 0
+			firstStep = false
+		}
+		w.files.writeTimestep(ts, tstepsInFile)
+		tstepsInFile++
+		// either advance to next date or end loop
+		keepGoing := w.c.NextTime()
+		if !keepGoing {
+			break
+		}
+	}
+	w.closeFiles()
+	w.c.Log(fmt.Sprintf("Finished writing WRF output."), 0)
+}
+
+type wrfFiles struct {
 	fids         []*cdf.File
 	fidsToClose  []*os.File
 	config       *WRFconfigData
@@ -48,48 +101,35 @@ type WrfFiles struct {
 	oldWRFout    string
 }
 
-func (c *RunData) NewWRFfiles(polsAndUnits map[string]string) *WrfFiles {
-	o := new(WrfFiles)
-	o.fids = make([]*cdf.File, c.wrfData.Max_dom)
-	o.fidsToClose = make([]*os.File, c.wrfData.Max_dom)
-	o.config = c.wrfData
-	o.polsAndUnits = polsAndUnits
-	o.oldWRFout = c.OldWRFout
-	return o
-}
-
-// Create new output WRF files
-func (c *RunData) NewWRFoutput(filebase string, polsAndUnits map[string]string,
-	date time.Time) *WrfFiles {
+func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
 	var err error
-	out := c.NewWRFfiles(polsAndUnits)
-	var WRFdateFormat string
-	if c.wrfData.Nocolons == true {
-		WRFdateFormat = "2006-01-02_15_04_05"
-	} else {
-		WRFdateFormat = "2006-01-02_15:04:05"
-	}
-	filename := strings.Replace(filebase, "[DATE]", date.Format(WRFdateFormat), -1)
-	for i, domain := range c.wrfData.DomainNames {
+	w.files = new(wrfFiles)
+	w.files.fids = make([]*cdf.File, w.c.wrfData.Max_dom)
+	w.files.fidsToClose = make([]*os.File, w.c.wrfData.Max_dom)
+	w.files.config = w.c.wrfData
+	w.files.polsAndUnits = units
+	w.files.oldWRFout = w.c.OldWRFout
+	filename := strings.Replace(w.filebase, "[DATE]", date.Format(w.dateFormat), -1)
+	for i, domain := range w.c.wrfData.DomainNames {
 		outfile := strings.Replace(filename, "[DOMAIN]", domain, -1)
 		wrfoutH := cdf.NewHeader([]string{"Time", "DateStrLen", "west_east",
 			"south_north", "emissions_zdim"},
-			[]int{0, 19, c.wrfData.Nx[i], c.wrfData.Ny[i], c.wrfData.Kemit})
+			[]int{0, 19, w.c.wrfData.Nx[i], w.c.wrfData.Ny[i], w.c.wrfData.Kemit})
 
 		wrfoutH.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
-			"by AEP (bitbucket.org/ctessum/aep)")
-		wrfoutH.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
-		wrfoutH.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
-		wrfoutH.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
-		wrfoutH.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
-		wrfoutH.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
-		wrfoutH.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-		wrfoutH.AddAttribute("", "REF_X", []float64{c.wrfData.Ref_x})
-		wrfoutH.AddAttribute("", "REF_Y", []float64{c.wrfData.Ref_y})
+			"by AEP version "+Version+" ("+Website+")")
+		wrfoutH.AddAttribute("", "CEN_LAT", []float64{w.c.wrfData.Ref_lat})
+		wrfoutH.AddAttribute("", "CEN_LOC", []float64{w.c.wrfData.Ref_lon})
+		wrfoutH.AddAttribute("", "TRUELAT1", []float64{w.c.wrfData.Truelat1})
+		wrfoutH.AddAttribute("", "TRUELAT2", []float64{w.c.wrfData.Truelat2})
+		wrfoutH.AddAttribute("", "STAND_LON", []float64{w.c.wrfData.Stand_lon})
+		wrfoutH.AddAttribute("", "MAP_PROJ", w.c.wrfData.Map_proj)
+		wrfoutH.AddAttribute("", "REF_X", []float64{w.c.wrfData.Ref_x})
+		wrfoutH.AddAttribute("", "REF_Y", []float64{w.c.wrfData.Ref_y})
 
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
-		for pol, units := range polsAndUnits {
+		for pol, units := range w.files.polsAndUnits {
 			createWRFvar(wrfoutH, pol, units)
 		}
 
@@ -100,16 +140,25 @@ func (c *RunData) NewWRFoutput(filebase string, polsAndUnits map[string]string,
 				panic(err)
 			}
 		}
-		out.fidsToClose[i], err = os.Create(outfile)
+		w.files.fidsToClose[i], err = os.Create(outfile)
 		if err != nil {
 			panic(err)
 		}
-		out.fids[i], err = cdf.Create(out.fidsToClose[i], wrfoutH)
+		w.files.fids[i], err = cdf.Create(w.files.fidsToClose[i], wrfoutH)
 		if err != nil {
 			panic(err)
 		}
 	}
-	return out
+}
+
+func (w *WRFOutputter) closeFiles() {
+	for _, f := range w.files.fidsToClose {
+		err := cdf.UpdateNumRecs(f)
+		if err != nil {
+			panic(err)
+		}
+		f.Close()
+	}
 }
 
 func createWRFvar(h *cdf.Header, name, unitsIn string) {
@@ -117,9 +166,9 @@ func createWRFvar(h *cdf.Header, name, unitsIn string) {
 	h.AddVariable(name, dims, []float32{0.})
 	var units string
 	switch unitsIn {
-	case "mol/year":
+	case "mol/hour":
 		units = "mol km^-2 hr^-1"
-	case "g/year", "gram/year":
+	case "g/hour", "gram/hour":
 		units = "ug/m3 m/s"
 	default:
 		panic(fmt.Errorf("Unknown units: %v", unitsIn))
@@ -132,89 +181,54 @@ func createWRFvar(h *cdf.Header, name, unitsIn string) {
 	h.AddAttribute(name, "coordinates", "XLONG XLAT")
 }
 
-func (w *WrfFiles) WriteTimesteps(tstepchan chan timeStep) {
-	outchanchan := make(chan chan map[string][]*sparse.SparseArray,
-		runtime.GOMAXPROCS(-1))
-	timeChan := make(chan time.Time, runtime.GOMAXPROCS(-1))
-	writeFinishedChan := make(chan int)
-	go w.writeoutput(outchanchan, timeChan, writeFinishedChan)
-	calchr := 0
-	for tstep := range tstepchan {
-		outchan := make(chan map[string][]*sparse.SparseArray)
-		go w.timeStepOutput(tstep, outchan, calchr)
-		outchanchan <- outchan
-		timeChan <- tstep.Time
-		calchr++
-	}
-	close(outchanchan)
-	close(timeChan)
-	<-writeFinishedChan
-	for i, _ := range w.fids {
-		err := cdf.UpdateNumRecs(w.fidsToClose[i])
+func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
+	var err error
+	// Write out time
+	for _, f := range w.fids {
+		start := []int{ihr, 0}
+		end := []int{ihr + 1, 0}
+		r := f.Writer("Times", start, end)
+		_, err = r.Write(ts.Time.Format("2006-01-02_15:04:05"))
 		if err != nil {
 			panic(err)
 		}
-		w.fidsToClose[i].Close()
 	}
-}
+	// get data
+	outData := w.timeStepOutput(ts, ihr)
+	for pol, units := range w.polsAndUnits {
+		for i, f := range w.fids {
+			// convert units
+			switch units {
+			case "mol/hour":
+				// gas conversion mole/hr --> mole/km(2)/hr
+				gasconv := float64(1. / (1.e-3 * w.config.Dx[i] *
+					1.e-3 * w.config.Dy[i]))
+				outData[pol][i].Scale(gasconv)
+			case "g/hour", "gram/hour":
+				// aerosol conversion g/hr --> microgram/m(2)/sec
+				partconv := float64(1.e6 / w.config.Dx[i] /
+					w.config.Dy[i] / 3600.)
+				outData[pol][i].Scale(partconv)
+			default:
+				panic(fmt.Errorf("Can't handle units `%v'.", units))
+			}
 
-func (w *WrfFiles) writeoutput(
-	outchanchan chan chan map[string][]*sparse.SparseArray,
-	timeChan chan time.Time, finishedChan chan int) {
-
-	var err error
-	ihr := 0
-	for outchan := range outchanchan {
-		outData := <-outchan
-		time := <-timeChan
-		// Write out time
-		for _, f := range w.fids {
-			start := []int{ihr, 0}
-			end := []int{ihr + 1, 19}
-			r := f.Writer("Times", start, end)
-			_, err = r.Write(time.Format("2006-01-02_15:04:05"))
-			if err != nil {
+			start := []int{ihr, 0, 0, 0}
+			end := []int{ihr + 1, 0, 0, 0}
+			r := f.Writer(pol, start, end)
+			if _, err = r.Write(outData[pol][i].ToDense32()); err != nil {
 				panic(err)
 			}
 		}
-		for pol, units := range w.polsAndUnits {
-			for i, f := range w.fids {
-				// convert units
-				switch units {
-				case "mol/year":
-					// gas conversion mole/hr --> mole/km(2)/hr
-					gasconv := float64(1. / (1.e-3 * w.config.Dx[i] *
-						1.e-3 * w.config.Dy[i]))
-					outData[pol][i].Scale(gasconv)
-				case "g/year", "gram/year":
-					// aerosol conversion g/hr --> microgram/m(2)/sec
-					partconv := float64(1.e6 / w.config.Dx[i] /
-						w.config.Dy[i] / 3600.)
-					outData[pol][i].Scale(partconv)
-				default:
-					panic(fmt.Errorf("Can't handle units `%v'.", units))
-				}
-
-				start := []int{ihr, 0, 0, 0}
-				end := []int{ihr + 1, 0, 0, 0}
-				r := f.Writer(pol, start, end)
-				if _, err = r.Write(outData[pol][i].ToDense32()); err != nil {
-					panic(err)
-				}
-			}
-		}
-		ihr++
 	}
-	finishedChan <- 0
 }
 
-func (w *WrfFiles) timeStepOutput(tstep timeStep,
-	outchan chan map[string][]*sparse.SparseArray, ihr int) {
-	tstep.ta.overallLock.RLock()
+func (w *wrfFiles) timeStepOutput(ts *TimeStepData,
+	ihr int) map[string][]*sparse.SparseArray {
 	var met *MetData
 	// prepare plume rise calculator
 	if w.config.Kemit > 1 {
-		met = w.NewMetData(tstep.Time, ihr)
+		met = w.NewMetData(ts.Time, ihr)
 	}
 
 	// prepare output
@@ -228,54 +242,46 @@ func (w *WrfFiles) timeStepOutput(tstep timeStep,
 	}
 
 	// add area data.
-	for temporalCodes, data := range tstep.ta.AreaData {
-		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
-		for pol, gridData := range data {
-			for i, g := range gridData {
-				// multiply by temporal factor to get time step
-				for _, ix := range g.Nonzero() {
-					val := g.Get1d(ix)
-					tFactor := tFactors[i].Get1d(ix)
-					index := g.IndexNd(ix)
-					outData[pol][i].
-						AddVal(val*tFactor, 0, index[0], index[1])
-				}
+	for pol, gridData := range ts.AreaData {
+		if _, ok := w.polsAndUnits[pol]; !ok {
+			panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
+		}
+		for i, g := range gridData {
+			o := outData[pol][i]
+			for ix, val := range g.Elements {
+				index := g.IndexNd(ix)
+				o.AddVal(val, 0, index[0], index[1])
 			}
 		}
 	}
 
 	// add point data
-	for temporalCodes, data := range tstep.ta.PointData {
-		tFactors := griddedTemporalFactors(temporalCodes, tstep.Time)
-		for _, record := range data {
-			for pol, emis := range record.ANN_EMIS {
-				for i, gridVal := range emis.Gridded {
-					k := 0
-					if w.config.Kemit > 1 {
-						k = met.PlumeRise(i, record)
-					}
-					// multiply by temporal factor to get time step
-					for _, ix := range gridVal.Nonzero() {
-						val := gridVal.Get1d(ix)
-						tFactor := tFactors[i].Get1d(ix)
-						index := gridVal.IndexNd(ix)
-						if k <= w.config.Kemit {
-							outData[pol][i].AddVal(val*tFactor,
-								k, index[0], index[1])
-						} else {
-							outData[pol][i].AddVal(val*tFactor,
-								k, index[0], index[1])
-						}
+	for _, record := range ts.PointData {
+		for pol, emis := range record.ANN_EMIS {
+			if _, ok := w.polsAndUnits[pol]; !ok {
+				panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
+			}
+			for i, g := range emis.Gridded {
+				k := 0
+				if w.config.Kemit > 1 {
+					k = met.PlumeRise(i, record)
+				}
+				o := outData[pol][i]
+				for ix, val := range g.Elements {
+					index := g.IndexNd(ix)
+					if k <= w.config.Kemit {
+						o.AddVal(val, k, index[0], index[1])
+					} else {
+						o.AddVal(val, w.config.Kemit, index[0], index[1])
 					}
 				}
 			}
 		}
 	}
-	tstep.ta.overallLock.RUnlock()
 	if w.config.Kemit > 1 {
 		met.Close()
 	}
-	outchan <- outData
+	return outData
 }
 
 type WRFconfigData struct {
@@ -309,7 +315,7 @@ type WRFconfigData struct {
 }
 
 func ParseWRFConfig(wpsnamelist, wrfnamelist string) (d *WRFconfigData, err error) {
-	e := new(errCat)
+	e := new(wrfErrCat)
 	d = new(WRFconfigData)
 	parseWPSnamelist(wpsnamelist, d, e)
 	parseWRFnamelist(wrfnamelist, d, e)
@@ -318,7 +324,7 @@ func ParseWRFConfig(wpsnamelist, wrfnamelist string) (d *WRFconfigData, err erro
 }
 
 // Parse a WPS namelist
-func parseWPSnamelist(filename string, d *WRFconfigData, e *errCat) {
+func parseWPSnamelist(filename string, d *WRFconfigData, e *wrfErrCat) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return
@@ -422,7 +428,7 @@ func parseWPSnamelist(filename string, d *WRFconfigData, e *errCat) {
 }
 
 // Parse a WRF namelist
-func parseWRFnamelist(filename string, d *WRFconfigData, e *errCat) {
+func parseWRFnamelist(filename string, d *WRFconfigData, e *wrfErrCat) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return
@@ -520,21 +526,21 @@ func namelistBool(str string) (out bool) {
 // The ErrCat type and methods collect errors while the program is running
 // and then print them later so that all errors can be seen and fixed at once,
 // instead of just the first one.
-type errCat struct {
+type wrfErrCat struct {
 	str string
 }
 
-func (e *errCat) Add(err error) {
+func (e *wrfErrCat) Add(err error) {
 	if err != nil && strings.Index(e.str, err.Error()) == -1 {
 		e.str += err.Error() + "\n"
 	}
 	return
 }
-func (e *errCat) convertToError() error {
+func (e *wrfErrCat) convertToError() error {
 	return errors.New(e.str)
 }
 
-func (e *errCat) compare(val1, val2 interface{}, name string) {
+func (e *wrfErrCat) compare(val1, val2 interface{}, name string) {
 	errFlag := false
 	switch val1.(type) {
 	case int:
@@ -595,9 +601,9 @@ type MetData struct {
 	Kemit        int             // number of levels in emissions file
 }
 
-// This assumes that the wrfout files each have 24 frames in
+// This assumes that the wrfout and wrfchemi files each have 24 frames in
 // one hour increments
-func (w *WrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
+func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	var err error
 	m := new(MetData)
 	m.h = timeIndex
@@ -644,8 +650,12 @@ func (m *MetData) Close() {
 // Uses meteorology from WRF output from a previous run.
 func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	gi := gridIndex
-	i := point.Col[gi]
-	j := point.Row[gi]
+	var i, j int
+	// Get the row and the column.
+	for _, emis := range point.ANN_EMIS {
+		index := emis.Gridded[gi].IndexNd(emis.Gridded[gi].Nonzero()[0])
+		j, i = index[0], index[1]
+	}
 
 	// deal with points that are inside one grid but not inside the others
 	if j >= grids[gi].Nx || i >= grids[gi].Ny || j < 0 || i < 0 {

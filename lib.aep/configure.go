@@ -40,6 +40,9 @@ const (
 	months   = "jan feb mar apr may jun jul aug sep oct nov dec"
 )
 
+const Website = "http://bitbucket.org/ctessum/aep/"
+const Version = "0.1.0" // versioning scheme at: http://semver.org/
+
 // Reads and parse a json configuration file.
 // See below for the required variables.
 func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat) (
@@ -84,8 +87,8 @@ func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat
 
 type configInput struct {
 	Dirs            *DirInfo
-	DefaultSettings *RunData
-	Sectors         map[string]*RunData
+	DefaultSettings *Context
+	Sectors         map[string]*Context
 }
 
 type DirInfo struct {
@@ -97,8 +100,8 @@ type DirInfo struct {
 	Output      string // Directory for output data and reports
 }
 
-// type RunData is a container for the configuration and report info
-type RunData struct {
+// type Context is a container for the configuration and report info
+type Context struct {
 	outputDir              string // Output directory
 	shapefiles             string // Directory where input shapefiles are stored
 	griddedSrgs            string // Directory where gridded spatial surrogate shapefiles are to be created
@@ -111,8 +114,9 @@ type RunData struct {
 	startDate              time.Time
 	EndDate                string // Date for which to end processing emissions
 	endDate                time.Time
-	Tstep                  string
+	Tstep                  string // Timestep between emissions outputs. Currently, it is recommended to set this to "1h".
 	tStep                  time.Duration
+	TstepsPerFile          int    // Number of output timesteps in each file. Currently, it is recommended to set this to "24".
 	OutputType             string // Type of output file. Currently the only available option is "WRF".
 	SccDesc                string // name of file with SCC code descriptions
 	SicDesc                string // name of file with SIC code descriptions
@@ -131,15 +135,15 @@ type RunData struct {
 	TemporalRefFile        string // Location of the temporal reference file
 	TemporalProFile        string // Location of the temporal profile file
 	HolidayFile            string // Location of the file specifying which days are holidays
-	CaseName               string
-	InventoryFreq          string // The temporal frequency of the inventory data files. Currently the options are "annual" and "monthly".
+	InventoryFreq          string // The temporal frequency of the inventory data files. Currently the options are "annual", "monthly", and "cem".
 	MatchFullSCC           bool   // Whether to only match codes which are identical, or to accept partial matches.
 	DebugLevel             int    // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
 	Ncpus                  int    // Number of processors available for use
 	InputUnits             string // Units of emissions in input file
 	InputConv              float64
 	ForceWesternHemisphere bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
-	InvFileNames           []string      // List of input files.
+	InvFileNames           []string      // List of input files. "[month]" can be used as a wildcard for the month name.
+	CEMFileNames           []string      // List of input files with CEM data (needs to be a whole year's worth of data
 	EarthRadius            float64       // in meters
 	SrgCacheExpirationTime time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 1 minute.
 	WPSnamelist            string        // Path to WPS namelist file
@@ -212,7 +216,7 @@ func (p *configInput) setup(e *ErrCat) {
 // Fill the configuration settings for an individual sector with
 // default settings, where `p` represents the settings for the individual
 // sector and `d` represents the default settings.
-func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
+func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 	c := *p
 	c.RunSpeciate = d.RunSpeciate
 	c.RunSpatialize = d.RunSpatialize
@@ -233,6 +237,10 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	d.SimulationName = os.ExpandEnv(d.SimulationName)
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
+	if d.TstepsPerFile == 0 {
+		d.TstepsPerFile = 24
+	}
+	c.TstepsPerFile = d.TstepsPerFile
 	if d.SrgCacheExpirationTime == 0 {
 		d.SrgCacheExpirationTime = 1
 	}
@@ -290,7 +298,7 @@ func (p *RunData) FillWithDefaults(d *RunData, e *ErrCat) {
 	*p = c
 }
 
-func (p *RunData) setup(e *ErrCat) {
+func (p *Context) setup(e *ErrCat) {
 	c := *p
 	var err error
 	c.startDate, err = time.Parse("2006/01/02", c.StartDate)
@@ -303,10 +311,10 @@ func (p *RunData) setup(e *ErrCat) {
 	e.Add(err)
 	c.tStep, err = time.ParseDuration(c.Tstep)
 	e.Add(err)
-	if c.InventoryFreq != "annual" && c.InventoryFreq != "monthly" {
+	if c.InventoryFreq != "annual" && c.InventoryFreq != "monthly" && c.InventoryFreq != "cem" {
 		e.Add(fmt.Errorf("In sector " + c.Sector + ", " + c.InventoryFreq +
 			" is not a valid value for variable inventoryFreq. Please choose " +
-			"either `annual' or `monthly'."))
+			"either `annual', `monthly', or `cem'."))
 	}
 	switch c.InputUnits {
 	case "tons/year":
@@ -340,7 +348,7 @@ func (p *RunData) setup(e *ErrCat) {
 }
 
 // Replace directory and file names with full paths
-func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
+func (p *Context) catPaths(d *DirInfo, e *ErrCat) {
 	c := *p
 
 	d.Output = strings.Replace(strings.Replace(strings.Replace(
@@ -388,11 +396,7 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 		"SrgSpecFile", "WPSnamelist", "WRFnamelist", "OldWRFout"}
 
 	for i, path := range paths {
-		*path = strings.Replace(*path, "[Home]", d.Home, -1)
-		*path = strings.Replace(*path, "[Output]", d.Output, -1)
-		*path = strings.Replace(*path, "[input]", d.Input, -1)
-		*path = strings.Replace(*path, "[Ancilliary]", d.Ancilliary, -1)
-		*path = os.ExpandEnv(*path)
+		d.expand(path)
 		if strings.Index(*path, "[DOMAIN]") == -1 &&
 			strings.Index(*path, "[DATE]") == -1 {
 			e.statOS(*path, varnames[i])
@@ -400,26 +404,40 @@ func (p *RunData) catPaths(d *DirInfo, e *ErrCat) {
 	}
 	c.shapefiles = d.Shapefiles
 	if c.Sector != "" {
-		sectorPath := filepath.Join(d.Input, c.CaseName, c.Sector)
-		e.statOS(sectorPath, "Sector "+c.Sector+" input")
-		for i, name := range c.InvFileNames {
-			if c.InventoryFreq == "annual" {
-				c.InvFileNames[i] = filepath.Join(sectorPath, name)
+		for i, _ := range c.InvFileNames {
+			d.expand(&c.InvFileNames[i])
+			if c.InventoryFreq == "annual" || c.InventoryFreq == "cem" {
 				e.statOS(c.InvFileNames[i], c.Sector+" Inventory file")
 			} else if c.InventoryFreq == "monthly" {
 				for _, month := range strings.Split(months, " ") {
-					c.InvFileNames[i] = filepath.Join(sectorPath,
-						strings.Replace(name, "[month]", month, -1))
-					e.statOS(c.InvFileNames[i], c.Sector+" Inventory file")
+					e.statOS(strings.Replace(
+						c.InvFileNames[i], "[month]", month, -1),
+						c.Sector+" Inventory file")
 				}
+			} else {
+				panic(fmt.Sprintf("Unknown InventoryFreq %v.", c.InventoryFreq))
 			}
+		}
+		for i, _ := range c.CEMFileNames {
+			d.expand(&c.CEMFileNames[i])
+			e.statOS(c.CEMFileNames[i], c.Sector+" CEM file")
 		}
 	}
 	*p = c
 	return
 }
 
-func (c *RunData) MessageChan() chan string {
-	c.msgchan = make(chan string, 1)
+func (d *DirInfo) expand(path *string) {
+	*path = strings.Replace(*path, "[Home]", d.Home, -1)
+	*path = strings.Replace(*path, "[Output]", d.Output, -1)
+	*path = strings.Replace(*path, "[Input]", d.Input, -1)
+	*path = strings.Replace(*path, "[Ancilliary]", d.Ancilliary, -1)
+	*path = os.ExpandEnv(*path)
+}
+
+func (c *Context) MessageChan() chan string {
+	if c.msgchan == nil {
+		c.msgchan = make(chan string, 1)
+	}
 	return c.msgchan
 }
