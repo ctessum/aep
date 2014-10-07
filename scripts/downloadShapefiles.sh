@@ -6,11 +6,11 @@ cd $wkdir
 
 # Get administrative boundary and 
 # timezone locations.
-# Conditions for use of this shapefile are specified at:
-# http://www.baruch.cuny.edu/geoportal/data/esri/esri_intl.htm
-wget http://www.baruch.cuny.edu/geoportal/data/esri/world/timezone.zip
-unzip timezone.zip
-rm timezone.zip
+# Conditions for use of this shapefile are specified the websites
+# http://efele.net/maps/tz/world/tz_world.zip
+wget http://efele.net/maps/tz/world/tz_world.zip
+unzip tz_world.zip 
+rm tz_world.zip
 
 wget http://www.baruch.cuny.edu/geoportal/data/esri/world/admin.zip
 unzip admin.zip

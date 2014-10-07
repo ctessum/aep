@@ -33,11 +33,12 @@ import (
 	"sync"
 
 	"bitbucket.org/ctessum/gis"
-	"bitbucket.org/ctessum/gisconversions"
 	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/geomop"
+	"github.com/ctessum/geomconv"
+	"github.com/ctessum/projgeom"
 	"github.com/ctessum/shapefile"
-	"github.com/dhconnelly/rtreego"
+	"github.com/patrick-higgins/rtreego"
 	"github.com/lukeroth/gdal"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/twpayne/gogeom/geom"
@@ -194,7 +195,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			return
 		}
 	}
-	// Write data to files (shapefile and srgMapCache)
+	// Write data to files (shapefile and srgMapCache sql db)
 	var outShp *gis.Shapefile
 	outShp, err = gis.CreateShapefile(outputDir, OutName, gridData.Sr,
 		gdal.GT_Polygon,
@@ -277,8 +278,8 @@ func getInputData(inputShapeFile, ShapeColumn string,
 	if err != nil {
 		return
 	}
-	var ct *gisconversions.CoordinateTransform
-	ct, err = gisconversions.NewCoordinateTransform(inputShp.Sr, gridData.Sr)
+	var ct *projgeom.CoordinateTransform
+	ct, err = projgeom.NewCoordinateTransform(inputShp.Sr, gridData.Sr)
 	if err != nil {
 		return
 	}
@@ -335,8 +336,8 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	}
 	defer srgShp.Close()
 
-	var ct *gisconversions.CoordinateTransform
-	ct, err = gisconversions.NewCoordinateTransform(srgShp.Sr, gridData.Sr)
+	var ct *projgeom.CoordinateTransform
+	ct, err = projgeom.NewCoordinateTransform(srgShp.Sr, gridData.Sr)
 	if err != nil {
 		return
 	}
@@ -357,7 +358,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 			}
 		}
 	}
-	srgData = rtreego.NewTree(2, 25, 50)
+	srgData = rtreego.NewTree(25, 50)
 	var data []interface{}
 	var rec *shapefile.ShapefileRecord
 	var intersects bool
@@ -456,7 +457,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 						"is not acceptable.", srg.Weight)
 					return
 				} else if srg.Weight != 0. {
-					srg.Extent, err = gisconversions.GeomToRect(srg.Geom)
+					srg.Extent, err = geomconv.GeomToRect(srg.Geom)
 					if err != nil {
 						return
 					}
@@ -552,7 +553,7 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	result.CoveredByGrid = geomop.Within(data.InputGeom, s.GridCells.Extent)
 
 	var inputBounds *rtreego.Rect
-	inputBounds, err = gisconversions.GeomToRect(data.InputGeom)
+	inputBounds, err = geomconv.GeomToRect(data.InputGeom)
 	if err != nil {
 		return
 	}

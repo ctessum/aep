@@ -104,10 +104,11 @@ type ParsedRecord struct {
 type SpecValUnits struct {
 	Val     float64
 	Units   string
+	PolType *PolHolder
 	Gridded []*sparse.SparseArray
 }
 
-func (c RunData) newParsedRecord() (rec *ParsedRecord) {
+func (c Context) newParsedRecord() (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
 	rec.ANN_EMIS = make(map[string]*SpecValUnits)
 	rec.CEFF = make(map[string]float64)
@@ -163,7 +164,7 @@ func (r *ParsedRecord) parseEmisHelper(pol, ann_emis, avd_emis string) string {
 }
 
 func (r *ParsedRecord) parsePointLocHelperORL(ctype, xloc, yloc, utmz string,
-	c *RunData) error {
+	c *Context) error {
 	ctypeClean := trimString(ctype)
 	if ctypeClean != "L" {
 		return fmt.Errorf("ctype needs to equal `L'. It is instead `%v'.",
@@ -184,7 +185,7 @@ func (r *ParsedRecord) parsePointLocHelperORL(ctype, xloc, yloc, utmz string,
 	return nil
 }
 
-func (r *ParsedRecord) parsePointLocHelperIDA(xloc, yloc string, c *RunData) error {
+func (r *ParsedRecord) parsePointLocHelperIDA(xloc, yloc string, c *Context) error {
 	x, err := strconv.ParseFloat(trimString(xloc), 64)
 	if err != nil {
 		return fmt.Errorf("Problem parsing latitude.")
@@ -253,18 +254,18 @@ func parseSIC(s string) string {
 	}
 }
 
-func (c *RunData) parseRecordPointORL(record string,
+func (c *Context) parseRecordPointORL(record string,
 	fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
 	var err error
 	fields.FIPS = trimString(splitString[0])
-	fields.PLANTID = splitString[1]
-	fields.POINTID = splitString[2]
-	fields.STACKID = splitString[3]
-	fields.SEGMENT = splitString[4]
-	fields.PLANT = splitString[5]
+	fields.PLANTID = trimString(splitString[1])
+	fields.POINTID = trimString(splitString[2])
+	fields.STACKID = trimString(splitString[3])
+	fields.SEGMENT = trimString(splitString[4])
+	fields.PLANT = trimString(splitString[5])
 	fields.SCC = trimString(splitString[6])
 	fields.SRCTYPE = splitString[8]
 	fields.STKHGT = stringToFloat(splitString[9])
@@ -285,12 +286,12 @@ func (c *RunData) parseRecordPointORL(record string,
 	fields.CEFF[pol] = stringToFloat(splitString[24])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[25])
 	fields.NEI_UNIQUE_ID = splitString[28]
-	fields.ORIS_FACILITY_CODE = splitString[29]
-	fields.ORIS_BOILER_ID = splitString[30]
+	fields.ORIS_FACILITY_CODE = trimString(splitString[29])
+	fields.ORIS_BOILER_ID = trimString(splitString[30])
 	return fields
 }
 
-func (c *RunData) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedRecord {
+func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
@@ -307,7 +308,7 @@ func (c *RunData) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedReco
 	return fields
 }
 
-func (c *RunData) parseRecordNonroadORL(record string,
+func (c *Context) parseRecordNonroadORL(record string,
 	fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	record = cleanRecordORL(record)
@@ -322,7 +323,7 @@ func (c *RunData) parseRecordNonroadORL(record string,
 	return fields
 }
 
-func (c *RunData) parseRecordMobileORL(record string,
+func (c *Context) parseRecordMobileORL(record string,
 	fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	record = cleanRecordORL(record)
@@ -349,17 +350,17 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 	return
 }
 
-func (c *RunData) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRecord {
+func (c *Context) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	checkRecordLengthIDA(record, fInfo, 249, 52)
 	fields.FIPS = parseFipsIDA(record[0:5])
-	fields.PLANTID = record[5:20]
-	fields.POINTID = record[20:35]
-	fields.STACKID = record[35:47]
-	fields.ORIS_FACILITY_CODE = record[47:53]
-	fields.ORIS_BOILER_ID = record[53:59]
-	fields.SEGMENT = record[59:61]
-	fields.PLANT = record[61:101]
+	fields.PLANTID = trimString(record[5:20])
+	fields.POINTID = trimString(record[20:35])
+	fields.STACKID = trimString(record[35:47])
+	fields.ORIS_FACILITY_CODE = trimString(record[47:53])
+	fields.ORIS_BOILER_ID = trimString(record[53:59])
+	fields.SEGMENT = trimString(record[59:61])
+	fields.PLANT = trimString(record[61:101])
 	fields.SCC = trimString(record[101:111])
 	fields.STKHGT = stringToFloat(record[119:123])
 	fields.STKDIAM = stringToFloat(record[123:129])
@@ -381,7 +382,7 @@ func (c *RunData) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRec
 	return fields
 }
 
-func (c *RunData) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedRecord {
+func (c *Context) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	checkRecordLengthIDA(record, fInfo, 15, 47)
 	fields.FIPS = parseFipsIDA(record[0:5])
@@ -396,7 +397,7 @@ func (c *RunData) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedReco
 	}
 	return fields
 }
-func (c *RunData) parseRecordMobileIDA(record string,
+func (c *Context) parseRecordMobileIDA(record string,
 	fInfo *FileInfo) *ParsedRecord {
 	fields := c.newParsedRecord()
 	checkRecordLengthIDA(record, fInfo, 25, 20)
@@ -410,14 +411,16 @@ func (c *RunData) parseRecordMobileIDA(record string,
 	return fields
 }
 
-func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
+func (config *Context) Inventory(OutputChan chan *ParsedRecord, period string) {
 	defer config.ErrorRecover()
+	reportMx.Lock()
 	if _, ok := Report.SectorResults[config.Sector]; !ok {
 		Report.SectorResults[config.Sector] = make(map[string]*Results)
 	}
 	if _, ok := Report.SectorResults[config.Sector][period]; !ok {
 		Report.SectorResults[config.Sector][period] = new(Results)
 	}
+	reportMx.Unlock()
 
 	// make a list of species that can possibly be double counted.
 	doubleCountablePols := make([]string, 0)
@@ -433,10 +436,16 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 
 	config.Log("Importing inventory for "+period+" "+
 		config.Sector+"...", 1)
+	reportMx.Lock()
 	Report.SectorResults[config.Sector][period].
 		InventoryResults = make(map[string]*FileInfo)
+	reportMx.Unlock()
 	// First, go through files to check for possible double
 	// counting in individual records.
+	// Records that double count are defined as those that
+	// contain a specific pollutant as well as a pollutant
+	// group that contains the specific pollutant as one
+	// of its component species.
 	for _, file := range config.InvFileNames {
 		if config.InventoryFreq == "monthly" {
 			file = strings.Replace(file, "[month]", period, -1)
@@ -499,8 +508,10 @@ func (config *RunData) Inventory(OutputChan chan *ParsedRecord, period string) {
 			OutputChan <- record
 		}
 		fInfo.fid.Close()
+	reportMx.Lock()
 		Report.SectorResults[config.Sector][period].
 			InventoryResults[file] = fInfo
+	reportMx.Unlock()
 	}
 	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
@@ -517,7 +528,7 @@ func cleanPol(pol string) (cleanedPol string) {
 	return
 }
 
-func (config *RunData) OpenFile(file string) (fInfo *FileInfo) {
+func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 	var record string
 	var err error
 	fInfo = newFileInfo()
@@ -587,7 +598,7 @@ func (config *RunData) OpenFile(file string) (fInfo *FileInfo) {
 	return
 }
 
-func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord, config *RunData) {
+func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord, config *Context) {
 	numProcs := runtime.GOMAXPROCS(-1)
 	lineChan := make(chan string)
 	var wg sync.WaitGroup
@@ -660,6 +671,5 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord, config *RunData
 		}
 		lineChan <- line
 	}
-
 	return
 }

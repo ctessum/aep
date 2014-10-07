@@ -19,21 +19,22 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/spatialsrg"
-	"bitbucket.org/ctessum/gis"
-	"bitbucket.org/ctessum/gisconversions"
-	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/csv"
 	"fmt"
-	"github.com/lukeroth/gdal"
-	"github.com/pmylund/go-cache"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"bitbucket.org/ctessum/aep/spatialsrg"
+	"bitbucket.org/ctessum/gis"
+	"bitbucket.org/ctessum/sparse"
+	"github.com/ctessum/projgeom"
+	"github.com/lukeroth/gdal"
+	"github.com/pmylund/go-cache"
 )
 
 var (
@@ -45,12 +46,14 @@ var (
 	srgCache               *cache.Cache
 )
 
-func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
+func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log("Setting up spatial environment...", 1)
 	spatialsrg.DebugLevel = c.DebugLevel
 	var err error
 	x := c.wrfData
+	reportMx.Lock()
 	Report.GridNames = x.DomainNames
+	reportMx.Unlock()
 	var proj string
 	switch x.Map_proj {
 	case "lambert":
@@ -83,7 +86,7 @@ func (c *RunData) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	return
 }
 
-func (c *RunData) setupSrgs(e *ErrCat) {
+func (c *Context) setupSrgs(e *ErrCat) {
 	c.Log("Setting up surrogate generation...", 1)
 	if c.RegenerateSpatialData {
 		// delete spatial surrogates
@@ -120,7 +123,7 @@ func (c *RunData) setupSrgs(e *ErrCat) {
 	return
 }
 
-func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
+func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
 	c.Log("Setting up spatial projection and database connection...", 5)
 	sr := c.setupCommon(e)
 	x := c.wrfData
@@ -130,7 +133,7 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 			x.Nx[i], x.Ny[i], x.Dx[i], x.Dy[i], x.W[i], x.S[i], sr)
 		if c.RunTemporal {
 			e.Add(grid.GetTimeZones(
-				filepath.Join(c.shapefiles, "timezone.shp"), "zone"))
+				filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 		}
 		e.Add(grid.WriteToShp(c.griddedSrgs))
 		grids = append(grids, grid)
@@ -140,7 +143,7 @@ func (c *RunData) SpatialSetupRegularGrid(e *ErrCat) {
 
 // Use a spatial table (which needs to be already loaded into PostGIS
 // as the grid. The table to needs to have an ID column called gid
-func (c *RunData) SpatialSetupIrregularGrid(name, shapeFilePath string,
+func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 	columnsToKeep []string, e *ErrCat) {
 	sr := c.setupCommon(e)
 	grid, err := spatialsrg.NewGridIrregular(name, shapeFilePath,
@@ -149,7 +152,7 @@ func (c *RunData) SpatialSetupIrregularGrid(name, shapeFilePath string,
 	grid.IrregularGrid = true
 	if c.RunTemporal {
 		e.Add(grid.GetTimeZones(
-			filepath.Join(c.shapefiles, "timezone"), "zone"))
+			filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 	}
 	grids = append(grids, grid)
 	c.setupSrgs(e)
@@ -191,7 +194,7 @@ func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int) {
 	*h = t
 }
 
-func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
+func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	OutputChan chan *ParsedRecord, period string) {
 	defer c.ErrorRecoverCloseChan(InputChan)
 	var err error
@@ -203,8 +206,8 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 
 	switch c.SectorType {
 	case "point":
-		var ct *gisconversions.CoordinateTransform
-		ct, err = gisconversions.NewCoordinateTransform(c.inputSr, grids[0].Sr)
+		var ct *projgeom.CoordinateTransform
+		ct, err = projgeom.NewCoordinateTransform(c.inputSr, grids[0].Sr)
 		for record := range InputChan {
 			emisInRecord := false
 			for pol, data := range record.ANN_EMIS {
@@ -287,13 +290,15 @@ func (c *RunData) Spatialize(InputChan chan *ParsedRecord,
 		panic(err)
 	}
 	close(OutputChan)
+	reportMx.Lock()
 	Report.SectorResults[c.Sector][period].SpatialResults = totals
+	reportMx.Unlock()
 	c.ResultMaps(totals, TotalGrid, period)
 	c.msgchan <- "Finished spatializing " + period + " " + c.Sector
 	return
 }
 
-func (c *RunData) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
+func (c *Context) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	upstreamSrgs []string) (srg *sparse.SparseArray) {
 
 	tableName := grid.Name + "___" + srgNum
@@ -321,7 +326,7 @@ func (c *RunData) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 
 // It is important not to edit the returned surrogate in place, because the
 // same copy is used over and over again.
-func (c *RunData) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
+func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 	upstreamSrgs []string) *sparse.SparseArray {
 
 	// Start the surrogate cacher, but only start it once.
@@ -408,7 +413,7 @@ func NewSrgGenData(srgNum string, grid *spatialsrg.GridDef) (
 }
 
 // Generate spatial surrogates
-func (c *RunData) SurrogateGenerator() {
+func (c *Context) SurrogateGenerator() {
 	for srgData := range SurrogateGeneratorChan {
 		var err error
 		srgNum := srgData.srgNum
@@ -431,7 +436,7 @@ func (c *RunData) SurrogateGenerator() {
 }
 
 // Generate a surrogate that doesn't require merging
-func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
+func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
 	inputMap := srgSpec[srgNum].DATASHAPEFILE
@@ -459,7 +464,7 @@ func (c *RunData) genSrgNoMerge(srgData *SrgGenData) (err error) {
 // surrogate merging: create a surrogate from other surrogates
 // Here, we just create weight surrogate tables if they don't exist.
 // The actual merging happens elsewhere.
-func (c *RunData) genSrgMerge(srgData *SrgGenData) (err error) {
+func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
 	c.Log(srgSpec[srgNum], 2)
@@ -522,7 +527,7 @@ type SrgMerge struct {
 	val  float64
 }
 
-func (c *RunData) SurrogateSpecification() (err error) {
+func (c *Context) SurrogateSpecification() (err error) {
 	var record []string
 	fid, err := os.Open(c.SrgSpecFile)
 	if err != nil {
@@ -621,7 +626,7 @@ func (c *RunData) SurrogateSpecification() (err error) {
 }
 
 // GridRef reads the SMOKE gref file, which maps FIPS and SCC codes to grid surrogates
-func (c *RunData) GridRef() (err error) {
+func (c *Context) GridRef() (err error) {
 	var record string
 	fid, err := os.Open(c.GridRefFile)
 	if err != nil {

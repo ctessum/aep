@@ -20,9 +20,9 @@ package aep
 
 import (
 	"bitbucket.org/ctessum/aep/spatialsrg"
+	"bitbucket.org/ctessum/cdf"
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
-	"bitbucket.org/ctessum/cdf"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,10 +38,11 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Write a message to standard error.
-func (c *RunData) Log(msg interface{}, DebugLevel int) {
+func (c *Context) Log(msg interface{}, DebugLevel int) {
 	if DebugLevel <= c.DebugLevel {
 		log.Print(msg)
 	}
@@ -50,7 +51,7 @@ func (c *RunData) Log(msg interface{}, DebugLevel int) {
 
 // Handle an error occuring within a function to allow the function
 // to fail without killing the whole program.
-func (c *RunData) ErrorRecover() {
+func (c *Context) ErrorRecover() {
 	if err := recover(); err != nil {
 		if c.DebugLevel > 0 {
 			panic(err)
@@ -65,7 +66,7 @@ func (c *RunData) ErrorRecover() {
 }
 
 // Same as ErrorRecover, but also close a channel
-func (c *RunData) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
+func (c *Context) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
 	if err := recover(); err != nil {
 		if c.DebugLevel > 0 {
 			panic(err)
@@ -112,7 +113,7 @@ func (e *ErrCat) Report() {
 	return
 }
 
-func (c *RunData) ErrorReport(errmesg interface{}) {
+func (c *Context) ErrorReport(errmesg interface{}) {
 	err := "--------------------------\nERROR REPORT\n"
 	err += "Sector: " + c.Sector + "\n"
 	err += "Error message: "
@@ -126,8 +127,9 @@ func (c *RunData) ErrorReport(errmesg interface{}) {
 }
 
 var (
-	Report = new(ReportHolder)
-	Status *StatusHolder
+	reportMx sync.Mutex
+	Report   = new(ReportHolder)
+	Status   *StatusHolder
 )
 
 func init() {
@@ -139,7 +141,7 @@ func init() {
 }
 
 type ReportHolder struct {
-	Config          *RunData
+	Config          *Context
 	SectorResults   map[string]map[string]*Results // map[sector][period]Results
 	ReportOnly      bool                           // whether main program is running at the same time
 	GridNames       []string                       // names of the grids
@@ -193,7 +195,7 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
-func (c *RunData) ResultMaps(totals *SpatialTotals,
+func (c *Context) ResultMaps(totals *SpatialTotals,
 	TotalGrid map[*spatialsrg.GridDef]map[string]*sparse.SparseArray,
 	period string) {
 
@@ -207,7 +209,7 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 			c.SimulationName, c.Sector, period, grid.Name))
 		h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
 		h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
-			"by AEP (bitbucket.org/ctessum/aep)")
+			"by AEP version "+Version+" ("+Website+")")
 		h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
 		h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
 		h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
@@ -260,7 +262,7 @@ func (c *RunData) ResultMaps(totals *SpatialTotals,
 }
 
 // SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
-func (c *RunData) SCCdesc() (map[string]string, error) {
+func (c *Context) SCCdesc() (map[string]string, error) {
 	sccDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(c.SccDesc)
@@ -312,7 +314,7 @@ func (c *RunData) SCCdesc() (map[string]string, error) {
 }
 
 // Read SIC description file, which gives descriptions for each SIC code.
-func (c *RunData) SICdesc() (map[string]string, error) {
+func (c *Context) SICdesc() (map[string]string, error) {
 	sicDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(c.SicDesc)
@@ -341,7 +343,7 @@ func (c *RunData) SICdesc() (map[string]string, error) {
 }
 
 // Read NAICS description file, which gives descriptions for each NAICS code.
-func (c *RunData) NAICSdesc() (map[string]string, error) {
+func (c *Context) NAICSdesc() (map[string]string, error) {
 	naicsDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(c.NaicsDesc)
@@ -747,7 +749,7 @@ func DrawTable(format string, includeTotals bool, dr *dataReport,
 	fmt.Fprint(w, "</tbody></table>\n")
 }
 
-func (c *RunData) ReportServer(reportOnly bool) {
+func (c *Context) ReportServer(reportOnly bool) {
 	// read in the report
 	if reportOnly {
 		file := filepath.Join(c.outputDir, "Report.json")
@@ -782,7 +784,7 @@ func (c *RunData) ReportServer(reportOnly bool) {
 }
 
 // Write out the report
-func (c *RunData) WriteReport() {
+func (c *Context) WriteReport() {
 	b, err := json.MarshalIndent(Report, "", "  ")
 	if err != nil {
 		panic(err)
