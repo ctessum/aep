@@ -21,9 +21,12 @@ package aep
 import (
 	"bufio"
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -33,13 +36,12 @@ import (
 const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
 
 var (
-	SpecProfChan    = make(chan *SpecProfRequest)
-	SpecRefFileLock = new(sync.Mutex)
+	SpecProfChan = make(chan *SpecProfRequest)
 )
 
 // SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *Context) SpecRef() (specRef map[string]interface{}, err error) {
-	specRef = make(map[string]interface{})
+func (c *Context) SpecRef() (specRef map[string]map[string]interface{}, err error) {
+	specRef = make(map[string]map[string]interface{})
 	// map[SCC][pol]code
 	var record string
 	fid, err := os.Open(c.SpecRefFile)
@@ -81,9 +83,9 @@ func (c *Context) SpecRef() (specRef map[string]interface{}, err error) {
 			pol := strings.Trim(splitLine[2], "\"\n")
 
 			if _, ok := specRef[SCC]; !ok {
-				specRef[SCC] = make(map[string]string)
+				specRef[SCC] = make(map[string]interface{})
 			}
-			specRef[SCC].(map[string]string)[pol] = code
+			specRef[SCC][pol] = code
 		}
 	}
 	return
@@ -163,6 +165,132 @@ func (c *Context) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 	return
 }
 
+// Read file specifying moles of a chemical mechanism model species
+// to chemicals in the SPECIATE database. Data can be obtained at
+// http://www.cert.ucr.edu/~carter/emitdb/.
+// Output data is in the format:
+// map[mechanism][SPECIATE ID][mechanism group]ratio
+func (c *Context) readMechAssignment(
+	e *ErrCat) map[string]map[int]map[string]float64 {
+	out := make(map[string]map[int]map[string]float64)
+	f, err := os.Open(c.MechAssignmentFile)
+	if err != nil {
+		e.Add(fmt.Errorf("Problem reading Mechanism Assignment file: %v",
+			err.Error()))
+		return out
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	for {
+		rec, err := r.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			e.Add(fmt.Errorf("Problem reading Mechanism Assignment file: %v",
+				err.Error()))
+		}
+		mech := rec[0]
+		specID := stringToInt(rec[1])
+		mechGroup := rec[2]
+		ratio := stringToFloat(rec[3])
+		if _, ok := out[mech]; !ok {
+			out[mech] = make(map[int]map[string]float64)
+		}
+		if _, ok := out[mech][specID]; !ok {
+			out[mech][specID] = make(map[string]float64)
+		}
+		out[mech][specID][mechGroup] = ratio
+	}
+	return out
+}
+
+type mechData struct {
+	massOrMol string
+	MW        float64
+}
+
+// Read file specifying molecular weights of mechanism model species
+// Data can be obtained at
+// http://www.cert.ucr.edu/~carter/emitdb/.
+// Output data is in the format:
+// map[mechanism][mechanism group]{massOrMol,MW}
+func (c *Context) readMechMW(e *ErrCat) map[string]map[string]mechData {
+	out := make(map[string]map[string]mechData)
+	f, err := os.Open(c.MechanismMWFile)
+	if err != nil {
+		e.Add(fmt.Errorf("Problem reading Mechanism MW file: %v",
+			err.Error()))
+		return out
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	for {
+		rec, err := r.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			e.Add(fmt.Errorf("Problem reading Mechanism MW file: %v",
+				err.Error()))
+		}
+		mech := rec[0]
+		massOrMol := rec[1] // mol or mass
+		mechGroup := rec[2]
+		MW := stringToFloat(rec[3])
+		if MW < 0. {
+			MW = math.NaN()
+		}
+		if _, ok := out[mech]; !ok {
+			out[mech] = make(map[string]mechData)
+		}
+		out[mech][mechGroup] = mechData{massOrMol, MW}
+	}
+	return out
+}
+
+type specInfo struct {
+	name string
+	MW   float64
+}
+
+// Read species info file. This data in this file is mainly the same as
+// what is in the SPECIATE database, but molecular weights for some
+// mixtures are apparently different.
+// Data can be obtained at
+// http://www.cert.ucr.edu/~carter/emitdb/.
+// Output data is in the format:
+// map[specID]{name, MW}
+func (c *Context) readSpecInfoVOC(e *ErrCat) map[int]specInfo {
+	out := make(map[int]specInfo)
+	f, err := os.Open(c.SpeciesInfoFile)
+	if err != nil {
+		e.Add(fmt.Errorf("Problem reading Species Info file: %v",
+			err.Error()))
+		return out
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	for {
+		rec, err := r.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			e.Add(fmt.Errorf("Problem reading Species Info file: %v",
+				err.Error()))
+		}
+		id := stringToInt(rec[0])
+		name := rec[1]
+		MW := stringToFloat(rec[8])
+		if MW < 0. {
+			MW = math.NaN()
+		}
+		out[id] = specInfo{name, MW}
+	}
+	return out
+}
+
 type SpecProfRequest struct {
 	SpecType            string
 	PolNameOrProfNumber string
@@ -183,6 +311,9 @@ func (c *Context) SpecProfiles(e *ErrCat) {
 		e.Add(err)
 		return
 	}
+	mechAssignment := c.readMechAssignment(e)
+	mechMW := c.readMechMW(e)
+	specInfoVOC := c.readSpecInfoVOC(e)
 	VOCprofiles := make(map[string]map[string]*SpecHolder)
 	NOxprofiles := make(map[string]map[string]*SpecHolder)
 	PM25profiles := make(map[string]map[string]*SpecHolder)
@@ -213,27 +344,54 @@ func (c *Context) SpecProfiles(e *ErrCat) {
 					}
 					totalWeight += weightPercent
 
-					specName, tempMW, groupString :=
-						c.getSpeciesInfoFromID(db, specID)
-					MW := handleMW(specName, tempMW, weightPercent)
-					groupFactors := c.handleGroupString(specName, groupString)
+					specinfo, ok := specInfoVOC[specID]
+					if !ok {
+						err := fmt.Errorf("Species ID number %v is not in the "+
+							"species info file.", specinfo.name)
+						panic(err)
+					}
+					groupFactors, ok := mechAssignment[c.ChemicalMechanism][specID]
+					if !ok {
+						err := fmt.Errorf("The mechanism name and species ID "+
+							"combination %v and %v is not in the mechanism "+
+							"assignment file.", c.ChemicalMechanism, specID)
+						panic(err)
+					}
 
 					x := new(SpecHolder)
 					switch c.SpecType {
 					case "mol":
-						x.Factor = convFac * weightPercent / MW / total
+						x.Factor = convFac * weightPercent / specinfo.MW / total
 						x.Units = "mol/gram"
 					case "mass":
 						x.Factor = convFac * weightPercent / total
 						x.Units = "gram/gram"
+						// change mol:mol factors to mass:mass factors
+						for g, _ := range groupFactors {
+							mechmw := mechMW[c.ChemicalMechanism][g]
+							groupFactors[g] *= mechmw.MW / specinfo.MW
+							totalFactor := 0.
+							for _, f := range groupFactors {
+								totalFactor += f
+							}
+							// The species to chemical mechanism conversion
+							// database (http://www.cert.ucr.edu/~carter/emitdb/)
+							// is designed to (attempt to) conserve reactivity
+							// rather than mass, so if we're doing mass speciation
+							// we just normalize the speciation factors so that
+							// the overall emissions mass doesn't change.
+							for g, _ := range groupFactors {
+								groupFactors[g] /= totalFactor
+							}
+						}
 					default:
 						err = fmt.Errorf("Invalid specType %v. Options are "+
 							"\"mass\" and \"mol\"", c.SpecType)
 					}
-					profile[specName] = new(SpecHolder)
-					profile[specName].Units = x.Units
-					profile[specName].Factor += x.Factor
-					profile[specName].groupFactors = groupFactors
+					profile[specinfo.name] = new(SpecHolder)
+					profile[specinfo.name].Units = x.Units
+					profile[specinfo.name].Factor += x.Factor
+					profile[specinfo.name].groupFactors = groupFactors
 				}
 				rows.Close()
 				request.ProfileChan <- profile
@@ -253,7 +411,7 @@ func (c *Context) SpecProfiles(e *ErrCat) {
 					request.PolNameOrProfNumber)
 
 				rows, err := db.Query("select species_id,weight_per from " +
-					"\"other gases_species\" where p_number=\"" + fmt.Sprint(
+					"\"other_gases_species\" where p_number=\"" + fmt.Sprint(
 					request.PolNameOrProfNumber) + "\"")
 				if err != nil {
 					panic(err)
@@ -410,7 +568,7 @@ func (c *Context) getPM25Total(db *sql.DB, ProfileNumber string) (
 
 func (c *Context) getNOxTotal(db *sql.DB, ProfileNumber string) (
 	total float64) {
-	cmd := fmt.Sprintf("select TOTAL from \"OTHER GASES_PROFILE\" where"+
+	cmd := fmt.Sprintf("select TOTAL from \"OTHER_GASES_PROFILE\" where"+
 		" P_NUMBER=%v and MASTER_POL=\"NOx\"", ProfileNumber)
 	err := db.QueryRow(cmd).Scan(&total)
 	if err != nil {
@@ -423,7 +581,7 @@ func (c *Context) getNOxTotal(db *sql.DB, ProfileNumber string) (
 func (c *Context) getSpeciesInfoFromID(db *sql.DB, specID int) (
 	specName string, tempMW sql.NullFloat64, groupString sql.NullString) {
 	err := db.QueryRow(fmt.Sprintf("SELECT name,spec_mw,%v_group "+
-		"FROM species_properties WHERE ID=%v", c.SpeciesGroupName, specID)).
+		"FROM species_properties WHERE ID=%v", c.ChemicalMechanism, specID)).
 		Scan(&specName, &tempMW, &groupString)
 	if err != nil {
 		panic(fmt.Errorf("Problem retrieving species "+
@@ -436,7 +594,7 @@ func (c *Context) getSpeciesInfoFromID(db *sql.DB, specID int) (
 func (c *Context) getSpeciesInfoFromName(db *sql.DB, specName string) (
 	tempMW sql.NullFloat64, groupString sql.NullString) {
 	err := db.QueryRow(fmt.Sprintf("SELECT spec_mw,%v_group "+
-		"FROM species_properties WHERE name=\"%v\"", c.SpeciesGroupName, specName)).
+		"FROM species_properties WHERE name=\"%v\"", c.ChemicalMechanism, specName)).
 		Scan(&tempMW, &groupString)
 	if err != nil {
 		panic(fmt.Errorf("Problem retrieving species "+
@@ -495,12 +653,13 @@ func (c *Context) handleGroupString(specName string, groupString sql.NullString)
 }
 
 type SpecRef struct {
-	sRef      map[string]interface{}            // map[SCC][pol]code
+	sRef      map[string]map[string]interface{} // map[SCC][pol]code
 	sRefCombo map[string]map[string]interface{} // map[pol][FIPS][code]frac
 }
 
 func (c *Context) NewSpecRef() (sp *SpecRef, err error) {
 	sp = new(SpecRef)
+	var SpecRefFileLock sync.Mutex
 	SpecRefFileLock.Lock()
 	sp.sRef, err = c.SpecRef()
 	SpecRefFileLock.Unlock()
@@ -516,16 +675,9 @@ type SpecHolder struct {
 	groupFactors map[string]float64
 }
 
-// A default speciation profile for when we don't have any other
-// information.
-func (sp *SpecRef) DefaultProfile(pol string) (profile map[string]*SpecHolder) {
-	// We don't know the molecular weight, so don't
-	// perform any conversion
-	profile = make(map[string]*SpecHolder)
-	profile[pol] = new(SpecHolder)
-	profile[pol].Factor = 1.
-	profile[pol].Units = "gram/gram"
-	return
+func (s *SpecHolder) String() string {
+	return fmt.Sprintf("Factor: %v; Units: %v; groupFactors: %v",
+		s.Factor, s.Units, s.groupFactors)
 }
 
 func (sp *SpecRef) GetProfileSingleSpecies(pol string, c *Context) (
@@ -604,32 +756,30 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*SpecHolder) {
 	var err error
-	var ref map[string]string
-	var matchedVal interface{}
-	var ok bool
-	SCC := record.SCC
-	if c.MatchFullSCC {
-		matchedVal, ok = sp.sRef[SCC]
-		if !ok {
-			err = fmt.Errorf("In Speciate, SCC code " + SCC +
-				" is not in specRef file. Setting matchFullSCC to " +
-				"'false' will allow a default value to be used.")
-			panic(err)
-		}
-	} else {
-		_, matchedVal, err = MatchCode(SCC, sp.sRef)
-		if err != nil {
-			err = fmt.Errorf("In Speciate, SCC code " + SCC +
-				" is not in specRef file and there is no default.")
-			panic(err)
-		}
-	}
-	ref = matchedVal.(map[string]string)
 
 	if c.PolsToKeep[cleanPol(pol)].SpecProf != nil {
 		// Handle species where the speciation profile is specified in
 		// the configuration file.
-		specFactors = c.PolsToKeep[cleanPol(pol)].SpecProf
+		specFactors = make(map[string]*SpecHolder)
+		total := 0.
+		for p, d := range c.PolsToKeep[cleanPol(pol)].SpecProf {
+			// make a copy
+			specFactors[p] = &SpecHolder{Factor: d.Factor, Units: d.Units}
+			total += d.Factor
+		}
+		if c.SpecType == "mass" {
+			// If the factors are converting to moles but we're doing mass
+			// speciation, noramalize the factors so that they sum to one.
+			// If some factors convert to moles but others don't (which
+			// should probably never be happening), this won't work right.
+			for g, f := range specFactors {
+				if !strings.Contains(f.Units, "mol") {
+					break
+				}
+				specFactors[g].Factor /= total
+				specFactors[g].Units = strings.Replace(f.Units, "mol", "gram", -1)
+			}
+		}
 	} else if c.PolsToKeep[cleanPol(pol)].SpecNames != nil {
 		// For explicit species, convert the value to moles
 		// if required and add the emissions to a species group
@@ -638,96 +788,116 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
 			c.PolsToKeep[cleanPol(pol)].SpecNames[0], c)
 	} else {
 		// Use the speciate database for speciation.
+		var matchedVal interface{}
+		var ok bool
+		SCC := record.SCC
+		if c.MatchFullSCC {
+			matchedVal, ok = sp.sRef[SCC][pol]
+			if !ok {
+				matchedVal, ok = sp.sRef[SCC][cleanPol(pol)]
+				if !ok {
+					err = fmt.Errorf("In Speciate, the combination of SCC code " +
+						SCC + " and pollutant " + pol + "or (" + cleanPol(pol) +
+						") is not in the specRef file.  Setting matchFullSCC to " +
+						"'false' will allow a default value to be used.")
+					panic(err)
+				}
+			}
+		} else {
+			_, _, matchedVal, err = MatchCodeDouble(SCC, pol, sp.sRef)
+			if err != nil {
+				_, _, matchedVal, err = MatchCodeDouble(SCC, cleanPol(pol), sp.sRef)
+				if err != nil {
+					err = fmt.Errorf("In Speciate, the combination of SCC code " +
+						SCC + " and pollutant " + pol + "or (" + cleanPol(pol) +
+						") is not in the specRef file and there is no default.")
+					panic(err)
+				}
+			}
+		}
+		code := matchedVal.(string)
+
 		specType := c.PolsToKeep[cleanPol(pol)].SpecType
 		switch specType {
 		case "VOC":
-			code, ok := ref[pol]
-			if ok {
-				if code == "COMBO" { // for location specific speciation profiles
-					if sp.sRefCombo == nil {
-						sp.sRefCombo, err = c.SpecRefCombo(period)
-						if err != nil {
-							return
-						}
-					}
-					countryCode := getCountryCode(record.Country)
-					_, _, codesI, err := MatchCodeDouble(pol, countryCode+record.FIPS, sp.sRefCombo)
+			if code == "COMBO" { // for location specific speciation profiles
+				if sp.sRefCombo == nil {
+					sp.sRefCombo, err = c.SpecRefCombo(period)
 					if err != nil {
-						err := fmt.Errorf("In GSPRO COMBO file, missing record: %v",
-							err.Error())
-						panic(err)
+						return
 					}
-					codes := codesI.(map[string]float64)
-					specFactors = make(map[string]*SpecHolder)
-					doubleCountSpecFactors = make(map[string]*SpecHolder)
-					ungroupedSpecFactors = make(map[string]*SpecHolder)
-					for code2, frac := range codes {
-						tempSpecFactors := make(map[string]*SpecHolder)
-						tempDoubleCountSpecFactors := make(map[string]*SpecHolder)
-						tempUngroupedSpecFactors := make(map[string]*SpecHolder)
-						tempSpecFactors, tempDoubleCountSpecFactors,
-							tempUngroupedSpecFactors =
-							sp.GetProfileAggregateSpecies(code2, specType,
-								record.DoubleCountPols, c)
-						for pol, val := range tempSpecFactors {
-							if _, ok := specFactors[pol]; !ok {
-								specFactors[pol] = new(SpecHolder)
-								specFactors[pol].Factor = val.Factor * frac
-								specFactors[pol].Units = val.Units
-							} else {
-								specFactors[pol].Factor += val.Factor * frac
-								if specFactors[pol].Units != val.Units {
-									panic("Units error!")
-								}
-							}
-						}
-						for pol, val := range tempDoubleCountSpecFactors {
-							if _, ok := doubleCountSpecFactors[pol]; !ok {
-								doubleCountSpecFactors[pol] = new(SpecHolder)
-								doubleCountSpecFactors[pol].Factor =
-									val.Factor * frac
-								doubleCountSpecFactors[pol].Units =
-									val.Units
-							} else {
-								doubleCountSpecFactors[pol].Factor +=
-									val.Factor * frac
-								if doubleCountSpecFactors[pol].Units !=
-									val.Units {
-									panic("Units error!")
-								}
-							}
-						}
-						for pol, val := range tempUngroupedSpecFactors {
-							if _, ok := ungroupedSpecFactors[pol]; !ok {
-								ungroupedSpecFactors[pol] = new(SpecHolder)
-								ungroupedSpecFactors[pol].Factor =
-									val.Factor * frac
-								ungroupedSpecFactors[pol].Units = val.Units
-							} else {
-								ungroupedSpecFactors[pol].Factor +=
-									val.Factor * frac
-								if ungroupedSpecFactors[pol].Units != val.Units {
-									panic("Units error!")
-								}
-							}
-						}
-					}
-				} else {
-					specFactors, doubleCountSpecFactors,
-						ungroupedSpecFactors = sp.GetProfileAggregateSpecies(
-						code, specType, record.DoubleCountPols, c)
 				}
-			} else { // no speciation profile reference is found
-				specFactors = sp.DefaultProfile(pol)
-			}
-		case "PM2.5", "NOx":
-			if code, ok := ref[pol]; ok {
+				countryCode := getCountryCode(record.Country)
+				_, _, codesI, err := MatchCodeDouble(pol, countryCode+record.FIPS, sp.sRefCombo)
+				if err != nil {
+					err := fmt.Errorf("In GSPRO COMBO file, missing record: %v",
+						err.Error())
+					panic(err)
+				}
+				codes := codesI.(map[string]float64)
+				specFactors = make(map[string]*SpecHolder)
+				doubleCountSpecFactors = make(map[string]*SpecHolder)
+				ungroupedSpecFactors = make(map[string]*SpecHolder)
+				for code2, frac := range codes {
+					tempSpecFactors := make(map[string]*SpecHolder)
+					tempDoubleCountSpecFactors := make(map[string]*SpecHolder)
+					tempUngroupedSpecFactors := make(map[string]*SpecHolder)
+					tempSpecFactors, tempDoubleCountSpecFactors,
+						tempUngroupedSpecFactors =
+						sp.GetProfileAggregateSpecies(code2, specType,
+							record.DoubleCountPols, c)
+					for pol, val := range tempSpecFactors {
+						if _, ok := specFactors[pol]; !ok {
+							specFactors[pol] = new(SpecHolder)
+							specFactors[pol].Factor = val.Factor * frac
+							specFactors[pol].Units = val.Units
+						} else {
+							specFactors[pol].Factor += val.Factor * frac
+							if specFactors[pol].Units != val.Units {
+								panic("Units error!")
+							}
+						}
+					}
+					for pol, val := range tempDoubleCountSpecFactors {
+						if _, ok := doubleCountSpecFactors[pol]; !ok {
+							doubleCountSpecFactors[pol] = new(SpecHolder)
+							doubleCountSpecFactors[pol].Factor =
+								val.Factor * frac
+							doubleCountSpecFactors[pol].Units =
+								val.Units
+						} else {
+							doubleCountSpecFactors[pol].Factor +=
+								val.Factor * frac
+							if doubleCountSpecFactors[pol].Units !=
+								val.Units {
+								panic("Units error!")
+							}
+						}
+					}
+					for pol, val := range tempUngroupedSpecFactors {
+						if _, ok := ungroupedSpecFactors[pol]; !ok {
+							ungroupedSpecFactors[pol] = new(SpecHolder)
+							ungroupedSpecFactors[pol].Factor =
+								val.Factor * frac
+							ungroupedSpecFactors[pol].Units = val.Units
+						} else {
+							ungroupedSpecFactors[pol].Factor +=
+								val.Factor * frac
+							if ungroupedSpecFactors[pol].Units != val.Units {
+								panic("Units error!")
+							}
+						}
+					}
+				}
+			} else {
 				specFactors, doubleCountSpecFactors,
 					ungroupedSpecFactors = sp.GetProfileAggregateSpecies(
 					code, specType, record.DoubleCountPols, c)
-			} else { // no speciation profile reference is found
-				specFactors = sp.DefaultProfile(pol)
 			}
+		case "PM2.5", "NOx":
+			specFactors, doubleCountSpecFactors,
+				ungroupedSpecFactors = sp.GetProfileAggregateSpecies(
+				code, specType, record.DoubleCountPols, c)
 		default:
 			panic("In PolsToKeep, either `SpecNames', `SpecProf', or `SpecType" +
 				" needs to be specified. `SpecType' can only be VOC, " +
@@ -747,8 +917,8 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
 		}
 		if absBias(fracSum, 1.0) > tolerance {
 			err = fmt.Errorf("Sum of speciation fractions (%v) for pollutant %v "+
-				"is not equal to 1. SpecType is %v", fracSum, pol,
-				c.PolsToKeep[cleanPol(pol)].SpecType)
+				"is not equal to 1. PolsToKeep entry is:\n`%v`", fracSum, pol,
+				c.PolsToKeep[cleanPol(pol)])
 			panic(err)
 		}
 	}
@@ -776,7 +946,7 @@ func (h *SpecTotals) AddKept(pol string, data *SpecValUnits) {
 		t.Kept[pol].Units = data.Units
 	} else {
 		if t.Kept[pol].Units != data.Units {
-			err := fmt.Errorf("Units problem for pol %v: %v! = %v",
+			err := fmt.Errorf("Units problem for pol %v: %v != %v",
 				pol, t.Kept[pol].Units, data.Units)
 			panic(err)
 		}

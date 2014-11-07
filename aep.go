@@ -156,7 +156,6 @@ func Run(c *aep.Context, runChan chan string,
 		}
 	}
 	for i := 0; i < n-1; i++ {
-		fmt.Println(c.Sector, i, n)
 		<-periodChan
 	}
 	if aep.Status.Sectors[c.Sector] != "Failed!" {

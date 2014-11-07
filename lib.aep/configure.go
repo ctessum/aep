@@ -46,7 +46,7 @@ const Version = "0.1.0" // versioning scheme at: http://semver.org/
 // Reads and parse a json configuration file.
 // See below for the required variables.
 func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat) (
-	config *configInput) {
+	config *ConfigData) {
 	// Open the configuration file
 	var (
 		file  *os.File
@@ -66,7 +66,7 @@ func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat
 		panic(err)
 	}
 
-	config = new(configInput)
+	config = new(ConfigData)
 	err = json.Unmarshal(bytes, config)
 	if err != nil {
 		fmt.Printf(
@@ -85,7 +85,7 @@ func ReadConfigFile(filepath *string, testmode *bool, slaves []string, e *ErrCat
 	return
 }
 
-type configInput struct {
+type ConfigData struct {
 	Dirs            *DirInfo
 	DefaultSettings *Context
 	Sectors         map[string]*Context
@@ -125,7 +125,10 @@ type Context struct {
 	SpecRefComboFile       string // Location of the county specific speciation code reference file, if any.
 	SpecProFile            string // Location of the SPECIATE database in sqlite format.
 	SpecType               string // Type of speciation to perform. Either "mol" or "mass".
-	SpeciesGroupName       string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
+	ChemicalMechanism      string // name for chemical species grouping scheme (needs to be present in SPECIATE database as columns with "_GROUP" and "_FACTOR" appended)
+	MechAssignmentFile     string // Path to the mechanism assignment file. Can be downloaded from http://www.cert.ucr.edu/~carter/emitdb/
+	MechanismMWFile        string // Path to the mechanism molecular weight file. Can be compiled from information from http://www.cert.ucr.edu/~carter/emitdb/
+	SpeciesInfoFile        string // Path to the VOC species info file. Can be downloaded from http://www.cert.ucr.edu/~carter/emitdb/
 	specFrac               map[string]map[string]map[string]SpecHolder
 	PolsToKeep             map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
 	InputProj4             string                // Proj4 specification of the spatial projection of the input emissions data.
@@ -169,7 +172,7 @@ type PolHolder struct {
 	SpecProf  map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
 }
 
-func (p *configInput) setup(e *ErrCat) {
+func (p *ConfigData) setup(e *ErrCat) {
 	c := *p
 	var err error
 	if c.DefaultSettings.InventoryFreq == "" {
@@ -237,6 +240,10 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 	d.SimulationName = os.ExpandEnv(d.SimulationName)
 	c.SimulationName = d.SimulationName
 	c.ForceWesternHemisphere = d.ForceWesternHemisphere
+	c.ChemicalMechanism = d.ChemicalMechanism
+	c.MechAssignmentFile = d.MechAssignmentFile
+	c.MechanismMWFile = d.MechanismMWFile
+	c.SpeciesInfoFile = d.SpeciesInfoFile
 	if d.TstepsPerFile == 0 {
 		d.TstepsPerFile = 24
 	}
@@ -269,9 +276,6 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 	}
 	if c.testMode { // for testing do mass speciation so speciated totals match inventory totals.
 		c.SpecType = "mass"
-	}
-	if c.SpeciesGroupName == "" {
-		c.SpeciesGroupName = d.SpeciesGroupName
 	}
 	if c.PolsToKeep == nil {
 		c.PolsToKeep = d.PolsToKeep
@@ -388,12 +392,14 @@ func (p *Context) catPaths(d *DirInfo, e *ErrCat) {
 		&c.SccDesc, &c.SicDesc, &c.NaicsDesc,
 		&c.GridRefFile, &c.TemporalRefFile, &c.TemporalProFile,
 		&c.HolidayFile, &c.SrgSpecFile, &c.WPSnamelist, &c.WRFnamelist,
-		&c.OldWRFout}
+		&c.OldWRFout, &c.MechAssignmentFile, &c.MechanismMWFile,
+		&c.SpeciesInfoFile}
 	varnames := []string{"Home", "Input", "Ancilliary", "Shapefiles",
 		"SpecRefFile", "SpecRefComboFile", "SpecProFile",
 		"SccDesc", "SicDesc", "NaicsDesc",
 		"GridRefFile", "TemporalRefFile", "TemporalProFile", "HolidayFile",
-		"SrgSpecFile", "WPSnamelist", "WRFnamelist", "OldWRFout"}
+		"SrgSpecFile", "WPSnamelist", "WRFnamelist", "OldWRFout",
+		"MechAssignmentFile", "MechanismMWFile", "SpeciesInfoFile"}
 
 	for i, path := range paths {
 		d.expand(path)
