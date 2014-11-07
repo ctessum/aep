@@ -458,8 +458,8 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	for pol, vals := range record.ANN_EMIS {
 		if _, ok := t.AreaData[temporalCodes][pol]; !ok {
 			t.AreaData[temporalCodes][pol] =
-				make([]*sparse.SparseArray, len(grids))
-			for i, grid := range grids {
+				make([]*sparse.SparseArray, len(Grids))
+			for i, grid := range Grids {
 				t.AreaData[temporalCodes][pol][i] =
 					sparse.ZerosSparse(grid.Ny, grid.Nx)
 			}
@@ -467,7 +467,7 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 		// change units from emissions per year to emissions per hour
 		units := strings.Replace(vals.Units, "/year", "/hour", -1)
 		t.addUnits(pol, units)
-		for i, _ := range grids {
+		for i, _ := range Grids {
 			if vals.Gridded[i] != nil {
 				t.AreaData[temporalCodes][pol][i].AddSparse(vals.Gridded[i])
 			}
@@ -538,8 +538,8 @@ var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time,
 		tFactors := t.griddedTemporalFactors(temporalCodes, time)
 		for pol, gridData := range data {
 			if _, ok := areaEmis[pol]; !ok { // initialize array
-				areaEmis[pol] = make([]*sparse.SparseArray, len(grids))
-				for i, grid := range grids {
+				areaEmis[pol] = make([]*sparse.SparseArray, len(Grids))
+				for i, grid := range Grids {
 					areaEmis[pol][i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 				}
 			}
@@ -635,7 +635,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time,
 						len(emis.Gridded))
 					for i, gridVal := range emis.Gridded {
 						out.ANN_EMIS[pol].Gridded[i] =
-							sparse.ZerosSparse(grids[i].Ny, grids[i].Nx)
+							sparse.ZerosSparse(Grids[i].Ny, Grids[i].Nx)
 						// multiply by temporal factor to get time step
 						for _, ix := range gridVal.Nonzero() {
 							tFactor := getCEMtFactor(emis.PolType,
@@ -737,8 +737,8 @@ func (t *temporalSector) getTemporalFactor(monthlyCode, weeklyCode,
 // daylight savings time.
 func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 	outputTime time.Time) (out []*sparse.SparseArray) {
-	out = make([]*sparse.SparseArray, len(grids))
-	for i, grid := range grids {
+	out = make([]*sparse.SparseArray, len(Grids))
+	for i, grid := range Grids {
 		out[i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for tz, cells := range grid.TimeZones {
 			location, err := time.LoadLocation(tz)
@@ -756,8 +756,8 @@ func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 // get times in grid cells with no daylight savings (needed for CEM data)
 func griddedTimeNoDST(outputTime time.Time) []map[int]string {
 	const format = "060102 15"
-	out := make([]map[int]string, len(grids))
-	for i, grid := range grids {
+	out := make([]map[int]string, len(Grids))
+	for i, grid := range Grids {
 		out[i] = make(map[int]string)
 		for tz, cells := range grid.TimeZones {
 			location, err := time.LoadLocation(tz)

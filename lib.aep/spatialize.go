@@ -38,9 +38,9 @@ import (
 )
 
 var (
-	srgSpec                = make(map[string]*srgSpecHolder)
+	SrgSpec                = make(map[string]*SrgSpecHolder)
 	srgCodes               = make(map[string]string)
-	grids                  = make([]*spatialsrg.GridDef, 0)
+	Grids                  = make([]*spatialsrg.GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
 	srgCache               *cache.Cache
@@ -114,7 +114,7 @@ func (c *Context) setupSrgs(e *ErrCat) {
 		//			return err
 		//		}))
 	}
-	for _, grid := range grids {
+	for _, grid := range Grids {
 		e.Add(grid.SetupSrgMapCache(c.griddedSrgs))
 	}
 	t := c.SrgCacheExpirationTime
@@ -136,7 +136,7 @@ func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
 				filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 		}
 		e.Add(grid.WriteToShp(c.griddedSrgs))
-		grids = append(grids, grid)
+		Grids = append(Grids, grid)
 	}
 	c.setupSrgs(e)
 }
@@ -154,7 +154,7 @@ func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 		e.Add(grid.GetTimeZones(
 			filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 	}
-	grids = append(grids, grid)
+	Grids = append(Grids, grid)
 	c.setupSrgs(e)
 }
 
@@ -207,12 +207,12 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	switch c.SectorType {
 	case "point":
 		var ct *projgeom.CoordinateTransform
-		ct, err = projgeom.NewCoordinateTransform(c.inputSr, grids[0].Sr)
+		ct, err = projgeom.NewCoordinateTransform(c.inputSr, Grids[0].Sr)
 		for record := range InputChan {
 			emisInRecord := false
 			for pol, data := range record.ANN_EMIS {
-				data.Gridded = make([]*sparse.SparseArray, len(grids))
-				for i, grid := range grids {
+				data.Gridded = make([]*sparse.SparseArray, len(Grids))
+				for i, grid := range Grids {
 					if _, ok := TotalGrid[grid]; !ok {
 						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
 					}
@@ -263,8 +263,8 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 
 			for pol, val := range record.ANN_EMIS {
 				val.Gridded = make([]*sparse.SparseArray,
-					len(grids))
-				for i, grid := range grids {
+					len(Grids))
+				for i, grid := range Grids {
 					if _, ok := TotalGrid[grid]; !ok {
 						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
 					}
@@ -341,10 +341,10 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	}
 
 	var srg *sparse.SparseArray
-	secondarySrg := srgSpec[srgNum].SECONDARYSURROGATE
-	tertiarySrg := srgSpec[srgNum].TERTIARYSURROGATE
-	quarternarySrg := srgSpec[srgNum].QUARTERNARYSURROGATE
-	MergeFunction := srgSpec[srgNum].MergeFunction
+	secondarySrg := SrgSpec[srgNum].SECONDARYSURROGATE
+	tertiarySrg := SrgSpec[srgNum].TERTIARYSURROGATE
+	quarternarySrg := SrgSpec[srgNum].QUARTERNARYSURROGATE
+	MergeFunction := SrgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
 		srg, err = spatialsrg.RetrieveGriddingSurrogate(
 			srgNum, FIPS, grid)
@@ -417,15 +417,15 @@ func (c *Context) SurrogateGenerator() {
 	for srgData := range SurrogateGeneratorChan {
 		var err error
 		srgNum := srgData.srgNum
-		c.Log(srgSpec[srgNum], 2)
-		if _, ok := srgSpec[srgNum]; !ok {
+		c.Log(SrgSpec[srgNum], 2)
+		if _, ok := SrgSpec[srgNum]; !ok {
 			err := fmt.Errorf("There is no surrogate specification for surrogate "+
 				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
 			Status.Surrogates[srgData.grid.Name+"___"+srgNum] = "Failed!"
 			srgData.finishedChan <- err
 			continue
 		}
-		MergeFunction := srgSpec[srgNum].MergeFunction
+		MergeFunction := SrgSpec[srgNum].MergeFunction
 		if MergeFunction == nil {
 			err = c.genSrgNoMerge(srgData)
 		} else {
@@ -439,11 +439,11 @@ func (c *Context) SurrogateGenerator() {
 func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
-	inputMap := srgSpec[srgNum].DATASHAPEFILE
-	inputColumn := srgSpec[srgNum].DATAATTRIBUTE
-	surrogateMap := srgSpec[srgNum].WEIGHTSHAPEFILE
-	WeightColumns := srgSpec[srgNum].WeightColumns
-	FilterFunction := srgSpec[srgNum].FilterFunction
+	inputMap := SrgSpec[srgNum].DATASHAPEFILE
+	inputColumn := SrgSpec[srgNum].DATAATTRIBUTE
+	surrogateMap := SrgSpec[srgNum].WEIGHTSHAPEFILE
+	WeightColumns := SrgSpec[srgNum].WeightColumns
+	FilterFunction := SrgSpec[srgNum].FilterFunction
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
 	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
@@ -467,8 +467,8 @@ func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
-	c.Log(srgSpec[srgNum], 2)
-	MergeFunction := srgSpec[srgNum].MergeFunction
+	c.Log(SrgSpec[srgNum], 2)
+	MergeFunction := SrgSpec[srgNum].MergeFunction
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	for _, mrgval := range MergeFunction {
 		newSrgNum, ok := srgCodes[mrgval.name]
@@ -483,7 +483,7 @@ func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 		case status == "Generating" || status == "Waiting to generate" ||
 			status == "Empty":
 			newSrgData := NewSrgGenData(newSrgNum, grid)
-			newMergeFunction := srgSpec[newSrgNum].MergeFunction
+			newMergeFunction := SrgSpec[newSrgNum].MergeFunction
 			if newMergeFunction == nil {
 				err = c.genSrgNoMerge(newSrgData)
 			} else {
@@ -502,7 +502,7 @@ func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 	return
 }
 
-type srgSpecHolder struct {
+type SrgSpecHolder struct {
 	REGION               string
 	SURROGATE            string
 	SURROGATECODE        string
@@ -554,7 +554,7 @@ func (c *Context) SurrogateSpecification() (err error) {
 			firstLine = false
 			continue
 		}
-		srg := new(srgSpecHolder)
+		srg := new(SrgSpecHolder)
 		srg.REGION = record[0]
 		srg.SURROGATE = strings.TrimSpace(record[1])
 		srg.SURROGATECODE = record[2]
@@ -619,7 +619,7 @@ func (c *Context) SurrogateSpecification() (err error) {
 			}
 		}
 
-		srgSpec[srg.REGION+srg.SURROGATECODE] = srg
+		SrgSpec[srg.REGION+srg.SURROGATECODE] = srg
 		srgCodes[srg.REGION+srg.SURROGATE] = srg.REGION + srg.SURROGATECODE
 	}
 	return

@@ -607,8 +607,8 @@ func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	var err error
 	m := new(MetData)
 	m.h = timeIndex
-	m.wrfout = make([]*cdf.File, len(grids))
-	m.fid = make([]*os.File, len(grids))
+	m.wrfout = make([]*cdf.File, len(Grids))
+	m.fid = make([]*os.File, len(Grids))
 	m.Kemit = w.config.Kemit
 	// Open old wrfout files
 	var WRFdateFormat string
@@ -619,7 +619,7 @@ func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	}
 	filename := strings.Replace(w.oldWRFout, "[DATE]",
 		date.Format(WRFdateFormat), -1)
-	for i, grid := range grids {
+	for i, grid := range Grids {
 		file2 := strings.Replace(filename, "[DOMAIN]", grid.Name, -1)
 		m.fid[i], err = os.Open(file2)
 		if err != nil {
@@ -658,7 +658,7 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	}
 
 	// deal with points that are inside one grid but not inside the others
-	if j >= grids[gi].Nx || i >= grids[gi].Ny || j < 0 || i < 0 {
+	if j >= Grids[gi].Nx || i >= Grids[gi].Ny || j < 0 || i < 0 {
 		return
 	}
 	stackHeight := point.STKHGT * feetToMeters // m

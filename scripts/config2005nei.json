@@ -22,7 +22,10 @@
 		"ForceWesternHemisphere":true,
 		"InputProj4":"+proj=longlat",
         "EarthRadius": 6370997,
-		"SpeciesGroupName":"RADM2",
+		"ChemicalMechanism":"RADM2",
+		"MechAssignmentFile":"[Ancilliary]/MechAsn.csv",
+		"MechanismMWFile":"[Ancilliary]/MechMW.csv",
+		"SpeciesInfoFile":"[Ancilliary]/SpeciesTable.csv",
 		"RegenerateSpatialData": false,
 		"SimulationName":"2005nei",
         "DebugLevel": 0,
@@ -33,9 +36,53 @@
         "PolsToKeep": {
 			"VOC":{"SpecType":"VOC"},
 			"PM2_5":{"SpecType":"PM2.5"},
-			"PM10":{"SpecProf":{"E_PM_10":{"Factor":1.0,
+			"NOX":{"SpecType":"NOx"},
+			"PM10":{"SpecProf":{"PM_10":{"Factor":1.0,
 				"Units":"gram/gram"}}},
-			"NOX":{"SpecNames":["Nitrogen Dioxide"]},
+			"POC_72":{"SpecProf":{
+				"ORGI_72":{"Factor":0.2,"Units":"gram/gram"},
+				"ORGJ_72":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PEC_72":{"SpecProf":{
+				"ECI_72":{"Factor":0.2,"Units":"gram/gram"},
+				"ECJ_72":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PMFINE_72":{"SpecProf":{
+				"PM25I_72":{"Factor":0.2,"Units":"gram/gram"},
+				"PM25J_72":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PMC_72":{"SpecProf":{
+				"PM_10_72":{"Factor":1.0,"Units":"gram/gram"}}},
+			"PMC":{"SpecProf":{
+				"PM_10":{"Factor":1.0,"Units":"gram/gram"}}},
+			"PSO4":{"SpecProf":{
+				"SO4I":{"Factor":0.2,"Units":"gram/gram"},
+				"SO4J":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PNO3":{"SpecProf":{
+				"NO3I":{"Factor":0.2,"Units":"gram/gram"},
+				"NO3J":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PEC":{"SpecProf":{
+				"ECI":{"Factor":0.2,"Units":"gram/gram"},
+				"ECJ":{"Factor":0.8,"Units":"gram/gram"}}},
+			"POC":{"SpecProf":{
+				"ORGI":{"Factor":0.2,"Units":"gram/gram"},
+				"ORGJ":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PMFINE":{"SpecProf":{
+				"PM25I":{"Factor":0.2,"Units":"gram/gram"},
+				"PM25J":{"Factor":0.8,"Units":"gram/gram"}}},
+			"PAR":{"SpecProf":{
+				"HC3":{"Factor":0.0076,"Units":"mol/gram"},
+				"HC5":{"Factor":0.0046,"Units":"mol/gram"},
+				"HC8":{"Factor":0.0029,"Units":"mol/gram"}}},
+			"ETH":{"SpecProf":{"OL2":{"Factor":0.036, "Units":"mol/gram"}}},
+			"OLE":{"SpecProf":{"OLT":{"Factor":0.024, "Units":"mol/gram"}}},
+			"FORM":{"SpecProf":{"HCHO":{"Factor":0.033, "Units":"mol/gram"}}},
+			"ETOH":{"SpecProf":{"HC5":{"Factor":0.014, "Units":"mol/gram"}}},
+			"TOL":{"SpecProf":{"TOL":{"Factor":0.011, "Units":"mol/gram"}}},
+			"XYL":{"SpecProf":{"XYL":{"Factor":0.0094, "Units":"mol/gram"}}},
+			"TERP":{"SpecProf":{"OLT":{"Factor":0.024, "Units":"mol/gram"}}},
+			"MEOH":{"SpecProf":{"HC3":{"Factor":0.023, "Units":"mol/gram"}}},
+			"ALDX":{"SpecProf":{"ALD":{"Factor":0.023, "Units":"mol/gram"}}},
+			"IOLE":{"SpecProf":{"OLI":{"Factor":0.019, "Units":"mol/gram"}}},
+			"ALD2":{"SpecProf":{"ALD":{"Factor":0.023, "Units":"mol/gram"}}},
+			"ISOP":{"SpecProf":{"ISO":{"Factor":0.015, "Units":"mol/gram"}}},
 			"NH3":{"SpecNames":["Ammonia"]},
 			"SO2":{"SpecNames":["Sulfur dioxide"]},
 			"CO":{"SpecNames":["Carbon monoxide"]},
@@ -48,7 +95,7 @@
         },
         "SpecRefFile": "[Ancilliary]/gsref_cmaq_cb05_soa_2005cr_05b_16jun2010.txt",
         "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-        "SpecProFile": "[Ancilliary]/SPECIATE 4.3 9-28-2011-FINAL.sqlite",
+        "SpecProFile": "[Ancilliary]/SPECIATE4.4Final.mdb.sqlite",
 		"SccDesc": "[Ancilliary]/sccdesc_pf31_06apr2010_v10.txt",
 		"SicDesc": "[Ancilliary]/sic_desc_04oct2006_v0.txt",
 		"NaicsDesc": "[Ancilliary]/naicsdesc_02jan2008_v0.txt",
