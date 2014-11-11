@@ -16,14 +16,13 @@ You should have received a copy of the GNU General Public License
 along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package spatialsrg
+package aep
 
 import (
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"bitbucket.org/ctessum/gis"
@@ -299,18 +298,6 @@ func getTimeZones(tzFile, tzColumn string) ([]*tzHolder, error) {
 		timezones = append(timezones, tzData)
 	}
 	return timezones, nil
-}
-func stringToFloat(s string) float64 {
-	f, err := strconv.ParseFloat(trimString(s), 64)
-	if err != nil {
-		panic(err)
-	} else {
-		return f
-	}
-}
-
-func trimString(s string) string {
-	return strings.Trim(s, "\" ")
 }
 
 func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,

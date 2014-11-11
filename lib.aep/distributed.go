@@ -19,7 +19,6 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/spatialsrg"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -29,8 +28,8 @@ var RPCport = "6061" // Port for RPC communications for distributed computing
 
 // Set up a server to remotely calculate gridding surrogates.
 func DistributedServer(c *Context) {
-	spatialsrg.DebugLevel = c.DebugLevel
-	srgGenWorker := new(spatialsrg.SrgGenWorker)
+	DebugLevel = c.DebugLevel
+	srgGenWorker := new(SrgGenWorker)
 	rpc.Register(srgGenWorker)
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", ":"+RPCport)

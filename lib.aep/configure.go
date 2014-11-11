@@ -199,7 +199,7 @@ func (p *ConfigData) setup(e *ErrCat) {
 	// Check the surrogate shapefiles to make sure they're preseht and
 	// can be opened.
 	e.Add(c.DefaultSettings.SurrogateSpecification())
-	for _, srg := range srgSpec {
+	for _, srg := range SrgSpec {
 		file := filepath.Join(
 			c.DefaultSettings.shapefiles, srg.DATASHAPEFILE+".shp")
 		shp, err := gis.OpenShapefile(file, true)

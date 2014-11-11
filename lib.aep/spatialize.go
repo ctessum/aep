@@ -29,7 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/ctessum/aep/spatialsrg"
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/projgeom"
@@ -40,7 +39,7 @@ import (
 var (
 	SrgSpec                = make(map[string]*SrgSpecHolder)
 	srgCodes               = make(map[string]string)
-	Grids                  = make([]*spatialsrg.GridDef, 0)
+	Grids                  = make([]*GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
 	srgCache               *cache.Cache
@@ -48,7 +47,7 @@ var (
 
 func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log("Setting up spatial environment...", 1)
-	spatialsrg.DebugLevel = c.DebugLevel
+	DebugLevel = c.DebugLevel
 	var err error
 	x := c.wrfData
 	reportMx.Lock()
@@ -129,7 +128,7 @@ func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
 		c.Log(fmt.Sprintf("Setting up grid %v...", i+1), 0)
-		grid := spatialsrg.NewGridRegular(x.DomainNames[i],
+		grid := NewGridRegular(x.DomainNames[i],
 			x.Nx[i], x.Ny[i], x.Dx[i], x.Dy[i], x.W[i], x.S[i], sr)
 		if c.RunTemporal {
 			e.Add(grid.GetTimeZones(
@@ -146,7 +145,7 @@ func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
 func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 	columnsToKeep []string, e *ErrCat) {
 	sr := c.setupCommon(e)
-	grid, err := spatialsrg.NewGridIrregular(name, shapeFilePath,
+	grid, err := NewGridIrregular(name, shapeFilePath,
 		columnsToKeep, sr)
 	e.Add(err)
 	grid.IrregularGrid = true
@@ -202,7 +201,7 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	c.Log("Spatializing "+period+" "+c.Sector+"...", 1)
 
 	totals := newSpatialTotalHolder()
-	TotalGrid := make(map[*spatialsrg.GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
+	TotalGrid := make(map[*GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
 
 	switch c.SectorType {
 	case "point":
@@ -298,7 +297,7 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	return
 }
 
-func (c *Context) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
+func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
 	upstreamSrgs []string) (srg *sparse.SparseArray) {
 
 	tableName := grid.Name + "___" + srgNum
@@ -326,7 +325,7 @@ func (c *Context) getSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
 
 // It is important not to edit the returned surrogate in place, because the
 // same copy is used over and over again.
-func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDef,
+func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	upstreamSrgs []string) *sparse.SparseArray {
 
 	// Start the surrogate cacher, but only start it once.
@@ -346,7 +345,7 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 	quarternarySrg := SrgSpec[srgNum].QUARTERNARYSURROGATE
 	MergeFunction := SrgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
-		srg, err = spatialsrg.RetrieveGriddingSurrogate(
+		srg, err = RetrieveGriddingSurrogate(
 			srgNum, FIPS, grid)
 		if err != nil {
 			panic(err)
@@ -399,11 +398,11 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *spatialsrg.GridDe
 
 type SrgGenData struct {
 	srgNum       string
-	grid         *spatialsrg.GridDef
+	grid         *GridDef
 	finishedChan chan error
 }
 
-func NewSrgGenData(srgNum string, grid *spatialsrg.GridDef) (
+func NewSrgGenData(srgNum string, grid *GridDef) (
 	d *SrgGenData) {
 	d = new(SrgGenData)
 	d.srgNum = srgNum
@@ -447,7 +446,7 @@ func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
 	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
-	err = spatialsrg.CreateGriddingSurrogate(srgNum, inputFilePath,
+	err = CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
 		grid, c.griddedSrgs, c.slaves)
 	if err == nil {
@@ -518,7 +517,7 @@ type SrgSpecHolder struct {
 	QUARTERNARYSURROGATE string
 	DETAILS              string
 	WeightColumns        []string
-	FilterFunction       *spatialsrg.SurrogateFilter
+	FilterFunction       *SurrogateFilter
 	MergeFunction        []*SrgMerge
 }
 
@@ -586,7 +585,7 @@ func (c *Context) SurrogateSpecification() (err error) {
 
 		// Parse filter function
 		if srg.FILTERFUNCTION != "NONE" && srg.FILTERFUNCTION != "" {
-			srg.FilterFunction = spatialsrg.NewSurrogateFilter()
+			srg.FilterFunction = NewSurrogateFilter()
 			s := make([]string, 0)
 			if strings.Index(srg.FILTERFUNCTION, "!=") != -1 {
 				srg.FilterFunction.EqualNotEqual = "NotEqual"
