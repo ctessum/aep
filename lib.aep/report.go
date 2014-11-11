@@ -19,9 +19,6 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/aep/spatialsrg"
-	"bitbucket.org/ctessum/cdf"
-	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/json"
 	"errors"
@@ -39,6 +36,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"bitbucket.org/ctessum/cdf"
+	"bitbucket.org/ctessum/sparse"
 )
 
 // Write a message to standard error.
@@ -196,7 +196,7 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
 func (c *Context) ResultMaps(totals *SpatialTotals,
-	TotalGrid map[*spatialsrg.GridDef]map[string]*sparse.SparseArray,
+	TotalGrid map[*GridDef]map[string]*sparse.SparseArray,
 	period string) {
 
 	dir := filepath.Join(c.outputDir, "maps")
@@ -581,7 +581,7 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	}
 }
 func renderStatusTemplate(w http.ResponseWriter) {
-	Status.SrgProgress = spatialsrg.SrgProgress
+	Status.SrgProgress = SrgProgress
 	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
 		"\n", "<br>", -1))
 	err := templates.ExecuteTemplate(w, "status.html", Status)

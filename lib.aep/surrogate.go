@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package spatialsrg
+package aep
 
 import (
 	"bytes"
@@ -34,13 +34,13 @@ import (
 
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
-	"github.com/ctessum/geomop"
 	"github.com/ctessum/geomconv"
+	"github.com/ctessum/geomop"
 	"github.com/ctessum/projgeom"
 	"github.com/ctessum/shapefile"
-	"github.com/patrick-higgins/rtreego"
 	"github.com/lukeroth/gdal"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/patrick-higgins/rtreego"
 	"github.com/twpayne/gogeom/geom"
 )
 
@@ -614,8 +614,6 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	return
 }
 
-var RPCport = "6061" // Port for RPC communications for distributed computing
-
 // Calculate the intersections between the grid cells and the input shape,
 // and between the surrogate shapes and the input shape
 func (s *SrgGenWorker) intersections1(procnum, nprocs int,
@@ -669,10 +667,6 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 			singleShapeSrgWeight += srg.Weight * size
 		case geom.LineString, geom.MultiLineString:
 			size = geomop.Length(intersection)
-			if err != nil {
-				errChan <- handle(err, "")
-				return
-			}
 			singleShapeSrgWeight += srg.Weight * size
 		case geom.Point:
 			singleShapeSrgWeight += srg.Weight
