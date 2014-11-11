@@ -620,7 +620,6 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 	data *GriddedSrgData, srgsWithinBounds []rtreego.Spatial,
 	GridCellChan chan []*GridCell, srgChan chan []*SrgHolder,
 	weightChan chan float64, errChan chan error) {
-	var err error
 
 	// Figure out which grid cells might intersect with the input shape
 	inputBounds := data.InputGeom.Bounds(nil)
