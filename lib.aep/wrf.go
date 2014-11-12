@@ -130,7 +130,7 @@ func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
 		for pol, units := range w.files.polsAndUnits {
-			createWRFvar(wrfoutH, pol, units)
+			createWRFvar(wrfoutH, "E_"+pol, units)
 		}
 
 		wrfoutH.Define()
@@ -215,7 +215,7 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 
 			start := []int{ihr, 0, 0, 0}
 			end := []int{ihr + 1, 0, 0, 0}
-			r := f.Writer(pol, start, end)
+			r := f.Writer("E_"+pol, start, end)
 			if _, err = r.Write(outData[pol][i].ToDense32()); err != nil {
 				panic(err)
 			}
