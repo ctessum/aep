@@ -225,9 +225,10 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 			intersects = geomop.Within(cellCenter, tzData.Geom)
 			if intersects {
 				if foundtz {
-					err = fmt.Errorf("In spatialsrg.GetTimeZones, there is a " +
-						"grid cell that overlaps with more than one timezone")
-					return
+					fmt.Println("In spatialsrg.GetTimeZones, there is a " +
+						"grid cell that overlaps with more than one timezone."+
+						" This probably shouldn't be happening.")
+					break
 				}
 				tz = tzData.tz
 				foundtz = true

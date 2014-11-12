@@ -4,7 +4,7 @@
         "Input": "[Home]/test/inputdata/emissions",
         "Ancilliary": "[Home]/ancilliary",
 		"Shapefiles": "[Home]/test/inputdata/shapefiles",
-		"Output":"[Home]/test/Output",
+		"Output":"[Home]/test/Output_na12",
 		"GriddedSrgs":"[Output]/srgs"
     },
     "DefaultSettings": {
@@ -16,8 +16,8 @@
         "SpecType": "mol",
         "InputUnits": "tons/year",
         "MatchFullSCC": false,
-        "WPSnamelist": "[Ancilliary]/namelist_minneapolis.wps",
-        "WRFnamelist": "[Ancilliary]/namelist_minneapolis.input",
+        "WPSnamelist": "[Ancilliary]/namelist_na12.wps",
+        "WRFnamelist": "[Ancilliary]/namelist_na12.input",
         "OldWRFout": "[Home]/xxx[DATE]",
 		"ForceWesternHemisphere":true,
 		"InputProj4":"+proj=longlat",
