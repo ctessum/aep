@@ -23,7 +23,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
@@ -186,7 +188,7 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 // Get time zones.
 func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 
-	var timezones []*tzHolder
+	var timezones *rtreego.Rtree
 	timezones, err = getTimeZones(tzFile, tzColumn)
 	if err != nil {
 		return
@@ -208,56 +210,79 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 		return
 	}
 
+	var lock sync.Mutex
+	nprocs := runtime.GOMAXPROCS(-1)
+	var wg sync.WaitGroup
+	wg.Add(nprocs)
 	var cellCenter geom.T
-	for _, cell := range grid.Cells {
-		// find timezone nearest to the center of the cell.
-		// Need to project grid to timezone projection rather than the
-		// other way around because the timezones can include the north
-		// and south poles which don't convert well to other projections.
-		cellCenter = geomop.Centroid(cell.Geom)
-		cellCenter, err = ct.Reproject(cellCenter)
-		if err != nil {
-			return
-		}
-		var tz string
-		var foundtz, intersects bool
-		for _, tzData := range timezones {
-			intersects = geomop.Within(cellCenter, tzData.Geom)
-			if intersects {
-				if foundtz {
-					fmt.Println("In spatialsrg.GetTimeZones, there is a " +
-						"grid cell that overlaps with more than one timezone."+
-						" This probably shouldn't be happening.")
-					break
+	for proc := 0; proc < nprocs; proc++ {
+		go func(proc int) {
+			defer wg.Done()
+			for ii := proc; ii < len(grid.Cells); ii += nprocs {
+				cell := grid.Cells[ii]
+				// find timezone nearest to the center of the cell.
+				// Need to project grid to timezone projection rather than the
+				// other way around because the timezones can include the north
+				// and south poles which don't convert well to other projections.
+				cellCenter = geomop.Centroid(cell.Geom)
+				cellCenter, err = ct.Reproject(cellCenter)
+				if err != nil {
+					return
 				}
-				tz = tzData.tz
-				foundtz = true
+				pointRect, err := geomconv.GeomToRect(cellCenter)
+				if err != nil {
+					return
+				}
+				var tz string
+				var foundtz, intersects bool
+				for _, tzDataI := range timezones.SearchIntersect(pointRect) {
+					tzData := tzDataI.(*tzHolder)
+					intersects = geomop.Within(cellCenter, tzData.Geom)
+					if intersects {
+						if foundtz {
+							fmt.Println("In spatialsrg.GetTimeZones, there is a " +
+								"grid cell that overlaps with more than one timezone." +
+								" This probably shouldn't be happening.")
+							break
+						}
+						tz = tzData.tz
+						foundtz = true
+					}
+				}
+				if !foundtz {
+					//err = fmt.Errorf("In spatialsrg.GetTimeZones, there is a " +
+					//	"grid cell that doesn't match any timezones")
+					//return
+					tz = "UTC" // The timezone shapefile doesn't include timezones
+					// over the ocean, so we assume all timezones that don't have
+					// tz info are UTC.
+				}
+				cell.AddOtherFieldData(tz)
+				lock.Lock()
+				if _, ok := grid.TimeZones[tz]; !ok {
+					grid.TimeZones[tz] = sparse.ZerosSparse(grid.Ny, grid.Nx)
+				}
+				grid.TimeZones[tz].Set(1., cell.Row, cell.Col)
+				lock.Unlock()
 			}
-		}
-		if !foundtz {
-			//err = fmt.Errorf("In spatialsrg.GetTimeZones, there is a " +
-			//	"grid cell that doesn't match any timezones")
-			//return
-			tz = "UTC" // The timezone shapefile doesn't include timezones
-			// over the ocean, so we assume all timezones that don't have
-			// tz info are UTC.
-		}
-		cell.AddOtherFieldData(tz)
-		if _, ok := grid.TimeZones[tz]; !ok {
-			grid.TimeZones[tz] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-		}
-		grid.TimeZones[tz].Set(1., cell.Row, cell.Col)
+		}(proc)
 	}
+	wg.Wait()
 	return
 }
 
 type tzHolder struct {
-	tz   string
-	Geom geom.T
+	tz     string
+	Geom   geom.T
+	bounds *rtreego.Rect
 }
 
-func getTimeZones(tzFile, tzColumn string) ([]*tzHolder, error) {
-	timezones := make([]*tzHolder, 0, 50)
+func (t *tzHolder) Bounds() *rtreego.Rect {
+	return t.bounds
+}
+
+func getTimeZones(tzFile, tzColumn string) (*rtreego.Rtree, error) {
+	timezones := rtreego.NewTree(25, 50)
 
 	f1, err := os.Open(tzFile)
 	if err != nil {
@@ -296,7 +321,11 @@ func getTimeZones(tzFile, tzColumn string) ([]*tzHolder, error) {
 			return nil, err
 		}
 		tzData.tz = fields[tzIndex].(string)
-		timezones = append(timezones, tzData)
+		tzData.bounds, err = geomconv.GeomToRect(tzData.Geom)
+		if err != nil {
+			return nil, err
+		}
+		timezones.Insert(tzData)
 	}
 	return timezones, nil
 }
