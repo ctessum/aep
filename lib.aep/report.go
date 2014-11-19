@@ -60,7 +60,9 @@ func (c *Context) ErrorRecover() {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
+		Status.Lock.Lock()
 		Status.Sectors[c.Sector] = "Failed!"
+		Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 	}
 }
@@ -75,7 +77,9 @@ func (c *Context) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
+		Status.Lock.Lock()
 		Status.Sectors[c.Sector] = "Failed!"
+		Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 		close(recordChan)
 	}
@@ -122,7 +126,9 @@ func (c *Context) ErrorReport(errmesg interface{}) {
 	err += fmt.Sprintf("%s\n", debug.Stack())
 	err += "--------------------------\n"
 	fmt.Print(err)
+	Status.Lock.Lock()
 	Status.ErrorMessages += err + "\n\n"
+	Status.Lock.Unlock()
 	return
 }
 
@@ -160,6 +166,7 @@ type StatusHolder struct {
 	ErrorMessages     string
 	HTMLerrorMessages template.HTML
 	SrgProgress       float64
+	Lock              sync.Mutex
 }
 
 func NewStatus() *StatusHolder {
@@ -170,6 +177,8 @@ func NewStatus() *StatusHolder {
 }
 
 func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
 	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
 		return "Generating"
 	} else if status, ok := s.Surrogates[srg]; ok &&
@@ -183,7 +192,9 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 		panic(err)
 	} else if _, ok := s.Surrogates[srg]; !ok {
 		if _, err := os.Stat(srgfile); err == nil {
+			Status.Lock.Lock()
 			Status.Surrogates[srg] = "Ready"
+			Status.Lock.Unlock()
 			return "Ready"
 		} else {
 			return "Empty"
@@ -581,9 +592,11 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	}
 }
 func renderStatusTemplate(w http.ResponseWriter) {
+	Status.Lock.Lock()
 	Status.SrgProgress = SrgProgress
 	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
 		"\n", "<br>", -1))
+	Status.Lock.Unlock()
 	err := templates.ExecuteTemplate(w, "status.html", Status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

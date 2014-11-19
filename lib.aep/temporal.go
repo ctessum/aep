@@ -37,6 +37,7 @@ type TemporalProcessor struct {
 	sectors        map[string]map[string]*temporalSector // map[sector][period]data
 	temporalReport *TemporalReport
 	Units          map[string]string // map[pol]units
+	mu            sync.RWMutex
 }
 
 // Read in data and start up subroutines for temporal processing.
@@ -79,10 +80,12 @@ func (tp *TemporalProcessor) NewSector(c *Context,
 	InputChan, OutputChan chan *ParsedRecord, period string) {
 	t := new(temporalSector)
 	t.mu.Lock()
+	tp.mu.Lock()
 	if _, ok := tp.sectors[c.Sector]; !ok {
 		tp.sectors[c.Sector] = make(map[string]*temporalSector)
 	}
 	tp.sectors[c.Sector][period] = t
+	tp.mu.Unlock()
 	t.tp = tp
 	t.InputChan = InputChan
 	t.OutputChan = OutputChan

@@ -158,9 +158,11 @@ func Run(c *aep.Context, runChan chan string,
 	for i := 0; i < n-1; i++ {
 		<-periodChan
 	}
+	aep.Status.Lock.Lock()
 	if aep.Status.Sectors[c.Sector] != "Failed!" {
 		aep.Status.Sectors[c.Sector] = "Finished"
 	}
+	aep.Status.Lock.Unlock()
 	runChan <- "Finished processing " + c.Sector
 }
 
