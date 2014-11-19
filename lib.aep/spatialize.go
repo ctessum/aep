@@ -307,7 +307,9 @@ func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
 	case status == "Generating" || status == "Waiting to generate" ||
 		status == "Empty":
 		if status == "Empty" {
+			Status.Lock.Lock()
 			Status.Surrogates[tableName] = "Waiting to generate"
+			Status.Lock.Unlock()
 		}
 		srgGenData := NewSrgGenData(srgNum, grid)
 		SurrogateGeneratorChan <- srgGenData
@@ -420,7 +422,9 @@ func (c *Context) SurrogateGenerator() {
 		if _, ok := SrgSpec[srgNum]; !ok {
 			err := fmt.Errorf("There is no surrogate specification for surrogate "+
 				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
+			Status.Lock.Lock()
 			Status.Surrogates[srgData.grid.Name+"___"+srgNum] = "Failed!"
+			Status.Lock.Unlock()
 			srgData.finishedChan <- err
 			continue
 		}
@@ -443,17 +447,23 @@ func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	surrogateMap := SrgSpec[srgNum].WEIGHTSHAPEFILE
 	WeightColumns := SrgSpec[srgNum].WeightColumns
 	FilterFunction := SrgSpec[srgNum].FilterFunction
+	Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
+	Status.Lock.Unlock()
 	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
 	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
 	err = CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
 		grid, c.griddedSrgs, c.slaves)
 	if err == nil {
+		Status.Lock.Lock()
 		Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
+		Status.Lock.Unlock()
 		return
 	} else {
+		Status.Lock.Lock()
 		Status.Surrogates[grid.Name+"___"+srgNum] = "Failed!"
+		Status.Lock.Unlock()
 		err = fmt.Errorf("Surrogate %v_%v Failed!\n%v",
 			grid.Name, srgNum, err.Error())
 		return
@@ -468,7 +478,9 @@ func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 	grid := srgData.grid
 	c.Log(SrgSpec[srgNum], 2)
 	MergeFunction := SrgSpec[srgNum].MergeFunction
+	Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
+	Status.Lock.Unlock()
 	for _, mrgval := range MergeFunction {
 		newSrgNum, ok := srgCodes[mrgval.name]
 		if !ok {
@@ -497,7 +509,9 @@ func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
 			return
 		}
 	}
+	Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
+	Status.Lock.Unlock()
 	return
 }
 

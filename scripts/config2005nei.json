@@ -4,7 +4,7 @@
         "Input": "[Home]/test/inputdata/emissions",
         "Ancilliary": "[Home]/ancilliary",
 		"Shapefiles": "[Home]/test/inputdata/shapefiles",
-		"Output":"[Home]/test/Output_na12",
+		"Output":"[Home]/test/Output",
 		"GriddedSrgs":"[Output]/srgs"
     },
     "DefaultSettings": {
@@ -16,8 +16,8 @@
         "SpecType": "mol",
         "InputUnits": "tons/year",
         "MatchFullSCC": false,
-        "WPSnamelist": "[Ancilliary]/namelist_na12.wps",
-        "WRFnamelist": "[Ancilliary]/namelist_na12.input",
+        "WPSnamelist": "[Ancilliary]/namelist_minneapolis.wps",
+        "WRFnamelist": "[Ancilliary]/namelist_minneapolis.input",
         "OldWRFout": "[Home]/xxx[DATE]",
 		"ForceWesternHemisphere":true,
 		"InputProj4":"+proj=longlat",
@@ -26,7 +26,7 @@
 		"MechAssignmentFile":"[Ancilliary]/MechAsn.csv",
 		"MechanismMWFile":"[Ancilliary]/MechMW.csv",
 		"SpeciesInfoFile":"[Ancilliary]/SpeciesTable.csv",
-		"RegenerateSpatialData": false,
+		"RegenerateSpatialData": true,
 		"SimulationName":"2005nei",
         "DebugLevel": 0,
         "Ncpus": 8,

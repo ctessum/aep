@@ -178,7 +178,10 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 		if grid.Extent == nil {
 			grid.Extent = cell.Geom
 		} else {
-			grid.Extent = geomop.Construct(grid.Extent, cell.Geom, geomop.UNION)
+			grid.Extent, err = geomop.Construct(grid.Extent, cell.Geom, geomop.UNION)
+			if err != nil {
+				return
+			}
 		}
 		cell.rtreebounds, err = geomconv.GeomToRect(cell.Geom)
 		if err != nil {
@@ -191,62 +194,67 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 }
 
 // Get time zones.
-func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
+func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 
+	var err error
 	var timezones *rtreego.Rtree
 	timezones, err = getTimeZones(tzFile, tzColumn)
 	if err != nil {
-		return
+		return err
 	}
 	grid.AddOtherFieldNames("timezone")
 	grid.TimeZones = make(map[string]*sparse.SparseArray)
 
 	f, err := os.Open(strings.Replace(tzFile, ".shp", ".prj", -1))
 	if err != nil {
-		return
+		return err
 	}
 	tzsr, err := projgeom.ReadPrj(f)
 	if err != nil {
-		return
+		return err
 	}
 	var ct *projgeom.CoordinateTransform
 	ct, err = projgeom.NewCoordinateTransform(grid.Sr, tzsr)
 	if err != nil {
-		return
+		return err
 	}
 
 	var lock sync.Mutex
+	errChan := make(chan error)
 	nprocs := runtime.GOMAXPROCS(-1)
-	var wg sync.WaitGroup
-	wg.Add(nprocs)
 	for proc := 0; proc < nprocs; proc++ {
 		go func(proc int) {
-			defer wg.Done()
+			var err2 error
 			var cellCenter geom.T
+			var pointRect *rtreego.Rect
 			for ii := proc; ii < len(grid.Cells); ii += nprocs {
 				cell := grid.Cells[ii]
 				// find timezone nearest to the center of the cell.
 				// Need to project grid to timezone projection rather than the
 				// other way around because the timezones can include the north
 				// and south poles which don't convert well to other projections.
-				cellCenter, err = geomop.Centroid(cell.Geom)
-				if err != nil {
+				cellCenter, err2 = geomop.Centroid(cell.Geom)
+				if err2 != nil {
+					errChan <- err2
 					return
 				}
-				cellCenter, err = ct.Reproject(cellCenter)
-				if err != nil {
+				cellCenter, err2 = ct.Reproject(cellCenter)
+				if err2 != nil {
+					errChan <- err2
 					return
 				}
-				pointRect, err := geomconv.GeomToRect(cellCenter)
-				if err != nil {
+				pointRect, err2 = geomconv.GeomToRect(cellCenter)
+				if err2 != nil {
+					errChan <- err2
 					return
 				}
 				var tz string
 				var foundtz, intersects bool
 				for _, tzDataI := range timezones.SearchIntersect(pointRect) {
 					tzData := tzDataI.(*tzHolder)
-					intersects, err = geomop.Within(cellCenter, tzData.Geom)
-					if err != nil {
+					intersects, err2 = geomop.Within(cellCenter, tzData.Geom)
+					if err2 != nil {
+						errChan <- err2
 						return
 					}
 					if intersects {
@@ -276,10 +284,15 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 				grid.TimeZones[tz].Set(1., cell.Row, cell.Col)
 				lock.Unlock()
 			}
+			errChan <- nil
 		}(proc)
 	}
-	wg.Wait()
-	return
+	for procnum := 0; procnum < nprocs; procnum++ {
+		if err = <-errChan; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type tzHolder struct {
