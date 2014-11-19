@@ -19,6 +19,7 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
+	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,10 @@ import (
 	"github.com/patrick-higgins/rtreego"
 	"github.com/twpayne/gogeom/geom"
 )
+
+func init() {
+	gob.Register(geom.Polygon{})
+}
 
 type GridDef struct {
 	Name            string
@@ -214,17 +219,20 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 	nprocs := runtime.GOMAXPROCS(-1)
 	var wg sync.WaitGroup
 	wg.Add(nprocs)
-	var cellCenter geom.T
 	for proc := 0; proc < nprocs; proc++ {
 		go func(proc int) {
 			defer wg.Done()
+			var cellCenter geom.T
 			for ii := proc; ii < len(grid.Cells); ii += nprocs {
 				cell := grid.Cells[ii]
 				// find timezone nearest to the center of the cell.
 				// Need to project grid to timezone projection rather than the
 				// other way around because the timezones can include the north
 				// and south poles which don't convert well to other projections.
-				cellCenter = geomop.Centroid(cell.Geom)
+				cellCenter, err = geomop.Centroid(cell.Geom)
+				if err != nil {
+					return
+				}
 				cellCenter, err = ct.Reproject(cellCenter)
 				if err != nil {
 					return
@@ -237,10 +245,13 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) (err error) {
 				var foundtz, intersects bool
 				for _, tzDataI := range timezones.SearchIntersect(pointRect) {
 					tzData := tzDataI.(*tzHolder)
-					intersects = geomop.Within(cellCenter, tzData.Geom)
+					intersects, err = geomop.Within(cellCenter, tzData.Geom)
+					if err != nil {
+						return
+					}
 					if intersects {
 						if foundtz {
-							fmt.Println("In spatialsrg.GetTimeZones, there is a " +
+							panic("In spatialsrg.GetTimeZones, there is a " +
 								"grid cell that overlaps with more than one timezone." +
 								" This probably shouldn't be happening.")
 							break
@@ -340,8 +351,8 @@ func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
 	}
 	gp := g.(geom.Point)
 	X, Y = gp.X, gp.Y // coordinates transformed to output projection
-	withinGrid = geomop.Within(g, grid.Extent)
-	if !withinGrid {
+	withinGrid, err = geomop.Within(g, grid.Extent)
+	if err != nil || !withinGrid {
 		return
 	}
 	rtreepoint := rtreego.Point([3]float64{X, Y, 0.})
