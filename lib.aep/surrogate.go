@@ -550,7 +550,10 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	Log(fmt.Sprintf("Working on shape %v.", data.InputID), 1)
 
 	// Figure out if inputShape is completely within the grid
-	result.CoveredByGrid = geomop.Within(data.InputGeom, s.GridCells.Extent)
+	result.CoveredByGrid, err = geomop.Within(data.InputGeom, s.GridCells.Extent)
+	if err != nil {
+		return
+	}
 
 	var inputBounds *rtreego.Rect
 	inputBounds, err = geomconv.GeomToRect(data.InputGeom)
@@ -645,7 +648,12 @@ func (s *SrgGenWorker) intersections1(procnum, nprocs int,
 			len(srgsWithinBounds)), 4)
 		switch srg.Geom.(type) {
 		case geom.Point:
-			if geomop.PointInPolygon(srg.Geom.(geom.Point), data.InputGeom) {
+			in, err := geomop.PointInPolygon(srg.Geom.(geom.Point), data.InputGeom)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if in {
 				intersection = srg.Geom
 			} else {
 				continue
@@ -693,7 +701,12 @@ func (s *SrgGenWorker) intersections2(procnum, nprocs int, data *GriddedSrgData,
 		for _, srg := range InputShapeSrgs {
 			switch srg.Geom.(type) {
 			case geom.Point:
-				if geomop.PointInPolygon(srg.Geom.(geom.Point), cell.Geom) {
+				in, err := geomop.PointInPolygon(srg.Geom.(geom.Point), cell.Geom)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if in {
 					intersection = srg.Geom
 				} else {
 					continue
