@@ -66,6 +66,14 @@ type GridCell struct {
 	rtreebounds    *rtreego.Rect
 }
 
+func (c *GridCell) Copy() *GridCell {
+	o := new(GridCell)
+	o.Geom = c.Geom
+	o.Row, o.Col = c.Row, c.Col
+	o.rtreebounds = c.rtreebounds
+	return o
+}
+
 func (g *GridCell) Bounds() *rtreego.Rect {
 	return g.rtreebounds
 }

@@ -20,6 +20,7 @@ const (
 var (
 	c          *Context
 	configFile = "../scripts/config2005nei.json"
+	//configFile = "../scripts/config2005nei_na12.json"
 )
 
 func init() {

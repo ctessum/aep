@@ -72,7 +72,7 @@ type GriddedSrgData struct {
 	InputID              string
 	InputGeom            geom.T
 	GridCellGeom         []geom.T
-	Cells                []GridCell
+	Cells                []*GridCell
 	SingleShapeSrgWeight float64
 	CoveredByGrid        bool
 }
@@ -448,7 +448,7 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 					case geom.Point:
 						srg.Weight = weightval
 					default:
-						err = geomop.NewError(srg.Geom)
+						err = geomop.UnsupportedGeometryError{srg.Geom}
 						return
 					}
 				} else {
@@ -558,7 +558,7 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 		return
 	}
 
-	var GridCells []GridCell
+	var GridCells []*GridCell
 	var InputShapeSrgs []*SrgHolder
 	GridCells, InputShapeSrgs, data.SingleShapeSrgWeight, err =
 		s.intersections1(data, s.surrogates)
@@ -567,15 +567,9 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 	}
 
 	if data.SingleShapeSrgWeight != 0. {
-		err = s.intersections2(data, InputShapeSrgs, GridCells)
+		result.Cells, err = s.intersections2(data, InputShapeSrgs, GridCells)
 		if err != nil {
 			return
-		}
-		result.Cells = make([]GridCell, 0, len(GridCells))
-		for _, cell := range GridCells {
-			if cell.Weight > 0. {
-				result.Cells = append(result.Cells, cell)
-			}
 		}
 	}
 	return
@@ -585,7 +579,7 @@ func (s *SrgGenWorker) Calculate(data, result *GriddedSrgData) (
 // and between the surrogate shapes and the input shape
 func (s *SrgGenWorker) intersections1(
 	data *GriddedSrgData, surrogates *rtreego.Rtree) (
-	GridCells []GridCell, srgs []*SrgHolder,
+	GridCells []*GridCell, srgs []*SrgHolder,
 	singleShapeSrgWeight float64, err error) {
 
 	nprocs := runtime.GOMAXPROCS(0)
@@ -594,14 +588,14 @@ func (s *SrgGenWorker) intersections1(
 
 	// Figure out which grid cells might intersect with the input shape
 	inputBounds := data.InputGeom.Bounds(nil)
-	GridCells = make([]GridCell, 0, 30)
+	GridCells = make([]*GridCell, 0, 30)
 	wg.Add(nprocs)
 	for procnum := 0; procnum < nprocs; procnum++ {
 		go func(procnum int) {
 			defer wg.Done()
 			var intersects bool
 			for i := procnum; i < len(s.GridCells.Cells); i += nprocs {
-				cell := *s.GridCells.Cells[i]
+				cell := s.GridCells.Cells[i]
 				intersects = cell.Geom.Bounds(nil).Overlaps(inputBounds)
 				if intersects {
 					mu.Lock()
@@ -672,7 +666,7 @@ func (s *SrgGenWorker) intersections1(
 				case geom.Point:
 					singleShapeSrgWeight += srg.Weight
 				default:
-					panic(geomop.NewError(intersection))
+					panic(geomop.UnsupportedGeometryError{intersection})
 				}
 				mu.Unlock()
 			}
@@ -691,10 +685,12 @@ func (s *SrgGenWorker) intersections1(
 // find the surrogate shapes that are within an individual grid
 // cell. This function updates the values in `GridCells`.
 func (s *SrgGenWorker) intersections2(data *GriddedSrgData,
-	InputShapeSrgs []*SrgHolder, GridCells []GridCell) (err error) {
+	InputShapeSrgs []*SrgHolder, GridCells []*GridCell) (
+	result []*GridCell, err error) {
 
 	nprocs := runtime.GOMAXPROCS(0)
 	var mu sync.Mutex
+	result = make([]*GridCell, 0, len(GridCells))
 
 	errChan := make(chan error)
 	for procnum := 0; procnum < nprocs; procnum++ {
@@ -703,7 +699,7 @@ func (s *SrgGenWorker) intersections2(data *GriddedSrgData,
 			for i := procnum; i < len(GridCells); i += nprocs {
 				Log(fmt.Sprintf("intersections2 grid cell %v out of %v", i,
 					len(GridCells)), 4)
-				cell := GridCells[i]
+				cell := GridCells[i].Copy()
 				var intersection geom.T
 				for _, srg := range InputShapeSrgs {
 					switch srg.Geom.(type) {
@@ -730,7 +726,6 @@ func (s *SrgGenWorker) intersections2(data *GriddedSrgData,
 							continue
 						}
 					}
-					mu.Lock()
 					switch srg.Geom.(type) {
 					case geom.Polygon, geom.MultiPolygon:
 						cell.Weight += srg.Weight * geomop.Area(intersection) /
@@ -741,10 +736,14 @@ func (s *SrgGenWorker) intersections2(data *GriddedSrgData,
 					case geom.Point:
 						cell.Weight += srg.Weight / data.SingleShapeSrgWeight
 					default:
-						panic(geomop.NewError(intersection))
+						panic(geomop.UnsupportedGeometryError{intersection})
 					}
-					mu.Unlock()
 				}
+				mu.Lock()
+				if cell.Weight > 0. {
+					result = append(result, cell)
+				}
+				mu.Unlock()
 			}
 			errChan <- nil
 		}(procnum)
