@@ -120,7 +120,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	// Make sure required files do exist
 	for _, file := range []string{inputShapeFile, surrogateFile} {
 		if _, err = os.Stat(file); os.IsNotExist(err) {
-			err = fmt.Errorf("File %v doesn't exist", file)
+			err = fmt.Errorf("Input shapefile %v doesn't exist", file)
 			return
 		}
 	}
@@ -222,7 +222,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			gridData.srgMapCache.mutex.Unlock()
 			return
 		}
-		// store surrogate map in cache for faster access.
+		// store surrogate map in sqlite cache for faster access.
 		srg := griddedSrgs[fid]
 		srgOut := sparse.ZerosSparse(gridData.Ny, gridData.Nx)
 		for _, cell := range srg.Cells {
