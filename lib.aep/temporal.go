@@ -747,7 +747,7 @@ func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 			location, err := time.LoadLocation(
 				strings.Replace(tz, " ", "_", -1))
 			if err != nil {
-				panic(fmt.Errorf("Unknown timezone %v.", tz))
+				panic(fmt.Errorf("Unknown timezone %v.\nError: %v", tz, err))
 			}
 			localTime := outputTime.In(location)
 			fac := t.getTemporalFactor(codes[0], codes[1], codes[2], localTime)
@@ -764,9 +764,10 @@ func griddedTimeNoDST(outputTime time.Time) []map[int]string {
 	for i, grid := range Grids {
 		out[i] = make(map[int]string)
 		for tz, cells := range grid.TimeZones {
-			location, err := time.LoadLocation(tz)
+			location, err := time.LoadLocation(
+				strings.Replace(tz, " ", "_", -1))
 			if err != nil {
-				panic(fmt.Errorf("Unknown timezone %v.", tz))
+				panic(fmt.Errorf("Unknown timezone %v.\nError: %v", tz, err))
 			}
 			localTimeNoDST := timeNoDST(outputTime, location)
 			timeString := localTimeNoDST.Format(format)
