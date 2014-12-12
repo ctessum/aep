@@ -249,7 +249,7 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 	}
 	c.TstepsPerFile = d.TstepsPerFile
 	if d.SrgCacheExpirationTime == 0 {
-		d.SrgCacheExpirationTime = 1
+		d.SrgCacheExpirationTime = 200
 	}
 	c.SrgCacheExpirationTime = d.SrgCacheExpirationTime
 	c.testMode = d.testMode

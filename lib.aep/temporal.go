@@ -37,7 +37,7 @@ type TemporalProcessor struct {
 	sectors        map[string]map[string]*temporalSector // map[sector][period]data
 	temporalReport *TemporalReport
 	Units          map[string]string // map[pol]units
-	mu            sync.RWMutex
+	mu             sync.RWMutex
 }
 
 // Read in data and start up subroutines for temporal processing.
@@ -744,7 +744,8 @@ func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 	for i, grid := range Grids {
 		out[i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for tz, cells := range grid.TimeZones {
-			location, err := time.LoadLocation(tz)
+			location, err := time.LoadLocation(
+				strings.Replace(tz, " ", "_", -1))
 			if err != nil {
 				panic(fmt.Errorf("Unknown timezone %v.", tz))
 			}

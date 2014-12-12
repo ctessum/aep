@@ -60,9 +60,9 @@ func (c *Context) ErrorRecover() {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
-		Status.Lock.Lock()
+		//Status.Lock.Lock()
 		Status.Sectors[c.Sector] = "Failed!"
-		Status.Lock.Unlock()
+		//Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 	}
 }
@@ -77,9 +77,9 @@ func (c *Context) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
-		Status.Lock.Lock()
+		//Status.Lock.Lock()
 		Status.Sectors[c.Sector] = "Failed!"
-		Status.Lock.Unlock()
+		//Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 		close(recordChan)
 	}
@@ -126,9 +126,9 @@ func (c *Context) ErrorReport(errmesg interface{}) {
 	err += fmt.Sprintf("%s\n", debug.Stack())
 	err += "--------------------------\n"
 	fmt.Print(err)
-	Status.Lock.Lock()
+	//Status.Lock.Lock()
 	Status.ErrorMessages += err + "\n\n"
-	Status.Lock.Unlock()
+	//Status.Lock.Unlock()
 	return
 }
 
@@ -192,9 +192,9 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 		panic(err)
 	} else if _, ok := s.Surrogates[srg]; !ok {
 		if _, err := os.Stat(srgfile); err == nil {
-			Status.Lock.Lock()
+			//Status.Lock.Lock()
 			Status.Surrogates[srg] = "Ready"
-			Status.Lock.Unlock()
+			//Status.Lock.Unlock()
 			return "Ready"
 		} else {
 			return "Empty"
@@ -592,11 +592,11 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 	}
 }
 func renderStatusTemplate(w http.ResponseWriter) {
-	Status.Lock.Lock()
+	//Status.Lock.Lock()
 	Status.SrgProgress = SrgProgress
 	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
 		"\n", "<br>", -1))
-	Status.Lock.Unlock()
+	//Status.Lock.Unlock()
 	err := templates.ExecuteTemplate(w, "status.html", Status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -780,7 +780,6 @@ func (c *Context) ReportServer(reportOnly bool) {
 			panic(err)
 		}
 		Report.ReportOnly = reportOnly
-
 	}
 	Report.ReportOnly = reportOnly
 	Report.Config = c
@@ -793,7 +792,6 @@ func (c *Context) ReportServer(reportOnly bool) {
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/", rootHandler)
 	http.ListenAndServe(":6060", nil)
-
 }
 
 // Write out the report
