@@ -203,19 +203,23 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		0, 0, "", float64(0), true)
 	defer outShp.Close()
 	var tx *sql.Tx
+	gridData.srgMapCache.mutex.Lock()
 	tx, err = gridData.srgMapCache.db.Begin()
 	if err != nil {
+		gridData.srgMapCache.mutex.Unlock()
 		return
 	}
 	var stmt *sql.Stmt
 	stmt, err = tx.Prepare("INSERT INTO srgs " +
 		"(code, inputid, val) VALUES (?, ?, ?)")
 	if err != nil {
+		gridData.srgMapCache.mutex.Unlock()
 		return
 	}
 	for fid := 0; fid < len(griddedSrgs); fid++ {
 		err = griddedSrgs[fid].WriteToShp(outShp, fid)
 		if err != nil {
+			gridData.srgMapCache.mutex.Unlock()
 			return
 		}
 		// store surrogate map in cache for faster access.
@@ -236,19 +240,21 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		e := gob.NewEncoder(buf)
 		err = e.Encode(srgOut)
 		if err != nil {
+			gridData.srgMapCache.mutex.Unlock()
 			return
 		}
 		_, err = stmt.Exec(srgCode, srg.InputID, buf.Bytes())
 		if err != nil {
+			gridData.srgMapCache.mutex.Unlock()
 			return
 		}
 	}
-	gridData.srgMapCache.mutex.Lock()
 	err = tx.Commit()
-	gridData.srgMapCache.mutex.Unlock()
 	if err != nil {
+		gridData.srgMapCache.mutex.Unlock()
 		return
 	}
+	gridData.srgMapCache.mutex.Unlock()
 
 	Log(fmt.Sprintf("Finished creating gridding surrogate %v.",
 		OutName), 0)
@@ -771,17 +777,21 @@ type cacheDB struct {
 }
 
 func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
+	g.srgMapCache.mutex.Lock()
 	fname := filepath.Join(srgDir, "srgMapCache_"+g.Name+".sqlite")
 	g.srgMapCache.db, err = sql.Open("sqlite3", fname)
 	if err != nil {
+		g.srgMapCache.mutex.Unlock()
 		panic(err)
 	}
 	err = g.srgMapCache.db.Ping()
 	if err != nil {
+		g.srgMapCache.mutex.Unlock()
 		return
 	}
 	g.srgMapCache.db.Exec("CREATE TABLE srgs (code TEXT, " +
 		"inputid TEXT, val BLOB)")
+	g.srgMapCache.mutex.Unlock()
 	return
 }
 

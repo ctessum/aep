@@ -25,6 +25,7 @@ import (
 	"log"
 	"runtime"
 	"strings"
+	//"time"
 )
 
 func main() {
@@ -113,6 +114,15 @@ func main() {
 		}
 	}
 
+	//go func() {
+	//	for {
+	//		time.Sleep(5 * time.Second)
+	//		buf := make([]byte, 100000)
+	//		runtime.Stack(buf, true)
+	//		fmt.Println(string(buf))
+	//	}
+	//}()
+
 	// wait for calculations to complete
 	for i := 0; i < n; i++ {
 		message := <-runChan
@@ -155,14 +165,14 @@ func Run(c *aep.Context, runChan chan string,
 			}
 		}
 	}
-	for i := 0; i < n-1; i++ {
+	for i := 0; i < n; i++ {
 		<-periodChan
 	}
-	aep.Status.Lock.Lock()
+	//aep.Status.Lock.Lock()
 	if aep.Status.Sectors[c.Sector] != "Failed!" {
 		aep.Status.Sectors[c.Sector] = "Finished"
 	}
-	aep.Status.Lock.Unlock()
+	//aep.Status.Lock.Unlock()
 	runChan <- "Finished processing " + c.Sector
 }
 

@@ -508,10 +508,10 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord, period string) {
 			OutputChan <- record
 		}
 		fInfo.fid.Close()
-	reportMx.Lock()
+		reportMx.Lock()
 		Report.SectorResults[config.Sector][period].
 			InventoryResults[file] = fInfo
-	reportMx.Unlock()
+		reportMx.Unlock()
 	}
 	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
 	// Close output channel to indicate input is finished.
