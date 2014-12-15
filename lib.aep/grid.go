@@ -376,9 +376,12 @@ func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
 	if err != nil || !withinGrid {
 		return
 	}
-	rtreepoint := rtreego.Point([3]float64{X, Y, 0.})
-	gridCellTemp := grid.rtree.NearestNeighbor(rtreepoint)
-	cell := gridCellTemp.(*GridCell)
+	bbox, err := geomconv.GeomToRect(g)
+	if err != nil {
+		return
+	}
+	gridCellsTemp := grid.rtree.SearchIntersect(bbox)
+	cell := gridCellsTemp[0].(*GridCell)
 	row = cell.Row
 	col = cell.Col
 	return

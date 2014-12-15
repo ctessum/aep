@@ -133,22 +133,22 @@ type Context struct {
 	PolsToKeep             map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
 	InputProj4             string                // Proj4 specification of the spatial projection of the input emissions data.
 	inputSr                gdal.SpatialReference
-	GridRefFile            string // Location of the gridding reference file
-	SrgSpecFile            string // Location of the surrogate specification file
-	TemporalRefFile        string // Location of the temporal reference file
-	TemporalProFile        string // Location of the temporal profile file
-	HolidayFile            string // Location of the file specifying which days are holidays
-	InventoryFreq          string // The temporal frequency of the inventory data files. Currently the options are "annual", "monthly", and "cem".
-	MatchFullSCC           bool   // Whether to only match codes which are identical, or to accept partial matches.
-	DebugLevel             int    // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
-	Ncpus                  int    // Number of processors available for use
-	InputUnits             string // Units of emissions in input file
+	GridRefFile            string   // Location of the gridding reference file
+	SrgSpecFile            string   // Location of the surrogate specification file
+	TemporalRefFile        string   // Location of the temporal reference file
+	TemporalProFile        string   // Location of the temporal profile file
+	HolidayFile            string   // Location of the file specifying which days are holidays
+	InventoryFreq          string   // The temporal frequency of the inventory data files. Currently the options are "annual", "monthly", and "cem".
+	runPeriods             []period // Periods (annual, or individual months, etc.) to be run for this sector
+	MatchFullSCC           bool     // Whether to only match codes which are identical, or to accept partial matches.
+	DebugLevel             int      // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
+	Ncpus                  int      // Number of processors available for use
+	InputUnits             string   // Units of emissions in input file
 	InputConv              float64
 	ForceWesternHemisphere bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
 	InvFileNames           []string      // List of input files. "[month]" can be used as a wildcard for the month name.
 	CEMFileNames           []string      // List of input files with CEM data (needs to be a whole year's worth of data
 	EarthRadius            float64       // in meters
-	SrgCacheExpirationTime time.Duration // Time in minutes after which surrogates in memeory cache are purged. Decrease to reduce memory usage, increase for faster performance. Default is 1 minute.
 	WPSnamelist            string        // Path to WPS namelist file
 	WRFnamelist            string        // Path to WPS namelist file
 	OldWRFout              string        // Path to old WRF output files for plume rise calculations.
@@ -170,6 +170,75 @@ type PolHolder struct {
 	SpecType  string                 // The type of speciation that will be applied. Options are "VOC","PM2.5","NOx", and "SOx". If empty, the pollutant will be carried through to the output without speciation, or grouped as if it were the pollutants in "SpecNames".
 	SpecNames []string               // Names of pollutants in the SPECIATE database which are equivalent to this pollutant. For records containing this pollutant, the pollutants included in "SpecNames" will be left out of any speciation that occurs to avoid double counting.
 	SpecProf  map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
+}
+
+type period int
+
+const (
+	jan period = iota + 1
+	feb
+	mar
+	apr
+	may
+	jun
+	jul
+	aug
+	sep
+	oct
+	nov
+	dec
+	annual
+	cem
+)
+
+func (p period) String() string {
+	switch p {
+	case jan:
+		return "jan"
+	case feb:
+		return "feb"
+	case mar:
+		return "mar"
+	case apr:
+		return "apr"
+	case may:
+		return "may"
+	case jun:
+		return "jun"
+	case jul:
+		return "jul"
+	case aug:
+		return "aug"
+	case sep:
+		return "sep"
+	case oct:
+		return "oct"
+	case nov:
+		return "nov"
+	case dec:
+		return "dec"
+	case annual:
+		return "annual"
+	case cem:
+		return "cem"
+	default:
+		panic(fmt.Sprintf("Unknown period: %v", p))
+		return ""
+	}
+}
+
+func (c *Context) getPeriod(t time.Time) period {
+	switch c.InventoryFreq {
+	case "annual":
+		return annual
+	case "cem":
+		return cem
+	case "monthly":
+		return period(t.Month())
+	default:
+		panic("getPeriod error")
+		return 0
+	}
 }
 
 func (p *ConfigData) setup(e *ErrCat) {
@@ -248,10 +317,6 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 		d.TstepsPerFile = 24
 	}
 	c.TstepsPerFile = d.TstepsPerFile
-	if d.SrgCacheExpirationTime == 0 {
-		d.SrgCacheExpirationTime = 200
-	}
-	c.SrgCacheExpirationTime = d.SrgCacheExpirationTime
 	c.testMode = d.testMode
 	if c.SccDesc == "" {
 		c.SccDesc = d.SccDesc
@@ -319,6 +384,18 @@ func (p *Context) setup(e *ErrCat) {
 		e.Add(fmt.Errorf("In sector " + c.Sector + ", " + c.InventoryFreq +
 			" is not a valid value for variable inventoryFreq. Please choose " +
 			"either `annual', `monthly', or `cem'."))
+	}
+	switch c.InventoryFreq {
+	case "annual":
+		c.runPeriods = []period{annual}
+	case "cem":
+		c.runPeriods = []period{cem}
+	case "monthly":
+		c.runPeriods = make([]period, 0)
+		for m := int(c.startDate.Month()); m <= int(c.endDate.Month()); m++ {
+			// period 1 is january
+			c.runPeriods = append(c.runPeriods, period(m))
+		}
 	}
 	switch c.InputUnits {
 	case "tons/year":

@@ -139,7 +139,7 @@ var (
 )
 
 func init() {
-	Report.SectorResults = make(map[string]map[string]*Results)
+	Report.SectorResults = make(map[string]*Results)
 	// track status of all of the running sectors
 	Status = NewStatus()
 	// Start server for html report (go to localhost:6060 in web browser to view report)
@@ -148,9 +148,9 @@ func init() {
 
 type ReportHolder struct {
 	Config          *Context
-	SectorResults   map[string]map[string]*Results // map[sector][period]Results
-	ReportOnly      bool                           // whether main program is running at the same time
-	GridNames       []string                       // names of the grids
+	SectorResults   map[string]*Results // map[sector]Results
+	ReportOnly      bool                // whether main program is running at the same time
+	GridNames       []string            // names of the grids
 	TemporalResults *TemporalReport
 }
 
@@ -207,67 +207,69 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
 func (c *Context) ResultMaps(totals *SpatialTotals,
-	TotalGrid map[*GridDef]map[string]*sparse.SparseArray,
-	period string) {
+	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray,
+) {
 
 	dir := filepath.Join(c.outputDir, "maps")
 	err := os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
-	for grid, d1 := range TotalGrid {
-		filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v_%v.nc",
-			c.SimulationName, c.Sector, period, grid.Name))
-		h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
-		h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
-			"by AEP version "+Version+" ("+Website+")")
-		h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
-		h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
-		h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
-		h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
-		h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
-		h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
-			float64(grid.Ny)*grid.Dy})
-		h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
-		h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
-			float64(grid.Nx)*grid.Dx})
-		h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
-		for pol, _ := range d1 {
-			if d, ok := totals.InsideDomainTotals[grid.Name][pol]; ok {
-				h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
-				h.AddAttribute(pol, "units", d.Units)
-			}
-		}
-		if len(h.Variables()) > 0 {
-			h.Define()
-			errs := h.Check()
-			for _, err := range errs {
-				if err != nil {
-					panic(err)
+	for grid, dx := range TotalGrid {
+		for p, d1 := range dx {
+			filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v_%v.nc",
+				c.SimulationName, c.Sector, p, grid.Name))
+			h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
+			h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
+				"by AEP version "+Version+" ("+Website+")")
+			h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
+			h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
+			h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
+			h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
+			h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
+			h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
+			h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
+				float64(grid.Ny)*grid.Dy})
+			h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
+			h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
+				float64(grid.Nx)*grid.Dx})
+			h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
+			for pol, _ := range d1 {
+				if d, ok := totals.InsideDomainTotals[grid.Name][pol][p.String()]; ok {
+					h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
+					h.AddAttribute(pol, "units", d.Units)
 				}
 			}
-			f, err := os.Create(filename)
-			if err != nil {
-				panic(err)
-			}
-			ff, err := cdf.Create(f, h)
-			if err != nil {
-				panic(err)
-			}
-			for pol, data := range d1 {
-				if data.Sum() != 0. {
-					r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
-					if _, err = r.Write(data.ToDense32()); err != nil {
+			if len(h.Variables()) > 0 {
+				h.Define()
+				errs := h.Check()
+				for _, err := range errs {
+					if err != nil {
 						panic(err)
 					}
 				}
+				f, err := os.Create(filename)
+				if err != nil {
+					panic(err)
+				}
+				ff, err := cdf.Create(f, h)
+				if err != nil {
+					panic(err)
+				}
+				for pol, data := range d1 {
+					if data.Sum() != 0. {
+						r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
+						if _, err = r.Write(data.ToDense32()); err != nil {
+							panic(err)
+						}
+					}
+				}
+				err = cdf.UpdateNumRecs(f)
+				if err != nil {
+					panic(err)
+				}
+				f.Close()
 			}
-			err = cdf.UpdateNumRecs(f)
-			if err != nil {
-				panic(err)
-			}
-			f.Close()
 		}
 	}
 }
@@ -650,12 +652,12 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 	for sector, sectorData := range r.SectorResults {
 		dr.data[sector] = make(map[string]float64)
 		dr.sectors = append(dr.sectors, sector)
-		numPeriods := float64(len(sectorData))
-		for _, periodData := range sectorData {
+		numPeriods := float64(len(r.Config.runPeriods))
+		for _, p := range r.Config.runPeriods {
 			switch procType {
 			case "Inventory":
-				if periodData.InventoryResults != nil {
-					for _, fileData := range periodData.InventoryResults {
+				if sectorData.InventoryResults != nil {
+					for _, fileData := range sectorData.InventoryResults {
 						switch countType {
 						case "Totals":
 							for pol, val := range fileData.Totals {
@@ -677,10 +679,10 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 					}
 				}
 			case "Speciation":
-				if periodData.SpeciationResults != nil {
+				if sectorData.SpeciationResults != nil {
 					switch countType {
 					case "Kept":
-						for pol, poldata := range periodData.
+						for pol, poldata := range sectorData.
 							SpeciationResults.Kept {
 							if !IsStringInArray(dr.pols, pol) {
 								dr.pols = append(dr.pols, pol)
@@ -689,7 +691,7 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 							dr.data[sector][pol] += poldata.Val / numPeriods
 						}
 					case "DoubleCounted":
-						for pol, poldata := range periodData.SpeciationResults.
+						for pol, poldata := range sectorData.SpeciationResults.
 							DoubleCounted {
 							if !IsStringInArray(dr.pols, pol) {
 								dr.pols = append(dr.pols, pol)
@@ -698,7 +700,7 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 							dr.data[sector][pol] += poldata.Val / numPeriods
 						}
 					case "Ungrouped":
-						for pol, poldata := range periodData.SpeciationResults.
+						for pol, poldata := range sectorData.SpeciationResults.
 							Ungrouped {
 							if !IsStringInArray(dr.pols, pol) {
 								dr.pols = append(dr.pols, pol)
@@ -709,18 +711,19 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 					}
 				}
 			case "Spatialization":
-				if periodData.SpatialResults != nil {
-					for pol, inData := range periodData.SpatialResults.
+				if sectorData.SpatialResults != nil {
+					for pol, inData := range sectorData.SpatialResults.
 						InsideDomainTotals[countType] {
-						outData := periodData.SpatialResults.
+						outData := sectorData.SpatialResults.
 							OutsideDomainTotals[countType][pol]
 						if !IsStringInArray(dr.pols, pol) {
 							dr.pols = append(dr.pols, pol)
-							dr.units[pol] = inData.Units
+							dr.units[pol] = inData[p.String()].Units
 						}
 						// Fraction inside the domain
-						dr.data[sector][pol] += inData.Val /
-							(inData.Val + outData.Val) * 100. / numPeriods
+						dr.data[sector][pol] += inData[p.String()].Val /
+							(inData[p.String()].Val + outData[p.String()].Val) *
+							100. / numPeriods
 					}
 				}
 			}

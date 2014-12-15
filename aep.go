@@ -41,6 +41,7 @@ func main() {
 	var configFile *string = flag.String("config", "none", "Path to configuration file")
 	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
 	var testmode *bool = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
+	var seq *bool = flag.Bool("seq", false, "Run sectors in sequence instead of parallel to conserve memory")
 	var slavesFlag *string = flag.String("slaves", "", "List of addresses of available slaves, in quotes, separated by spaces.")
 	var masterAddress *string = flag.String("masteraddress", "", "What is the address of the master? Leave empty if this is not a slave.")
 	flag.Parse()
@@ -84,8 +85,6 @@ func main() {
 	}
 	defer ConfigAll.DefaultSettings.WriteReport()
 
-	runChan := make(chan string, 1)
-
 	// Start server for retrieving profiles from the
 	// SPECIATE database
 	if ConfigAll.DefaultSettings.RunSpeciate {
@@ -105,28 +104,29 @@ func main() {
 
 	e.Report() // Print errors, if any
 
-	// run sector subroutines
-	n := 0
-	for sector, c := range ConfigAll.Sectors {
-		if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
-			go Run(c, runChan, temporal)
-			n++
+	runChan := make(chan string, 1)
+	if *seq { // run sectors in sequence to conserve memory
+		for sector, c := range ConfigAll.Sectors {
+			if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
+				go Run(c, runChan, temporal)
+				message := <-runChan
+				log.Println(message)
+			}
 		}
-	}
-
-	//go func() {
-	//	for {
-	//		time.Sleep(5 * time.Second)
-	//		buf := make([]byte, 100000)
-	//		runtime.Stack(buf, true)
-	//		fmt.Println(string(buf))
-	//	}
-	//}()
-
-	// wait for calculations to complete
-	for i := 0; i < n; i++ {
-		message := <-runChan
-		log.Println(message)
+	} else { // run sectors in parallel
+		// run sector subroutines
+		n := 0
+		for sector, c := range ConfigAll.Sectors {
+			if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
+				go Run(c, runChan, temporal)
+				n++
+			}
+		}
+		// wait for calculations to complete
+		for i := 0; i < n; i++ {
+			message := <-runChan
+			log.Println(message)
+		}
 	}
 
 	// run output subroutines
@@ -144,43 +144,9 @@ func main() {
 
 func Run(c *aep.Context, runChan chan string,
 	temporal *aep.TemporalProcessor) {
-	periodChan := make(chan string)
-	n := 0
-	if c.InventoryFreq == "annual" || c.InventoryFreq == "cem" {
-		go RunPeriod(c, c.InventoryFreq, temporal, periodChan)
-		n++
-	} else {
-		var inventoryMonth string
-		for {
-			month := c.CurrentMonth()
-			if c.InventoryFreq == "monthly" && month != inventoryMonth {
-				go RunPeriod(c, month, temporal, periodChan)
-				n++
-				inventoryMonth = month
-			}
-			// either advance to next date or end loop
-			keepGoing := c.NextTime()
-			if !keepGoing {
-				break
-			}
-		}
-	}
-	for i := 0; i < n; i++ {
-		<-periodChan
-	}
-	//aep.Status.Lock.Lock()
-	if aep.Status.Sectors[c.Sector] != "Failed!" {
-		aep.Status.Sectors[c.Sector] = "Finished"
-	}
-	//aep.Status.Lock.Unlock()
-	runChan <- "Finished processing " + c.Sector
-}
 
-// Set up the correct subroutines to run for each sector and period
-func RunPeriod(c *aep.Context, period string,
-	temporal *aep.TemporalProcessor, periodChan chan string) {
-	log.Println("Running " + c.Sector + " " + period + "...")
-	aep.Status.Sectors[c.Sector] = "Running " + period
+	log.Println("Running " + c.Sector + "...")
+	aep.Status.Sectors[c.Sector] = "Running"
 	msgchan := c.MessageChan()
 	n := 0 // number of subroutines that we need to wait to finish
 
@@ -189,45 +155,45 @@ func RunPeriod(c *aep.Context, period string,
 
 	// only run inventory
 	if c.RunSpeciate == false && c.RunSpatialize == false {
-		go c.Inventory(discardChan, period)
+		go c.Inventory(discardChan)
 		n++
 	}
 
 	// speciate but don't spatialize
 	if c.RunSpeciate == true && c.RunSpatialize == false {
 		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory, period)
-		go c.Speciate(ChanFromInventory, discardChan, period)
+		go c.Inventory(ChanFromInventory)
+		go c.Speciate(ChanFromInventory, discardChan)
 		n += 2
 	}
 
 	// speciate and spatialize
 	if c.RunSpeciate == true && c.RunSpatialize == true {
 		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory, period)
+		go c.Inventory(ChanFromInventory)
 		SpecSpatialChan := make(chan *aep.ParsedRecord, 1)
-		go c.Speciate(ChanFromInventory, SpecSpatialChan, period)
+		go c.Speciate(ChanFromInventory, SpecSpatialChan)
 		if c.RunTemporal { // only run temporal if spatializing
 			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
-			go c.Spatialize(SpecSpatialChan, SpatialTemporalChan, period)
-			temporal.NewSector(c, SpatialTemporalChan, discardChan, period)
+			go c.Spatialize(SpecSpatialChan, SpatialTemporalChan)
+			temporal.NewSector(c, SpatialTemporalChan, discardChan)
 			n++
 		} else {
-			go c.Spatialize(SpecSpatialChan, discardChan, period)
+			go c.Spatialize(SpecSpatialChan, discardChan)
 		}
 		n += 3
 	}
 	// spatialize but don't speciate
 	if c.RunSpeciate == false && c.RunSpatialize == true {
 		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory, period)
+		go c.Inventory(ChanFromInventory)
 		if c.RunTemporal { // only run temporal if spatializing
 			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
-			go c.Spatialize(ChanFromInventory, SpatialTemporalChan, period)
-			temporal.NewSector(c, SpatialTemporalChan, discardChan, period)
+			go c.Spatialize(ChanFromInventory, SpatialTemporalChan)
+			temporal.NewSector(c, SpatialTemporalChan, discardChan)
 			n++
 		} else {
-			go c.Spatialize(ChanFromInventory, discardChan, period)
+			go c.Spatialize(ChanFromInventory, discardChan)
 		}
 		n += 2
 	}
@@ -237,8 +203,13 @@ func RunPeriod(c *aep.Context, period string,
 		message := <-msgchan
 		c.Log(message, 1)
 	}
-	periodChan <- "Done"
-	return
+
+	//aep.Status.Lock.Lock()
+	if aep.Status.Sectors[c.Sector] != "Failed!" {
+		aep.Status.Sectors[c.Sector] = "Finished"
+	}
+	//aep.Status.Lock.Unlock()
+	runChan <- "Finished processing " + c.Sector
 }
 
 func DiscardRecords(inputChan chan *aep.ParsedRecord) {

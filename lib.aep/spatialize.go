@@ -27,13 +27,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/projgeom"
 	"github.com/lukeroth/gdal"
-	"github.com/pmylund/go-cache"
 )
 
 var (
@@ -42,7 +40,7 @@ var (
 	Grids                  = make([]*GridDef, 0)
 	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
-	srgCache               *cache.Cache
+	srgCache               = make(map[string]*sparse.SparseArray)
 )
 
 func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
@@ -116,8 +114,6 @@ func (c *Context) setupSrgs(e *ErrCat) {
 	for _, grid := range Grids {
 		e.Add(grid.SetupSrgMapCache(c.griddedSrgs))
 	}
-	t := c.SrgCacheExpirationTime
-	srgCache = cache.New(t*time.Minute, t*time.Minute)
 	go c.SurrogateGenerator()
 	return
 }
@@ -158,50 +154,54 @@ func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 }
 
 type SpatialTotals struct {
-	InsideDomainTotals  map[string]map[string]*SpecValUnits
-	OutsideDomainTotals map[string]map[string]*SpecValUnits
+	InsideDomainTotals  map[string]map[string]map[string]*SpecValUnits
+	OutsideDomainTotals map[string]map[string]map[string]*SpecValUnits
 }
 
 func newSpatialTotalHolder() *SpatialTotals {
 	out := new(SpatialTotals)
-	out.InsideDomainTotals = make(map[string]map[string]*SpecValUnits)
-	out.OutsideDomainTotals = make(map[string]map[string]*SpecValUnits)
+	out.InsideDomainTotals = make(map[string]map[string]map[string]*SpecValUnits)
+	out.OutsideDomainTotals = make(map[string]map[string]map[string]*SpecValUnits)
 	return out
 }
 
-func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int) {
+func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int, p period) {
 	t := *h
 	if _, ok := t.InsideDomainTotals[grid]; !ok {
-		t.InsideDomainTotals[grid] = make(map[string]*SpecValUnits)
-		t.OutsideDomainTotals[grid] = make(map[string]*SpecValUnits)
+		t.InsideDomainTotals[grid] = make(map[string]map[string]*SpecValUnits)
+		t.OutsideDomainTotals[grid] = make(map[string]map[string]*SpecValUnits)
 	}
 	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
-		t.InsideDomainTotals[grid][pol] = new(SpecValUnits)
-		t.InsideDomainTotals[grid][pol].Units = data.Units
-		t.OutsideDomainTotals[grid][pol] = new(SpecValUnits)
-		t.OutsideDomainTotals[grid][pol].Units = data.Units
+		t.InsideDomainTotals[grid][pol] = make(map[string]*SpecValUnits)
+		t.OutsideDomainTotals[grid][pol] = make(map[string]*SpecValUnits)
+	}
+	if _, ok := t.InsideDomainTotals[grid][pol][p.String()]; !ok {
+		t.InsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
+		t.InsideDomainTotals[grid][pol][p.String()].Units = data.Units
+		t.OutsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
+		t.OutsideDomainTotals[grid][pol][p.String()].Units = data.Units
 	} else {
-		if t.InsideDomainTotals[grid][pol].Units != data.Units {
+		if t.InsideDomainTotals[grid][pol][p.String()].Units != data.Units {
 			err := fmt.Errorf("Units problem: %v! = %v",
-				t.InsideDomainTotals[grid][pol].Units, data.Units)
+				t.InsideDomainTotals[grid][pol][p.String()].Units, data.Units)
 			panic(err)
 		}
 	}
 	gridTotal := data.Gridded[i].Sum()
-	t.InsideDomainTotals[grid][pol].Val += gridTotal
-	t.OutsideDomainTotals[grid][pol].Val += data.Val - gridTotal
+	t.InsideDomainTotals[grid][pol][p.String()].Val += gridTotal
+	t.OutsideDomainTotals[grid][pol][p.String()].Val += data.Val - gridTotal
 	*h = t
 }
 
 func (c *Context) Spatialize(InputChan chan *ParsedRecord,
-	OutputChan chan *ParsedRecord, period string) {
+	OutputChan chan *ParsedRecord) {
 	defer c.ErrorRecoverCloseChan(InputChan)
 	var err error
 
-	c.Log("Spatializing "+period+" "+c.Sector+"...", 1)
+	c.Log("Spatializing "+c.Sector+"...", 1)
 
 	totals := newSpatialTotalHolder()
-	TotalGrid := make(map[*GridDef]map[string]*sparse.SparseArray) // map[grid][pol]data
+	TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
 
 	switch c.SectorType {
 	case "point":
@@ -209,34 +209,41 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 		ct, err = projgeom.NewCoordinateTransform(c.inputSr, Grids[0].Sr)
 		for record := range InputChan {
 			emisInRecord := false
-			for pol, data := range record.ANN_EMIS {
-				data.Gridded = make([]*sparse.SparseArray, len(Grids))
-				for i, grid := range Grids {
-					if _, ok := TotalGrid[grid]; !ok {
-						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
-					}
-					if _, ok := TotalGrid[grid][pol]; !ok {
-						TotalGrid[grid][pol] =
-							sparse.ZerosSparse(grid.Ny, grid.Nx)
-					}
-					data.Gridded[i] = sparse.ZerosSparse(grid.Ny,
-						grid.Nx)
-					var row, col int
-					var withinGrid bool
-					record.PointXcoord, record.PointYcoord, row, col,
-						withinGrid, err = grid.GetIndex(record.XLOC,
-						record.YLOC, &c.inputSr, ct)
-					if err != nil {
-						panic(err)
-					}
-					if withinGrid {
-						if data.Val != 0. {
-							emisInRecord = true
+			for p, periodData := range record.ANN_EMIS {
+				for pol, data := range periodData {
+					data.Gridded = make([]*sparse.SparseArray, len(Grids))
+					for i, grid := range Grids {
+						if _, ok := TotalGrid[grid]; !ok {
+							TotalGrid[grid] =
+								make(map[period]map[string]*sparse.SparseArray)
 						}
-						data.Gridded[i].Set(data.Val, row, col)
-						TotalGrid[grid][pol].AddVal(data.Val, row, col)
+						if _, ok := TotalGrid[grid][p]; !ok {
+							TotalGrid[grid][p] =
+								make(map[string]*sparse.SparseArray)
+						}
+						if _, ok := TotalGrid[grid][p][pol]; !ok {
+							TotalGrid[grid][p][pol] =
+								sparse.ZerosSparse(grid.Ny, grid.Nx)
+						}
+						data.Gridded[i] = sparse.ZerosSparse(grid.Ny,
+							grid.Nx)
+						var row, col int
+						var withinGrid bool
+						record.PointXcoord, record.PointYcoord, row, col,
+							withinGrid, err = grid.GetIndex(record.XLOC,
+							record.YLOC, &c.inputSr, ct)
+						if err != nil {
+							panic(err)
+						}
+						if withinGrid {
+							if data.Val != 0. {
+								emisInRecord = true
+							}
+							data.Gridded[i].Set(data.Val, row, col)
+							TotalGrid[grid][p][pol].AddVal(data.Val, row, col)
+						}
+						totals.Add(pol, grid.Name, data, i, p)
 					}
-					totals.Add(pol, grid.Name, data, i)
 				}
 			}
 			if emisInRecord {
@@ -260,26 +267,34 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 			}
 			srgNum := matchedVal.(string)
 
-			for pol, val := range record.ANN_EMIS {
-				val.Gridded = make([]*sparse.SparseArray,
-					len(Grids))
-				for i, grid := range Grids {
-					if _, ok := TotalGrid[grid]; !ok {
-						TotalGrid[grid] = make(map[string]*sparse.SparseArray)
-					}
-					if _, ok := TotalGrid[grid][pol]; !ok {
-						TotalGrid[grid][pol] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-					}
+			for p, periodData := range record.ANN_EMIS {
+				for pol, val := range periodData {
+					val.Gridded = make([]*sparse.SparseArray,
+						len(Grids))
+					for i, grid := range Grids {
+						if _, ok := TotalGrid[grid]; !ok {
+							TotalGrid[grid] =
+								make(map[period]map[string]*sparse.SparseArray)
+						}
+						if _, ok := TotalGrid[grid][p]; !ok {
+							TotalGrid[grid][p] =
+								make(map[string]*sparse.SparseArray)
+						}
+						if _, ok := TotalGrid[grid][p][pol]; !ok {
+							TotalGrid[grid][p][pol] = sparse.ZerosSparse(
+								grid.Ny, grid.Nx)
+						}
 
-					srg := c.getSurrogate(srgNum, record.FIPS, grid,
-						make([]string, 0))
-					val.Gridded[i] = sparse.ZerosSparse(grid.Ny,
-						grid.Nx)
-					if srg != nil {
-						val.Gridded[i] = srg.ScaleCopy(val.Val)
-						TotalGrid[grid][pol].AddSparse(val.Gridded[i])
+						srg := c.getSurrogate(srgNum, record.FIPS, grid,
+							make([]string, 0))
+						val.Gridded[i] = sparse.ZerosSparse(grid.Ny,
+							grid.Nx)
+						if srg != nil {
+							val.Gridded[i] = srg.ScaleCopy(val.Val)
+							TotalGrid[grid][p][pol].AddSparse(val.Gridded[i])
+						}
+						totals.Add(pol, grid.Name, val, i, p)
 					}
-					totals.Add(pol, grid.Name, val, i)
 				}
 			}
 			OutputChan <- record
@@ -290,10 +305,10 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	}
 	close(OutputChan)
 	reportMx.Lock()
-	Report.SectorResults[c.Sector][period].SpatialResults = totals
+	Report.SectorResults[c.Sector].SpatialResults = totals
 	reportMx.Unlock()
-	c.ResultMaps(totals, TotalGrid, period)
-	c.msgchan <- "Finished spatializing " + period + " " + c.Sector
+	c.ResultMaps(totals, TotalGrid)
+	c.msgchan <- "Finished spatializing " + c.Sector
 	return
 }
 
@@ -330,15 +345,12 @@ func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
 func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	upstreamSrgs []string) *sparse.SparseArray {
 
-	// Start the surrogate cacher, but only start it once.
-	//go srgCacheStart.Do(srgCacher)
-
 	var err error
 	cacheKey := grid.Name + srgNum + FIPS
 
 	// Check if surrogate is already in the cache.
-	if srg, found := srgCache.Get(cacheKey); found {
-		return srg.(*sparse.SparseArray)
+	if srg, found := srgCache[cacheKey]; found {
+		return srg
 	}
 
 	var srg *sparse.SparseArray
@@ -394,7 +406,7 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	//	}
 	//}
 	// store surrogate in cache for faster access.
-	srgCache.Set(cacheKey, srg, 0)
+	srgCache[cacheKey] = srg
 	return srg
 }
 
