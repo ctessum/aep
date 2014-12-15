@@ -774,10 +774,12 @@ func handle(err error, cmd string) error {
 type cacheDB struct {
 	db    *sql.DB
 	mutex sync.Mutex
+	cache map[string]map[string]*sparse.SparseArray
 }
 
 func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
 	g.srgMapCache.mutex.Lock()
+	g.srgMapCache.cache = make(map[string]map[string]*sparse.SparseArray)
 	fname := filepath.Join(srgDir, "srgMapCache_"+g.Name+".sqlite")
 	g.srgMapCache.db, err = sql.Open("sqlite3", fname)
 	if err != nil {
@@ -797,30 +799,43 @@ func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
 
 // Returned srg may be nil
 func RetrieveGriddingSurrogate(srgCode string, inputID string,
-	grid *GridDef) (srg *sparse.SparseArray, err error) {
+	grid *GridDef) (*sparse.SparseArray, error) {
 
-	var tempRow *sql.Row
+	var err error
 	grid.srgMapCache.mutex.Lock()
-	tempRow = grid.srgMapCache.db.QueryRow(
-		"SELECT val FROM srgs WHERE "+
-			"code=? AND inputid=?", srgCode, inputID)
-	var tempResult interface{}
-	err = tempRow.Scan(&tempResult)
-	grid.srgMapCache.mutex.Unlock()
-	if err != nil {
-		// No result found, return nil
-		if err == sql.ErrNoRows {
-			err = nil
+	defer grid.srgMapCache.mutex.Unlock()
+
+	if _, ok := grid.srgMapCache.cache[srgCode]; !ok { // get srg from sql cache.
+		grid.srgMapCache.cache[srgCode] = make(map[string]*sparse.SparseArray)
+		var rows *sql.Rows
+		rows, err = grid.srgMapCache.db.Query(
+			"SELECT val, inputid FROM srgs WHERE "+
+				"code=?", srgCode)
+		if err != nil {
+			return nil, err
 		}
-		return
+		defer rows.Close()
+		for rows.Next() {
+			var srgByte []byte
+			var inputid string
+			err = rows.Scan(&srgByte, &inputid)
+			if err != nil {
+				// No result found, return nil
+				if err == sql.ErrNoRows {
+					err = nil
+				}
+				return nil, err
+			}
+			buf := bytes.NewReader(srgByte)
+			d := gob.NewDecoder(buf)
+			var srg *sparse.SparseArray
+			err = d.Decode(&srg)
+			if err != nil {
+				return nil, err
+			}
+			srg.Fix()
+			grid.srgMapCache.cache[srgCode][inputid] = srg
+		}
 	}
-	srgByte := tempResult.([]byte)
-	buf := bytes.NewReader(srgByte)
-	d := gob.NewDecoder(buf)
-	err = d.Decode(&srg)
-	if err != nil {
-		return
-	}
-	srg.Fix()
-	return
+	return grid.srgMapCache.cache[srgCode][inputID], nil
 }

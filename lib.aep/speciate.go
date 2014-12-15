@@ -93,7 +93,7 @@ func (c *Context) SpecRef() (specRef map[string]map[string]interface{}, err erro
 
 // SpecRefCombo reads the SMOKE gspro_combo file, which maps location
 // codes to chemical speciation profiles for mobile sources.
-func (c *Context) SpecRefCombo(runPeriod string) (specRef map[string]map[string]interface{}, err error) {
+func (c *Context) SpecRefCombo(runPeriod period) (specRef map[string]map[string]interface{}, err error) {
 	specRef = make(map[string]map[string]interface{})
 	// map[pol][FIPS][code]frac
 	var record string
@@ -144,7 +144,7 @@ func (c *Context) SpecRefCombo(runPeriod string) (specRef map[string]map[string]
 					c.SpecRefComboFile)
 				panic(err)
 			}
-			if period == runPeriod {
+			if period == runPeriod.String() {
 				if _, ok := specRef[pol]; !ok {
 					specRef[pol] = make(map[string]interface{})
 				}
@@ -752,7 +752,7 @@ func (sp *SpecRef) GetProfileAggregateSpecies(number, specType string,
 // Match SCC in record to speciation profile. If none matches exactly, find a
 // more general SCC that matches.
 func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
-	period string) (
+	p period) (
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*SpecHolder) {
 	var err error
@@ -822,7 +822,7 @@ func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
 		case "VOC":
 			if code == "COMBO" { // for location specific speciation profiles
 				if sp.sRefCombo == nil {
-					sp.sRefCombo, err = c.SpecRefCombo(period)
+					sp.sRefCombo, err = c.SpecRefCombo(p)
 					if err != nil {
 						return
 					}
@@ -997,9 +997,9 @@ func (h *SpecTotals) AddUngrouped(pol string, val float64, units string) {
 // speciated emissions by a conversion factor from the input
 // units to g/year.
 func (c *Context) Speciate(InputChan chan *ParsedRecord,
-	OutputChan chan *ParsedRecord, period string) {
+	OutputChan chan *ParsedRecord) {
 	defer c.ErrorRecoverCloseChan(InputChan)
-	c.Log("Speciating "+period+" "+c.Sector+"...", 1)
+	c.Log("Speciating "+c.Sector+"...", 1)
 
 	sp, err := c.NewSpecRef()
 	if err != nil {
@@ -1012,43 +1012,54 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 	ungroupedPolFracs := make(map[string]*SpecHolder)
 	for record := range InputChan {
 		newAnnEmis := make(map[string]*SpecValUnits)
-		for pol, AnnEmis := range record.ANN_EMIS {
-			polFracs, doubleCountPolFracs, ungroupedPolFracs =
-				sp.getSccFracs(record, pol, c, period)
-			for newpol, factor := range polFracs {
-				if _, ok := newAnnEmis[newpol]; ok {
-					err = fmt.Errorf("Possible double counting of"+
-						" pollutant %v SCC %v", newpol, record.SCC)
-					panic(err)
+		for p, periodData := range record.ANN_EMIS {
+			for pol, AnnEmis := range periodData {
+				polFracs, doubleCountPolFracs, ungroupedPolFracs =
+					sp.getSccFracs(record, pol, c, p)
+				for newpol, factor := range polFracs {
+					if _, ok := newAnnEmis[newpol]; ok {
+						// There is already a value for this pol
+						s := newAnnEmis[newpol]
+						s.Val += AnnEmis.Val *
+							c.InputConv * factor.Factor
+						u := strings.Replace(
+							factor.Units, "/gram", "/year", -1)
+						if s.Units != u {
+							panic(fmt.Sprintf("Units don't match: %v != %v",
+								s.Units, u))
+						}
+						totals.AddKept(newpol, s)
+					} else {
+						// There is not already a value for this pol
+						s := new(SpecValUnits)
+						s.Val = AnnEmis.Val *
+							c.InputConv * factor.Factor
+						s.Units = strings.Replace(
+							factor.Units, "/gram", "/year", -1)
+						s.PolType = c.PolsToKeep[pol]
+						totals.AddKept(newpol, s)
+						newAnnEmis[newpol] = s
+					}
 				}
-				s := new(SpecValUnits)
-				s.Val = AnnEmis.Val *
-					c.InputConv * factor.Factor
-				s.Units = strings.Replace(
-					factor.Units, "/gram", "/year", -1)
-				s.PolType = c.PolsToKeep[pol]
-				totals.AddKept(newpol, s)
-				newAnnEmis[newpol] = s
+				for droppedpol, factor := range doubleCountPolFracs {
+					totals.AddDoubleCounted(droppedpol, AnnEmis.Val*
+						c.InputConv*factor.Factor, strings.Replace(
+						factor.Units, "/gram", "/year", -1))
+				}
+				for droppedpol, factor := range ungroupedPolFracs {
+					totals.AddUngrouped(droppedpol, AnnEmis.Val*
+						c.InputConv*factor.Factor, strings.Replace(
+						factor.Units, "/gram", "/year", -1))
+				}
 			}
-			for droppedpol, factor := range doubleCountPolFracs {
-				totals.AddDoubleCounted(droppedpol, AnnEmis.Val*
-					c.InputConv*factor.Factor, strings.Replace(
-					factor.Units, "/gram", "/year", -1))
-			}
-			for droppedpol, factor := range ungroupedPolFracs {
-				totals.AddUngrouped(droppedpol, AnnEmis.Val*
-					c.InputConv*factor.Factor, strings.Replace(
-					factor.Units, "/gram", "/year", -1))
-			}
+			record.ANN_EMIS[p] = newAnnEmis
 		}
-		record.ANN_EMIS = newAnnEmis
 		OutputChan <- record
 	}
 	reportMx.Lock()
-	Report.SectorResults[c.Sector][period].
-		SpeciationResults = totals
+	Report.SectorResults[c.Sector].SpeciationResults = totals
 	reportMx.Unlock()
 
-	c.msgchan <- "Finished speciating " + period + " " + c.Sector
+	c.msgchan <- "Finished speciating " + c.Sector
 	close(OutputChan)
 }

@@ -26,6 +26,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -64,32 +65,49 @@ func (c *Context) NewWRFOutputter(tp *TemporalProcessor) *WRFOutputter {
 	return w
 }
 
+func (w *WRFOutputter) getEmis(t time.Time) chan *TimeStepData {
+	c := make(chan *TimeStepData)
+	go func() {
+		c <- w.tp.EmisAtTime(t)
+	}()
+	return c
+}
+
 func (w *WRFOutputter) Output() {
-	tstepsInFile := 0
-	firstStep := true
-	for {
-		w.c.Log(fmt.Sprintf("Waiting for temporal data for %v...",
-			w.c.currentTime), 3)
-		ts := w.tp.EmisAtTime(w.c.currentTime)
-		w.c.Log(fmt.Sprintf("Writing WRF output for %v...", w.c.currentTime), 0)
-		if tstepsInFile == w.c.TstepsPerFile || firstStep {
-			// open new set of files
-			if !firstStep {
-				w.closeFiles()
+	emisChan := make(chan chan *TimeStepData, runtime.GOMAXPROCS(-1))
+	doneChan := make(chan int)
+	go func() {
+		firstStep := true
+		tstepsInFile := 0
+		for tsChan := range emisChan {
+			ts := <-tsChan
+			w.c.Log(fmt.Sprintf("Writing WRF output for %v...", ts.Time), 0)
+			if tstepsInFile == w.c.TstepsPerFile || firstStep {
+				// open new set of files
+				if !firstStep {
+					w.closeFiles()
+				}
+				w.newFiles(w.tp.Units, ts.Time)
+				tstepsInFile = 0
+				firstStep = false
 			}
-			w.newFiles(w.tp.Units, ts.Time)
-			tstepsInFile = 0
-			firstStep = false
+			w.files.writeTimestep(ts, tstepsInFile)
+			tstepsInFile++
 		}
-		w.files.writeTimestep(ts, tstepsInFile)
-		tstepsInFile++
+		w.closeFiles()
+		doneChan <- 0
+	}()
+	for {
+		tsChan := w.getEmis(w.c.currentTime)
+		emisChan <- tsChan
 		// either advance to next date or end loop
 		keepGoing := w.c.NextTime()
 		if !keepGoing {
 			break
 		}
 	}
-	w.closeFiles()
+	close(emisChan)
+	<-doneChan
 	w.c.Log(fmt.Sprintf("Finished writing WRF output."), 0)
 }
 
@@ -269,10 +287,10 @@ func (w *wrfFiles) timeStepOutput(ts *TimeStepData,
 				o := outData[pol][i]
 				for ix, val := range g.Elements {
 					index := g.IndexNd(ix)
-					if k <= w.config.Kemit {
+					if k < w.config.Kemit {
 						o.AddVal(val, k, index[0], index[1])
 					} else {
-						o.AddVal(val, w.config.Kemit, index[0], index[1])
+						o.AddVal(val, w.config.Kemit-1, index[0], index[1])
 					}
 				}
 			}
@@ -653,6 +671,9 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	var i, j int
 	// Get the row and the column.
 	for _, emis := range point.ANN_EMIS {
+		if len(emis.Gridded[gi].Nonzero()) == 0 {
+			break
+		}
 		index := emis.Gridded[gi].IndexNd(emis.Gridded[gi].Nonzero()[0])
 		j, i = index[0], index[1]
 	}

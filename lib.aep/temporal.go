@@ -34,7 +34,7 @@ import (
 
 type TemporalProcessor struct {
 	c              *Context
-	sectors        map[string]map[string]*temporalSector // map[sector][period]data
+	sectors        map[string]*temporalSector // map[sector]data
 	temporalReport *TemporalReport
 	Units          map[string]string // map[pol]units
 	mu             sync.RWMutex
@@ -44,7 +44,7 @@ type TemporalProcessor struct {
 func (c *Context) NewTemporalProcessor() *TemporalProcessor {
 	tp := new(TemporalProcessor)
 	tp.c = c
-	tp.sectors = make(map[string]map[string]*temporalSector)
+	tp.sectors = make(map[string]*temporalSector)
 	tp.Units = make(map[string]string)
 	tp.temporalReport = newTemporalReport(c, tp.Units)
 	reportMx.Lock()
@@ -67,9 +67,8 @@ type temporalSector struct {
 	mu            sync.RWMutex
 	InputChan     chan *ParsedRecord
 	OutputChan    chan *ParsedRecord
-	period        string
-	PointData     map[[3]string][]*PointRecord
-	AreaData      map[[3]string]map[string][]*sparse.SparseArray
+	PointData     map[[3]string][]*ParsedRecord
+	AreaData      map[[3]string]map[period]map[string][]*sparse.SparseArray
 	aggregate     func(*temporalSector, *ParsedRecord)
 	addEmisAtTime func(*temporalSector, time.Time,
 		map[string][]*sparse.SparseArray, []*PointRecord) (
@@ -77,22 +76,18 @@ type temporalSector struct {
 }
 
 func (tp *TemporalProcessor) NewSector(c *Context,
-	InputChan, OutputChan chan *ParsedRecord, period string) {
+	InputChan, OutputChan chan *ParsedRecord) {
 	t := new(temporalSector)
 	t.mu.Lock()
 	tp.mu.Lock()
-	if _, ok := tp.sectors[c.Sector]; !ok {
-		tp.sectors[c.Sector] = make(map[string]*temporalSector)
-	}
-	tp.sectors[c.Sector][period] = t
+	tp.sectors[c.Sector] = t
 	tp.mu.Unlock()
 	t.tp = tp
 	t.InputChan = InputChan
 	t.OutputChan = OutputChan
-	t.period = period
 	t.c = c
-	t.PointData = make(map[[3]string][]*PointRecord)
-	t.AreaData = make(map[[3]string]map[string][]*sparse.SparseArray)
+	t.PointData = make(map[[3]string][]*ParsedRecord)
+	t.AreaData = make(map[[3]string]map[period]map[string][]*sparse.SparseArray)
 	// Choose which temporal aggregation function to use.
 	switch t.c.SectorType {
 	case "point":
@@ -130,13 +125,13 @@ func (tp *TemporalProcessor) NewSector(c *Context,
 		if t.c.InventoryFreq == "cem" {
 			t.getCEMdata()
 		}
-		t.c.Log("Aggregating by temporal profile "+t.period+" "+t.c.Sector+"...", 1)
+		t.c.Log("Aggregating by temporal profile "+t.c.Sector+"...", 1)
 		for record := range InputChan {
 			t.aggregate(t, record)
 			t.OutputChan <- record
 		}
 		close(t.OutputChan)
-		t.c.msgchan <- "Finished temporalizing " + t.period + " " + t.c.Sector
+		t.c.msgchan <- "Finished temporalizing " + t.c.Sector
 		t.mu.Unlock()
 	}()
 }
@@ -455,24 +450,30 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	temporalCodes := t.getTemporalCodes(record.SCC, record.FIPS)
 	// Create matrices if they don't exist
 	if _, ok := t.AreaData[temporalCodes]; !ok {
-		t.AreaData[temporalCodes] = make(map[string][]*sparse.SparseArray)
+		t.AreaData[temporalCodes] = make(map[period]map[string][]*sparse.SparseArray)
 	}
 	// Add data from record into matricies.
-	for pol, vals := range record.ANN_EMIS {
-		if _, ok := t.AreaData[temporalCodes][pol]; !ok {
-			t.AreaData[temporalCodes][pol] =
-				make([]*sparse.SparseArray, len(Grids))
-			for i, grid := range Grids {
-				t.AreaData[temporalCodes][pol][i] =
-					sparse.ZerosSparse(grid.Ny, grid.Nx)
+	for p, periodData := range record.ANN_EMIS {
+		for pol, vals := range periodData {
+			if _, ok := t.AreaData[temporalCodes][p]; !ok {
+				t.AreaData[temporalCodes][p] =
+					make(map[string][]*sparse.SparseArray)
 			}
-		}
-		// change units from emissions per year to emissions per hour
-		units := strings.Replace(vals.Units, "/year", "/hour", -1)
-		t.addUnits(pol, units)
-		for i, _ := range Grids {
-			if vals.Gridded[i] != nil {
-				t.AreaData[temporalCodes][pol][i].AddSparse(vals.Gridded[i])
+			if _, ok := t.AreaData[temporalCodes][p][pol]; !ok {
+				t.AreaData[temporalCodes][p][pol] =
+					make([]*sparse.SparseArray, len(Grids))
+				for i, grid := range Grids {
+					t.AreaData[temporalCodes][p][pol][i] =
+						sparse.ZerosSparse(grid.Ny, grid.Nx)
+				}
+			}
+			// change units from emissions per year to emissions per hour
+			units := strings.Replace(vals.Units, "/year", "/hour", -1)
+			t.addUnits(pol, units)
+			for i, _ := range Grids {
+				if vals.Gridded[i] != nil {
+					t.AreaData[temporalCodes][p][pol][i].AddSparse(vals.Gridded[i])
+				}
 			}
 		}
 	}
@@ -490,44 +491,21 @@ func (ts *temporalSector) addUnits(pol string, newUnits string) {
 	}
 }
 
-type PointRecord struct {
-	STKHGT             float64                  //	Stack Height (ft) (required)
-	STKDIAM            float64                  //	Stack Diameter (ft) (required)
-	STKTEMP            float64                  //	Stack Gas Exit Temperature (°F) (required)
-	STKFLOW            float64                  //	Stack Gas Flow Rate (ft3/sec) (optional, automatically calculated by Smkinven from velocity and diameter if not given in file)
-	STKVEL             float64                  //	Stack Gas Exit Velocity (ft/sec) (required)
-	ANN_EMIS           map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
-	ORIS_FACILITY_CODE string
-	ORIS_BOILER_ID     string
-}
-
-func newPointRecord(r *ParsedRecord) *PointRecord {
-	out := new(PointRecord)
-	out.STKHGT = r.STKHGT
-	out.STKDIAM = r.STKDIAM
-	out.STKTEMP = r.STKTEMP
-	out.STKFLOW = r.STKFLOW
-	out.STKVEL = r.STKVEL
-	out.ANN_EMIS = r.ANN_EMIS
-	out.ORIS_FACILITY_CODE = r.ORIS_FACILITY_CODE
-	out.ORIS_BOILER_ID = r.ORIS_BOILER_ID
-	return out
-}
-
 var aggregatePoint = func(t *temporalSector, record *ParsedRecord) {
 	temporalCodes := t.getTemporalCodes(record.SCC, record.FIPS)
 	// Create point arrays if they don't exist
 	if _, ok := t.PointData[temporalCodes]; !ok {
-		t.PointData[temporalCodes] = make([]*PointRecord, 0)
+		t.PointData[temporalCodes] = make([]*ParsedRecord, 0)
 	}
 	if len(record.ANN_EMIS) != 0 {
-		t.PointData[temporalCodes] = append(t.PointData[temporalCodes],
-			newPointRecord(record))
+		t.PointData[temporalCodes] = append(t.PointData[temporalCodes], record)
 	}
 	// change units from emissions per year to emissions per hour
-	for pol, rec := range record.ANN_EMIS {
-		units := strings.Replace(rec.Units, "/year", "/hour", -1)
-		t.addUnits(pol, units)
+	for _, periodData := range record.ANN_EMIS {
+		for pol, rec := range periodData {
+			units := strings.Replace(rec.Units, "/year", "/hour", -1)
+			t.addUnits(pol, units)
+		}
 	}
 }
 
@@ -536,10 +514,11 @@ var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time,
 	pointEmis []*PointRecord) (map[string][]*sparse.SparseArray,
 	[]*PointRecord) {
 	t.mu.RLock()
+	p := t.c.getPeriod(time)
 	// add area data.
 	for temporalCodes, data := range t.AreaData {
 		tFactors := t.griddedTemporalFactors(temporalCodes, time)
-		for pol, gridData := range data {
+		for pol, gridData := range data[p] {
 			if _, ok := areaEmis[pol]; !ok { // initialize array
 				areaEmis[pol] = make([]*sparse.SparseArray, len(Grids))
 				for i, grid := range Grids {
@@ -566,12 +545,13 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time,
 	areaEmis map[string][]*sparse.SparseArray,
 	pointEmis []*PointRecord) (map[string][]*sparse.SparseArray,
 	[]*PointRecord) {
+	p := t.c.getPeriod(time)
 	t.mu.RLock()
 	// add point data
 	for temporalCodes, data := range t.PointData {
 		tFactors := t.griddedTemporalFactors(temporalCodes, time)
 		for _, record := range data {
-			out := emisAtTimeTproPoint(tFactors, record)
+			out := emisAtTimeTproPoint(tFactors, record, p)
 			pointEmis = append(pointEmis, out)
 		}
 	}
@@ -579,8 +559,17 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time,
 	return areaEmis, pointEmis
 }
 
+type PointRecord struct {
+	STKHGT   float64
+	STKDIAM  float64
+	STKTEMP  float64
+	STKFLOW  float64
+	STKVEL   float64
+	ANN_EMIS map[string]*SpecValUnits
+}
+
 func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
-	record *PointRecord) *PointRecord {
+	record *ParsedRecord, p period) *PointRecord {
 	out := new(PointRecord)
 	out.STKHGT = record.STKHGT
 	out.STKDIAM = record.STKDIAM
@@ -588,7 +577,7 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 	out.STKFLOW = record.STKFLOW
 	out.STKVEL = record.STKVEL
 	out.ANN_EMIS = make(map[string]*SpecValUnits)
-	for pol, emis := range record.ANN_EMIS {
+	for pol, emis := range record.ANN_EMIS[p] {
 		out.ANN_EMIS[pol] = new(SpecValUnits)
 		out.ANN_EMIS[pol].Units = emis.Units
 		out.ANN_EMIS[pol].Gridded = make([]*sparse.SparseArray,
@@ -615,6 +604,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time,
 	areaEmis map[string][]*sparse.SparseArray,
 	pointEmis []*PointRecord) (map[string][]*sparse.SparseArray,
 	[]*PointRecord) {
+	p := t.c.getPeriod(time)
 	t.mu.RLock()
 	cemTimes := griddedTimeNoDST(time)
 	// add point data
@@ -631,7 +621,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time,
 				out.STKFLOW = record.STKFLOW
 				out.STKVEL = record.STKVEL
 				out.ANN_EMIS = make(map[string]*SpecValUnits)
-				for pol, emis := range record.ANN_EMIS {
+				for pol, emis := range record.ANN_EMIS[p] {
 					out.ANN_EMIS[pol] = new(SpecValUnits)
 					out.ANN_EMIS[pol].Units = emis.Units
 					out.ANN_EMIS[pol].Gridded = make([]*sparse.SparseArray,
@@ -651,7 +641,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time,
 					}
 				}
 			} else {
-				out = emisAtTimeTproPoint(tproTFactors, record)
+				out = emisAtTimeTproPoint(tproTFactors, record, p)
 			}
 			pointEmis = append(pointEmis, out)
 		}
@@ -809,20 +799,9 @@ func (tp *TemporalProcessor) EmisAtTime(time time.Time) *TimeStepData {
 	ts.Time = time
 	ts.AreaData = make(map[string][]*sparse.SparseArray) // map[pol][grid]array
 	ts.PointData = make([]*PointRecord, 0)
-	month := strings.ToLower(time.Format("Jan"))
 	for _, sectorData := range tp.sectors {
-		var periodData *temporalSector
-		var ok bool
-		// Get data for the correct period
-		if periodData, ok = sectorData["annual"]; ok {
-		} else if periodData, ok = sectorData["cem"]; ok {
-		} else if periodData, ok = sectorData[month]; ok {
-		} else {
-			panic(fmt.Errorf("Sector %v does not have data for period %v",
-				periodData.c.Sector, periodData.period))
-		}
-		ts.AreaData, ts.PointData = periodData.addEmisAtTime(
-			periodData, time, ts.AreaData, ts.PointData)
+		ts.AreaData, ts.PointData = sectorData.addEmisAtTime(
+			sectorData, time, ts.AreaData, ts.PointData)
 	}
 	tp.temporalReport.addTstep(ts)
 	return ts

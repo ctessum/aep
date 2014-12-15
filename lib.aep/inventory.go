@@ -87,17 +87,16 @@ type ParsedRecord struct {
 	//  If CTYPE = L, Latitude (decimal degrees)
 	UTMZ int //	UTM zone (required if CTYPE = U)
 	//	CAS                string  // Pollutant CAS number or other code (16 characters maximum) (required, this is called the pollutant code in the NIF)
-	ANN_EMIS           map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
-	CEFF               map[string]float64       //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
-	REFF               map[string]float64       //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
-	RPEN               map[string]float64       //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
-	NEI_UNIQUE_ID      string                   //Unique ID that ties together HAP and CAP emissions within a common facility ID and also ties together emissions obtained from muptiple data sources which may have different State facility identifiers but really belong to a single facility (optional, not currently used by SMOKE)
-	ORIS_FACILITY_CODE string                   //DOE Plant ID (generally recommended, and required if matching to hour-specific CEM data)
-	ORIS_BOILER_ID     string                   //Boiler Identification Code (recommended)
-	PointXcoord        float64                  // Projected coordinate for point sources
-	PointYcoord        float64                  // Projected coordinate for point sources
-	InventoryFreq      string                   // inventory frequency from configuration file
-	DoubleCountPols    []string                 // Pols that should not be included in the speciation of this record to avoid double counting
+	ANN_EMIS           map[period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
+	CEFF               map[string]float64                  //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
+	REFF               map[string]float64                  //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
+	RPEN               map[string]float64                  //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
+	//NEI_UNIQUE_ID      string                              //Unique ID that ties together HAP and CAP emissions within a common facility ID and also ties together emissions obtained from muptiple data sources which may have different State facility identifiers but really belong to a single facility (optional, not currently used by SMOKE)
+	ORIS_FACILITY_CODE string                              //DOE Plant ID (generally recommended, and required if matching to hour-specific CEM data)
+	ORIS_BOILER_ID     string                              //Boiler Identification Code (recommended)
+	PointXcoord        float64                             // Projected coordinate for point sources
+	PointYcoord        float64                             // Projected coordinate for point sources
+	DoubleCountPols    []string                            // Pols that should not be included in the speciation of this record to avoid double counting
 	Country            string
 }
 
@@ -108,13 +107,13 @@ type SpecValUnits struct {
 	Gridded []*sparse.SparseArray
 }
 
-func (c Context) newParsedRecord() (rec *ParsedRecord) {
+func (c Context) newParsedRecord(p period) (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
-	rec.ANN_EMIS = make(map[string]*SpecValUnits)
+	rec.ANN_EMIS = make(map[period]map[string]*SpecValUnits)
+	rec.ANN_EMIS[p] = make(map[string]*SpecValUnits)
 	rec.CEFF = make(map[string]float64)
 	rec.REFF = make(map[string]float64)
 	rec.RPEN = make(map[string]float64)
-	rec.InventoryFreq = c.InventoryFreq
 	return
 }
 
@@ -146,19 +145,20 @@ func cleanRecordORL(record string) string {
 	return record
 }
 
-func (r *ParsedRecord) parseEmisHelper(pol, ann_emis, avd_emis string) string {
+func (r *ParsedRecord) parseEmisHelper(p period, pol, ann_emis,
+	avd_emis string) string {
 	pol = trimString(pol)
 	ann := stringToFloat(ann_emis)
 	// if annual emissions not present, fill with average day
 	if ann <= 0. {
 		avd := stringToFloat(avd_emis)
 		if avd >= 0. {
-			r.ANN_EMIS[pol] = new(SpecValUnits)
-			r.ANN_EMIS[pol].Val = avd * 365.
+			r.ANN_EMIS[p][pol] = new(SpecValUnits)
+			r.ANN_EMIS[p][pol].Val = avd * 365.
 		}
 	} else if ann != 0. {
-		r.ANN_EMIS[pol] = new(SpecValUnits)
-		r.ANN_EMIS[pol].Val = ann
+		r.ANN_EMIS[p][pol] = new(SpecValUnits)
+		r.ANN_EMIS[p][pol].Val = ann
 	}
 	return pol
 }
@@ -255,8 +255,8 @@ func parseSIC(s string) string {
 }
 
 func (c *Context) parseRecordPointORL(record string,
-	fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
 	var err error
@@ -281,18 +281,19 @@ func (c *Context) parseRecordPointORL(record string,
 	if err != nil {
 		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
 	}
-	pol := fields.parseEmisHelper(splitString[21], splitString[22],
+	pol := fields.parseEmisHelper(p, splitString[21], splitString[22],
 		splitString[23])
 	fields.CEFF[pol] = stringToFloat(splitString[24])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[25])
-	fields.NEI_UNIQUE_ID = splitString[28]
+	//fields.NEI_UNIQUE_ID = splitString[28]
 	fields.ORIS_FACILITY_CODE = trimString(splitString[29])
 	fields.ORIS_BOILER_ID = trimString(splitString[30])
 	return fields
 }
 
-func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo,
+	p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
 	fields.FIPS = trimString(splitString[0])
@@ -301,7 +302,7 @@ func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedReco
 	fields.MACT = splitString[3]
 	fields.SRCTYPE = splitString[4]
 	fields.NAICS = parseNAICS(splitString[5])
-	pol := fields.parseEmisHelper(splitString[6], splitString[7], splitString[8])
+	pol := fields.parseEmisHelper(p, splitString[6], splitString[7], splitString[8])
 	fields.CEFF[pol] = stringToFloat(splitString[9])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[10])
 	fields.RPEN[pol] = stringToFloatDefault100(splitString[11])
@@ -309,13 +310,13 @@ func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo) *ParsedReco
 }
 
 func (c *Context) parseRecordNonroadORL(record string,
-	fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
 	fields.FIPS = trimString(splitString[0])
 	fields.SCC = trimString(splitString[1])
-	pol := fields.parseEmisHelper(splitString[2], splitString[3], splitString[4])
+	pol := fields.parseEmisHelper(p, splitString[2], splitString[3], splitString[4])
 	fields.CEFF[pol] = stringToFloat(splitString[5])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[6])
 	fields.RPEN[pol] = stringToFloatDefault100(splitString[7])
@@ -324,13 +325,13 @@ func (c *Context) parseRecordNonroadORL(record string,
 }
 
 func (c *Context) parseRecordMobileORL(record string,
-	fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
 	fields.FIPS = trimString(splitString[0])
 	fields.SCC = trimString(splitString[1])
-	fields.parseEmisHelper(splitString[2], splitString[3], splitString[4])
+	fields.parseEmisHelper(p, splitString[2], splitString[3], splitString[4])
 	fields.SRCTYPE = splitString[5]
 	return fields
 }
@@ -350,8 +351,9 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 	return
 }
 
-func (c *Context) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+func (c *Context) parseRecordPointIDA(record string,
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 249, 52)
 	fields.FIPS = parseFipsIDA(record[0:5])
 	fields.PLANTID = trimString(record[5:20])
@@ -374,7 +376,7 @@ func (c *Context) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRec
 	}
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 249 + 52*i
-		pol = fields.parseEmisHelper(pol, record[start:start+13],
+		pol = fields.parseEmisHelper(p, pol, record[start:start+13],
 			record[start+13:start+26])
 		fields.CEFF[pol] = stringToFloat(record[start+26 : start+33])
 		fields.REFF[pol] = stringToFloatDefault100(record[start+33 : start+40])
@@ -382,14 +384,15 @@ func (c *Context) parseRecordPointIDA(record string, fInfo *FileInfo) *ParsedRec
 	return fields
 }
 
-func (c *Context) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+func (c *Context) parseRecordAreaIDA(record string,
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 15, 47)
 	fields.FIPS = parseFipsIDA(record[0:5])
 	fields.SCC = trimString(record[5:15])
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 15 + 47*i
-		pol = fields.parseEmisHelper(pol, record[start:start+10],
+		pol = fields.parseEmisHelper(p, pol, record[start:start+10],
 			record[start+10:start+20])
 		fields.CEFF[pol] = stringToFloat(record[start+31 : start+38])
 		fields.REFF[pol] = stringToFloatDefault100(record[start+38 : start+41])
@@ -398,29 +401,21 @@ func (c *Context) parseRecordAreaIDA(record string, fInfo *FileInfo) *ParsedReco
 	return fields
 }
 func (c *Context) parseRecordMobileIDA(record string,
-	fInfo *FileInfo) *ParsedRecord {
-	fields := c.newParsedRecord()
+	fInfo *FileInfo, p period) *ParsedRecord {
+	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 25, 20)
 	fields.FIPS = parseFipsIDA(record[0:5])
 	fields.SCC = trimString(record[15:25])
 	for i, pol := range strings.Split(fInfo.polid, " ") {
 		start := 25 + 20*i
-		fields.parseEmisHelper(pol, record[start:start+10],
+		fields.parseEmisHelper(p, pol, record[start:start+10],
 			record[start+10:start+20])
 	}
 	return fields
 }
 
-func (config *Context) Inventory(OutputChan chan *ParsedRecord, period string) {
+func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 	defer config.ErrorRecover()
-	reportMx.Lock()
-	if _, ok := Report.SectorResults[config.Sector]; !ok {
-		Report.SectorResults[config.Sector] = make(map[string]*Results)
-	}
-	if _, ok := Report.SectorResults[config.Sector][period]; !ok {
-		Report.SectorResults[config.Sector][period] = new(Results)
-	}
-	reportMx.Unlock()
 
 	// make a list of species that can possibly be double counted.
 	doubleCountablePols := make([]string, 0)
@@ -432,88 +427,101 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord, period string) {
 			}
 		}
 	}
-	recordsThatDoubleCount := make(map[string][]string)
+	records := make(map[string]*ParsedRecord)
 
-	config.Log("Importing inventory for "+period+" "+
-		config.Sector+"...", 1)
-	reportMx.Lock()
-	Report.SectorResults[config.Sector][period].
-		InventoryResults = make(map[string]*FileInfo)
-	reportMx.Unlock()
-	// First, go through files to check for possible double
-	// counting in individual records.
-	// Records that double count are defined as those that
-	// contain a specific pollutant as well as a pollutant
-	// group that contains the specific pollutant as one
-	// of its component species.
-	for _, file := range config.InvFileNames {
-		if config.InventoryFreq == "monthly" {
-			file = strings.Replace(file, "[month]", period, -1)
+	config.Log("Importing inventory for "+config.Sector+"...", 1)
+
+	for _, p := range config.runPeriods {
+		reportMx.Lock()
+		if _, ok := Report.SectorResults[config.Sector]; !ok {
+			Report.SectorResults[config.Sector] = new(Results)
 		}
-		config.Log("Checking file "+file+" for possible double counting", 1)
-		fInfo := config.OpenFile(file)
-		recordChan := make(chan *ParsedRecord)
-		go fInfo.ParseLines(recordChan, config)
-		for record := range recordChan {
-			for pol, _ := range record.ANN_EMIS {
-				if IsStringInArray(doubleCountablePols, pol) {
-					key := record.FIPS + record.SCC + record.PLANTID +
-						record.POINTID + record.STACKID +
-						record.SEGMENT
-					if _, ok := recordsThatDoubleCount[key]; !ok {
-						recordsThatDoubleCount[key] = make([]string, 0)
+		Report.SectorResults[config.Sector].
+			InventoryResults = make(map[string]*FileInfo)
+		reportMx.Unlock()
+		for _, file := range config.InvFileNames {
+			if config.InventoryFreq == "monthly" {
+				file = strings.Replace(file, "[month]", p.String(), -1)
+			}
+			config.Log("Processing file "+file, 1)
+			fInfo := config.OpenFile(file)
+			recordChan := make(chan *ParsedRecord)
+			go fInfo.ParseLines(recordChan, config, p)
+			for record := range recordChan {
+				// add emissions to totals for report
+				for pol, emis := range record.ANN_EMIS[p] {
+					if _, ok := config.PolsToKeep[cleanPol(pol)]; ok {
+						fInfo.Totals[pol] += emis.Val
+					} else {
+						// delete value if we don't want to keep it
+						fInfo.DroppedTotals[pol] += emis.Val
+						delete(record.ANN_EMIS[p], pol)
 					}
-					for _, specName := range config.PolsToKeep[cleanPol(pol)].SpecNames {
-						if !IsStringInArray(recordsThatDoubleCount[key], specName) {
-							recordsThatDoubleCount[key] = append(
-								recordsThatDoubleCount[key], specName)
+				}
+
+				key := record.FIPS + record.SCC + record.PLANTID +
+					record.POINTID + record.STACKID +
+					record.SEGMENT + record.ORIS_FACILITY_CODE +
+					record.ORIS_BOILER_ID
+				var currentRec *ParsedRecord
+				if _, ok := records[key]; !ok {
+					// We don't yet have a record for this key
+					records[key] = record
+					currentRec = record
+				} else {
+					// There is already a record for this key
+					currentRec = records[key]
+					for pol, e := range record.ANN_EMIS[p] {
+						if _, ok := currentRec.ANN_EMIS[p][pol]; !ok {
+							if _, ok := currentRec.ANN_EMIS[p]; !ok {
+								currentRec.ANN_EMIS[p] =
+									make(map[string]*SpecValUnits)
+							}
+							// We don't yet have a value for this pol
+							currentRec.ANN_EMIS[p][pol] = e
+						} else {
+							// There is already a value for this pol
+							currentRec.ANN_EMIS[p][pol].Val += e.Val
+							if currentRec.ANN_EMIS[p][pol].Units != e.Units {
+								panic(fmt.Sprintf("Units don't match: %v != %v",
+									currentRec.ANN_EMIS[p][pol].Units, e.Units))
+							}
+						}
+					}
+				}
+				// Check for possible double counting in individual records.
+				// Records that double count are defined as those that
+				// contain a specific pollutant as well as a pollutant
+				// group that contains the specific pollutant as one
+				// of its component species.
+				for pol, _ := range currentRec.ANN_EMIS[p] {
+					if IsStringInArray(doubleCountablePols, pol) {
+						if currentRec.DoubleCountPols == nil {
+							currentRec.DoubleCountPols = make([]string, 0)
+						}
+						for _, specName := range config.PolsToKeep[cleanPol(pol)].SpecNames {
+							if !IsStringInArray(currentRec.DoubleCountPols, specName) {
+								currentRec.DoubleCountPols = append(
+									currentRec.DoubleCountPols, specName)
+							}
 						}
 					}
 				}
 			}
+			fInfo.fid.Close()
+			reportMx.Lock()
+			Report.SectorResults[config.Sector].
+				InventoryResults[file] = fInfo
+			reportMx.Unlock()
 		}
-		fInfo.fid.Close()
 	}
 
-	// Now, go through the files a second time, marking records
-	// that need to be adjusted for double counting and then
-	// sending them off for further processing.
-	for _, file := range config.InvFileNames {
-		if config.InventoryFreq == "monthly" {
-			file = strings.Replace(file, "[month]", period, -1)
-		}
-		config.Log("Processing file "+file, 1)
-		fInfo := config.OpenFile(file)
-		recordChan := make(chan *ParsedRecord)
-		go fInfo.ParseLines(recordChan, config)
-		for record := range recordChan {
-			key := record.FIPS + record.SCC + record.PLANTID +
-				record.POINTID + record.STACKID +
-				record.SEGMENT
-			if _, ok := recordsThatDoubleCount[key]; ok {
-				record.DoubleCountPols =
-					recordsThatDoubleCount[key]
-			}
-			// add emissions to totals for report
-			for pol, emis := range record.ANN_EMIS {
-				if _, ok := config.PolsToKeep[cleanPol(pol)]; ok {
-					fInfo.Totals[pol] += emis.Val
-				} else {
-					// delete value if we don't want to keep it
-					fInfo.DroppedTotals[pol] += emis.Val
-					delete(record.ANN_EMIS, pol)
-				}
-			}
-			// send parsed record to the next processing step
-			OutputChan <- record
-		}
-		fInfo.fid.Close()
-		reportMx.Lock()
-		Report.SectorResults[config.Sector][period].
-			InventoryResults[file] = fInfo
-		reportMx.Unlock()
+	// Now send off the records for further processing
+	for key, record := range records {
+		OutputChan <- record
+		delete(records,key)
 	}
-	config.msgchan <- "Finished importing inventory for " + period + " " + config.Sector
+	config.msgchan <- "Finished importing inventory for " + config.Sector
 	// Close output channel to indicate input is finished.
 	close(OutputChan)
 }
@@ -598,30 +606,32 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 	return
 }
 
-func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord, config *Context) {
+func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
+	config *Context, p period) {
 	numProcs := runtime.GOMAXPROCS(-1)
 	lineChan := make(chan string)
 	var wg sync.WaitGroup
 	wg.Add(numProcs)
 	for i := 0; i < numProcs; i++ {
 		go func() {
-			for line := range lineChan {
+			var line string
+			for line = range lineChan {
 				record := new(ParsedRecord)
 				switch fInfo.Format + config.SectorType {
 				case "ORLpoint":
-					record = config.parseRecordPointORL(line, fInfo)
+					record = config.parseRecordPointORL(line, fInfo, p)
 				case "ORLarea":
-					record = config.parseRecordAreaORL(line, fInfo)
+					record = config.parseRecordAreaORL(line, fInfo, p)
 				case "ORLNONROADarea":
-					record = config.parseRecordNonroadORL(line, fInfo)
+					record = config.parseRecordNonroadORL(line, fInfo, p)
 				case "ORLmobile":
-					record = config.parseRecordMobileORL(line, fInfo)
+					record = config.parseRecordMobileORL(line, fInfo, p)
 				case "IDApoint":
-					record = config.parseRecordPointIDA(line, fInfo)
+					record = config.parseRecordPointIDA(line, fInfo, p)
 				case "IDAarea":
-					record = config.parseRecordAreaIDA(line, fInfo)
+					record = config.parseRecordAreaIDA(line, fInfo, p)
 				case "IDAmobile":
-					record = config.parseRecordMobileIDA(line, fInfo)
+					record = config.parseRecordMobileIDA(line, fInfo, p)
 				default:
 					panic("Unknown format: " + fInfo.Format + " " +
 						config.SectorType)
