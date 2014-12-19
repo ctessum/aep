@@ -87,16 +87,17 @@ type ParsedRecord struct {
 	//  If CTYPE = L, Latitude (decimal degrees)
 	UTMZ int //	UTM zone (required if CTYPE = U)
 	//	CAS                string  // Pollutant CAS number or other code (16 characters maximum) (required, this is called the pollutant code in the NIF)
-	ANN_EMIS           map[period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
-	CEFF               map[string]float64                  //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
-	REFF               map[string]float64                  //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
-	RPEN               map[string]float64                  //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
+	ANN_EMIS map[period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
+	gridSrg  []*sparse.SparseArray               // Surrogate to apply emissions to grid cells
+	CEFF     map[string]float64                  //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
+	REFF     map[string]float64                  //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
+	RPEN     map[string]float64                  //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
 	//NEI_UNIQUE_ID      string                              //Unique ID that ties together HAP and CAP emissions within a common facility ID and also ties together emissions obtained from muptiple data sources which may have different State facility identifiers but really belong to a single facility (optional, not currently used by SMOKE)
-	ORIS_FACILITY_CODE string                              //DOE Plant ID (generally recommended, and required if matching to hour-specific CEM data)
-	ORIS_BOILER_ID     string                              //Boiler Identification Code (recommended)
-	PointXcoord        float64                             // Projected coordinate for point sources
-	PointYcoord        float64                             // Projected coordinate for point sources
-	DoubleCountPols    []string                            // Pols that should not be included in the speciation of this record to avoid double counting
+	ORIS_FACILITY_CODE string   //DOE Plant ID (generally recommended, and required if matching to hour-specific CEM data)
+	ORIS_BOILER_ID     string   //Boiler Identification Code (recommended)
+	PointXcoord        float64  // Projected coordinate for point sources
+	PointYcoord        float64  // Projected coordinate for point sources
+	DoubleCountPols    []string // Pols that should not be included in the speciation of this record to avoid double counting
 	Country            string
 }
 
@@ -104,7 +105,6 @@ type SpecValUnits struct {
 	Val     float64
 	Units   string
 	PolType *PolHolder
-	Gridded []*sparse.SparseArray
 }
 
 func (c Context) newParsedRecord(p period) (rec *ParsedRecord) {
@@ -519,7 +519,7 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 	// Now send off the records for further processing
 	for key, record := range records {
 		OutputChan <- record
-		delete(records,key)
+		delete(records, key)
 	}
 	config.msgchan <- "Finished importing inventory for " + config.Sector
 	// Close output channel to indicate input is finished.

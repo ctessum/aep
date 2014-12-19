@@ -24,6 +24,8 @@ import (
 
 type Outputter interface {
 	Output()
+	PlumeRise(gridIndex int, r *ParsedRecord) (kPlume int)
+	Kemit() int
 }
 
 func (c *Context) NewOutputter(tp *TemporalProcessor) Outputter {
