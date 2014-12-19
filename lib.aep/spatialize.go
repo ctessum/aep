@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
@@ -41,6 +42,7 @@ var (
 	gridRef                = make(map[string]map[string]map[string]interface{})
 	SurrogateGeneratorChan = make(chan *SrgGenData)
 	srgCache               = make(map[string]*sparse.SparseArray)
+	srgCacheMx             sync.Mutex
 )
 
 func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
@@ -165,7 +167,8 @@ func newSpatialTotalHolder() *SpatialTotals {
 	return out
 }
 
-func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int, p period) {
+func (h *SpatialTotals) Add(pol, grid string, emis float64,
+	gridEmis *sparse.SparseArray, units string, p period) {
 	t := *h
 	if _, ok := t.InsideDomainTotals[grid]; !ok {
 		t.InsideDomainTotals[grid] = make(map[string]map[string]*SpecValUnits)
@@ -177,20 +180,35 @@ func (h *SpatialTotals) Add(pol, grid string, data *SpecValUnits, i int, p perio
 	}
 	if _, ok := t.InsideDomainTotals[grid][pol][p.String()]; !ok {
 		t.InsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
-		t.InsideDomainTotals[grid][pol][p.String()].Units = data.Units
+		t.InsideDomainTotals[grid][pol][p.String()].Units = units
 		t.OutsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
-		t.OutsideDomainTotals[grid][pol][p.String()].Units = data.Units
+		t.OutsideDomainTotals[grid][pol][p.String()].Units = units
 	} else {
-		if t.InsideDomainTotals[grid][pol][p.String()].Units != data.Units {
+		if t.InsideDomainTotals[grid][pol][p.String()].Units != units {
 			err := fmt.Errorf("Units problem: %v! = %v",
-				t.InsideDomainTotals[grid][pol][p.String()].Units, data.Units)
+				t.InsideDomainTotals[grid][pol][p.String()].Units, units)
 			panic(err)
 		}
 	}
-	gridTotal := data.Gridded[i].Sum()
+	gridTotal := gridEmis.Sum()
 	t.InsideDomainTotals[grid][pol][p.String()].Val += gridTotal
-	t.OutsideDomainTotals[grid][pol][p.String()].Val += data.Val - gridTotal
+	t.OutsideDomainTotals[grid][pol][p.String()].Val += emis - gridTotal
 	*h = t
+}
+
+// EmisToGrid returns gridded emissions for a given grid index and period.
+func (r *ParsedRecord) EmisToGrid(gi int, p period) (
+	emis map[string]*sparse.SparseArray, units map[string]string) {
+	emis = make(map[string]*sparse.SparseArray)
+	units = make(map[string]string)
+	if r.gridSrg[gi] == nil {
+		return
+	}
+	for pol, data := range r.ANN_EMIS[p] {
+		emis[pol] = r.gridSrg[gi].ScaleCopy(data.Val)
+		units[pol] = data.Units
+	}
+	return
 }
 
 func (c *Context) Spatialize(InputChan chan *ParsedRecord,
@@ -209,43 +227,26 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 		ct, err = projgeom.NewCoordinateTransform(c.inputSr, Grids[0].Sr)
 		for record := range InputChan {
 			emisInRecord := false
-			for p, periodData := range record.ANN_EMIS {
-				for pol, data := range periodData {
-					data.Gridded = make([]*sparse.SparseArray, len(Grids))
-					for i, grid := range Grids {
-						if _, ok := TotalGrid[grid]; !ok {
-							TotalGrid[grid] =
-								make(map[period]map[string]*sparse.SparseArray)
-						}
-						if _, ok := TotalGrid[grid][p]; !ok {
-							TotalGrid[grid][p] =
-								make(map[string]*sparse.SparseArray)
-						}
-						if _, ok := TotalGrid[grid][p][pol]; !ok {
-							TotalGrid[grid][p][pol] =
-								sparse.ZerosSparse(grid.Ny, grid.Nx)
-						}
-						data.Gridded[i] = sparse.ZerosSparse(grid.Ny,
-							grid.Nx)
-						var row, col int
-						var withinGrid bool
-						record.PointXcoord, record.PointYcoord, row, col,
-							withinGrid, err = grid.GetIndex(record.XLOC,
-							record.YLOC, &c.inputSr, ct)
-						if err != nil {
-							panic(err)
-						}
-						if withinGrid {
-							if data.Val != 0. {
-								emisInRecord = true
-							}
-							data.Gridded[i].Set(data.Val, row, col)
-							TotalGrid[grid][p][pol].AddVal(data.Val, row, col)
-						}
-						totals.Add(pol, grid.Name, data, i, p)
-					}
+
+			record.gridSrg = make([]*sparse.SparseArray, len(Grids))
+			for i, grid := range Grids {
+				record.gridSrg[i] = sparse.ZerosSparse(grid.Ny,
+					grid.Nx)
+				var row, col int
+				var withinGrid bool
+				record.PointXcoord, record.PointYcoord, row, col,
+					withinGrid, err = grid.GetIndex(record.XLOC,
+					record.YLOC, &c.inputSr, ct)
+				if err != nil {
+					panic(err)
+				}
+				if withinGrid {
+					emisInRecord = true
+					// For points, all emissions are in the same cell.
+					record.gridSrg[i].Set(1., row, col)
 				}
 			}
+			record.addEmisToReport(totals, TotalGrid)
 			if emisInRecord {
 				OutputChan <- record
 			}
@@ -267,36 +268,12 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 			}
 			srgNum := matchedVal.(string)
 
-			for p, periodData := range record.ANN_EMIS {
-				for pol, val := range periodData {
-					val.Gridded = make([]*sparse.SparseArray,
-						len(Grids))
-					for i, grid := range Grids {
-						if _, ok := TotalGrid[grid]; !ok {
-							TotalGrid[grid] =
-								make(map[period]map[string]*sparse.SparseArray)
-						}
-						if _, ok := TotalGrid[grid][p]; !ok {
-							TotalGrid[grid][p] =
-								make(map[string]*sparse.SparseArray)
-						}
-						if _, ok := TotalGrid[grid][p][pol]; !ok {
-							TotalGrid[grid][p][pol] = sparse.ZerosSparse(
-								grid.Ny, grid.Nx)
-						}
-
-						srg := c.getSurrogate(srgNum, record.FIPS, grid,
-							make([]string, 0))
-						val.Gridded[i] = sparse.ZerosSparse(grid.Ny,
-							grid.Nx)
-						if srg != nil {
-							val.Gridded[i] = srg.ScaleCopy(val.Val)
-							TotalGrid[grid][p][pol].AddSparse(val.Gridded[i])
-						}
-						totals.Add(pol, grid.Name, val, i, p)
-					}
-				}
+			record.gridSrg = make([]*sparse.SparseArray, len(Grids))
+			for i, grid := range Grids {
+				record.gridSrg[i] = c.getSurrogate(srgNum, record.FIPS, grid,
+					make([]string, 0))
 			}
+			record.addEmisToReport(totals, TotalGrid)
 			OutputChan <- record
 		}
 	default:
@@ -310,6 +287,33 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	c.ResultMaps(totals, TotalGrid)
 	c.msgchan <- "Finished spatializing " + c.Sector
 	return
+}
+
+func (r *ParsedRecord) addEmisToReport(totals *SpatialTotals,
+	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray) {
+	// Add emissions to reports
+	for p, periodEmis := range r.ANN_EMIS {
+		for i, grid := range Grids {
+			gridEmis, units := r.EmisToGrid(i, p)
+			if _, ok := TotalGrid[grid]; !ok {
+				TotalGrid[grid] =
+					make(map[period]map[string]*sparse.SparseArray)
+			}
+			if _, ok := TotalGrid[grid][p]; !ok {
+				TotalGrid[grid][p] =
+					make(map[string]*sparse.SparseArray)
+			}
+			for pol, polGridEmis := range gridEmis {
+				if _, ok := TotalGrid[grid][p][pol]; !ok {
+					TotalGrid[grid][p][pol] =
+						sparse.ZerosSparse(grid.Ny, grid.Nx)
+				}
+				TotalGrid[grid][p][pol].AddSparse(polGridEmis)
+				totals.Add(pol, grid.Name, periodEmis[pol].Val,
+					polGridEmis, units[pol], p)
+			}
+		}
+	}
 }
 
 func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
@@ -349,9 +353,12 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	cacheKey := grid.Name + srgNum + FIPS
 
 	// Check if surrogate is already in the cache.
+	srgCacheMx.Lock()
 	if srg, found := srgCache[cacheKey]; found {
+		srgCacheMx.Unlock()
 		return srg
 	}
+	srgCacheMx.Unlock()
 
 	var srg *sparse.SparseArray
 	secondarySrg := SrgSpec[srgNum].SECONDARYSURROGATE
@@ -406,7 +413,9 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	//	}
 	//}
 	// store surrogate in cache for faster access.
+	srgCacheMx.Lock()
 	srgCache[cacheKey] = srg
+	srgCacheMx.Unlock()
 	return srg
 }
 

@@ -26,7 +26,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +47,11 @@ type WRFOutputter struct {
 	filebase   string
 	dateFormat string
 	files      *wrfFiles
+	met        *MetData
+}
+
+func (w *WRFOutputter) Kemit() int {
+	return w.files.config.Kemit
 }
 
 // Create new output WRF files
@@ -65,49 +69,34 @@ func (c *Context) NewWRFOutputter(tp *TemporalProcessor) *WRFOutputter {
 	return w
 }
 
-func (w *WRFOutputter) getEmis(t time.Time) chan *TimeStepData {
-	c := make(chan *TimeStepData)
-	go func() {
-		c <- w.tp.EmisAtTime(t)
-	}()
-	return c
-}
-
 func (w *WRFOutputter) Output() {
-	emisChan := make(chan chan *TimeStepData, runtime.GOMAXPROCS(-1))
-	doneChan := make(chan int)
-	go func() {
-		firstStep := true
-		tstepsInFile := 0
-		for tsChan := range emisChan {
-			ts := <-tsChan
-			w.c.Log(fmt.Sprintf("Writing WRF output for %v...", ts.Time), 0)
-			if tstepsInFile == w.c.TstepsPerFile || firstStep {
-				// open new set of files
-				if !firstStep {
-					w.closeFiles()
-				}
-				w.newFiles(w.tp.Units, ts.Time)
-				tstepsInFile = 0
-				firstStep = false
-			}
-			w.files.writeTimestep(ts, tstepsInFile)
-			tstepsInFile++
-		}
-		w.closeFiles()
-		doneChan <- 0
-	}()
+	tstepsInFile := 0
+	w.newFiles(w.tp.Units, w.c.startDate)
+	if w.files.config.Kemit > 1 {
+		w.met = w.files.NewMetData(w.c.startDate, tstepsInFile)
+	}
 	for {
-		tsChan := w.getEmis(w.c.currentTime)
-		emisChan <- tsChan
+		ts := w.tp.EmisAtTime(w.c.currentTime, w)
+		w.c.Log(fmt.Sprintf("Writing WRF output for %v...", ts.Time), 0)
+		if tstepsInFile == w.c.TstepsPerFile {
+			// open new set of files
+			w.closeFiles()
+			w.newFiles(w.tp.Units, ts.Time)
+			tstepsInFile = 0
+		}
+		w.files.writeTimestep(ts, tstepsInFile)
+		if w.files.config.Kemit > 1 {
+			w.met.Close()
+			w.met = w.files.NewMetData(ts.Time, tstepsInFile)
+		}
 		// either advance to next date or end loop
 		keepGoing := w.c.NextTime()
 		if !keepGoing {
 			break
 		}
+		tstepsInFile++
 	}
-	close(emisChan)
-	<-doneChan
+	w.closeFiles()
 	w.c.Log(fmt.Sprintf("Finished writing WRF output."), 0)
 }
 
@@ -211,22 +200,29 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 			panic(err)
 		}
 	}
-	// get data
-	outData := w.timeStepOutput(ts, ihr)
+	for pol, _ := range ts.Emis {
+		if _, ok := w.polsAndUnits[pol]; !ok {
+			panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
+		}
+	}
 	for pol, units := range w.polsAndUnits {
+		if _, ok := ts.Emis[pol]; !ok {
+			continue
+		}
 		for i, f := range w.fids {
+			var outData *sparse.SparseArray
 			// convert units
 			switch units {
 			case "mol/hour":
 				// gas conversion mole/hr --> mole/km(2)/hr
 				gasconv := float64(1. / (1.e-3 * w.config.Dx[i] *
 					1.e-3 * w.config.Dy[i]))
-				outData[pol][i].Scale(gasconv)
+				outData = ts.Emis[pol][i].ScaleCopy(gasconv)
 			case "g/hour", "gram/hour":
 				// aerosol conversion g/hr --> microgram/m(2)/sec
 				partconv := float64(1.e6 / w.config.Dx[i] /
 					w.config.Dy[i] / 3600.)
-				outData[pol][i].Scale(partconv)
+				outData = ts.Emis[pol][i].ScaleCopy(partconv)
 			default:
 				panic(fmt.Errorf("Can't handle units `%v'.", units))
 			}
@@ -234,72 +230,11 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 			start := []int{ihr, 0, 0, 0}
 			end := []int{ihr + 1, 0, 0, 0}
 			r := f.Writer("E_"+pol, start, end)
-			if _, err = r.Write(outData[pol][i].ToDense32()); err != nil {
+			if _, err = r.Write(outData.ToDense32()); err != nil {
 				panic(err)
 			}
 		}
 	}
-}
-
-func (w *wrfFiles) timeStepOutput(ts *TimeStepData,
-	ihr int) map[string][]*sparse.SparseArray {
-	var met *MetData
-	// prepare plume rise calculator
-	if w.config.Kemit > 1 {
-		met = w.NewMetData(ts.Time, ihr)
-	}
-
-	// prepare output
-	outData := make(map[string][]*sparse.SparseArray) // map[pol][grid]array
-	for pol, _ := range w.polsAndUnits {
-		outData[pol] = make([]*sparse.SparseArray, len(w.fids))
-		for i, _ := range w.fids {
-			outData[pol][i] = sparse.ZerosSparse(w.config.Kemit, w.config.Ny[i],
-				w.config.Nx[i])
-		}
-	}
-
-	// add area data.
-	for pol, gridData := range ts.AreaData {
-		if _, ok := w.polsAndUnits[pol]; !ok {
-			panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
-		}
-		for i, g := range gridData {
-			o := outData[pol][i]
-			for ix, val := range g.Elements {
-				index := g.IndexNd(ix)
-				o.AddVal(val, 0, index[0], index[1])
-			}
-		}
-	}
-
-	// add point data
-	for _, record := range ts.PointData {
-		for pol, emis := range record.ANN_EMIS {
-			if _, ok := w.polsAndUnits[pol]; !ok {
-				panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
-			}
-			for i, g := range emis.Gridded {
-				k := 0
-				if w.config.Kemit > 1 {
-					k = met.PlumeRise(i, record)
-				}
-				o := outData[pol][i]
-				for ix, val := range g.Elements {
-					index := g.IndexNd(ix)
-					if k < w.config.Kemit {
-						o.AddVal(val, k, index[0], index[1])
-					} else {
-						o.AddVal(val, w.config.Kemit-1, index[0], index[1])
-					}
-				}
-			}
-		}
-	}
-	if w.config.Kemit > 1 {
-		met.Close()
-	}
-	return outData
 }
 
 type WRFconfigData struct {
@@ -666,27 +601,24 @@ func (m *MetData) Close() {
 // Plume rise calculation, ASME (1973), as described in Sienfeld and Pandis,
 // ``Atmospheric Chemistry and Physics - From Air Pollution to Climate Change
 // Uses meteorology from WRF output from a previous run.
-func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
-	gi := gridIndex
-	var i, j int
-	// Get the row and the column.
-	for _, emis := range point.ANN_EMIS {
-		if len(emis.Gridded[gi].Nonzero()) == 0 {
-			break
-		}
-		index := emis.Gridded[gi].IndexNd(emis.Gridded[gi].Nonzero()[0])
-		j, i = index[0], index[1]
+func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int) {
+	if w.files.config.Kemit == 1 {
+		return
 	}
+
+	gi := gridIndex
+	index := point.gridSrg[gi].IndexNd(point.gridSrg[gi].Nonzero()[0])
+	j, i := index[0], index[1]
 
 	// deal with points that are inside one grid but not inside the others
 	if j >= Grids[gi].Nx || i >= Grids[gi].Ny || j < 0 || i < 0 {
 		return
 	}
-	stackHeight := point.STKHGT * feetToMeters // m
+	stackHeight := math.Max(0, point.STKHGT*feetToMeters) // m
 	// Find K level of stack
 	kStak := 0
-	for m.LayerHeights[gi][j][i][kStak+1] < float32(stackHeight) {
-		if kStak > m.Kemit {
+	for w.met.LayerHeights[gi][j][i][kStak+1] < float32(stackHeight) {
+		if kStak > w.met.Kemit {
 			msg := "stack height > top of emissions file"
 			panic(msg)
 		}
@@ -694,11 +626,11 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	}
 
 	// Make sure all parameters are reasonable values
-	airTemp := float64(m.Temp[gi][j][i][kStak])                       // K
-	windSpd := math.Max(float64(m.Uspd[gi][j][i][kStak]), 1.)         // m/s, small numbers cause problems
-	stackVel := math.Min(point.STKVEL*feetToMeters, 40.)              // m/s
-	stackDiam := point.STKDIAM * feetToMeters                         // m
-	stackTemp := math.Max((point.STKTEMP-32)/1.8+273.15, airTemp+10.) // K
+	airTemp := float64(w.met.Temp[gi][j][i][kStak])                    // K
+	windSpd := math.Max(float64(w.met.Uspd[gi][j][i][kStak]), 1.)      // m/s, small numbers cause problems
+	stackVel := math.Max(0., math.Min(point.STKVEL*feetToMeters, 40.)) // m/s
+	stackDiam := math.Max(0, point.STKDIAM*feetToMeters)               // m
+	stackTemp := math.Max((point.STKTEMP-32)/1.8+273.15, airTemp+10.)  // K
 
 	////////////////////////////////////////////////////////////////////////////
 	// Plume rise calculation, ASME (1973), as described in Sienfeld and Pandis,
@@ -719,11 +651,11 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 		F := g * (stackTemp - airTemp) / stackTemp * stackVel *
 			math.Pow(stackDiam/2, 2)
 
-		if m.Sclass[gi][j][i][kStak] == "S" { // stable conditions
+		if w.met.Sclass[gi][j][i][kStak] == "S" { // stable conditions
 			calcType = "Stable"
 
 			deltaH = 29. * math.Pow(
-				F/float64(m.S1[gi][j][i][kStak]), 0.333333333) /
+				F/float64(w.met.S1[gi][j][i][kStak]), 0.333333333) /
 				math.Pow(windSpd, 0.333333333)
 
 		} else { // unstable conditions
@@ -749,8 +681,9 @@ func (m *MetData) PlumeRise(gridIndex int, point *PointRecord) (kPlume int) {
 	plumeHeight := stackHeight + deltaH
 
 	// Find K level of plume
-	for kPlume = 0; m.LayerHeights[gi][j][i][kPlume+1] < float32(plumeHeight); kPlume++ {
-		if kPlume > m.Kemit {
+	for kPlume = 0; w.met.LayerHeights[gi][j][i][kPlume+1] < float32(plumeHeight); kPlume++ {
+		if kPlume >= w.met.Kemit-1 {
+			kPlume = w.met.Kemit - 2
 			break
 		}
 	}
