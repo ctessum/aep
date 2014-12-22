@@ -370,13 +370,13 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 func (p *Context) setup(e *ErrCat) {
 	c := *p
 	var err error
-	c.startDate, err = time.Parse("2006/01/02", c.StartDate)
+	c.startDate, err = time.Parse("2006/01/02", os.ExpandEnv(c.StartDate))
 	if err != nil {
 		panic(err)
 	}
 	e.Add(err)
 	c.currentTime = c.startDate
-	c.endDate, err = time.Parse("2006/01/02", c.EndDate)
+	c.endDate, err = time.Parse("2006/01/02", os.ExpandEnv(c.EndDate))
 	e.Add(err)
 	c.tStep, err = time.ParseDuration(c.Tstep)
 	e.Add(err)
