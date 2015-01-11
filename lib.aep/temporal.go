@@ -70,8 +70,8 @@ type temporalSector struct {
 	PointData     map[[3]string][]*ParsedRecord
 	AreaData      map[[3]string]map[period]map[string][]*sparse.SparseArray
 	aggregate     func(*temporalSector, *ParsedRecord)
-	addEmisAtTime func(*temporalSector, time.Time,
-		Outputter) map[string][]*sparse.SparseArray
+	addEmisAtTime func(*temporalSector, time.Time, Outputter,
+		map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray
 }
 
 func (tp *TemporalProcessor) NewSector(c *Context,
@@ -507,9 +507,8 @@ var aggregatePoint = func(t *temporalSector, record *ParsedRecord) {
 	}
 }
 
-var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time,
-	o Outputter) map[string][]*sparse.SparseArray {
-	emis := make(map[string][]*sparse.SparseArray)
+var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time, o Outputter,
+	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	t.mu.RLock()
 	p := t.c.getPeriod(time)
 	// add area data.
@@ -538,9 +537,8 @@ var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time,
 	return emis
 }
 
-var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time,
-	o Outputter) map[string][]*sparse.SparseArray {
-	emis := make(map[string][]*sparse.SparseArray)
+var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter,
+	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	p := t.c.getPeriod(time)
 	t.mu.RLock()
 	// add point data
@@ -592,9 +590,8 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 // First, try to match the record ORIS ID and Boiler ID to the cem database
 // and use CEM temporalization.
 // If there is no match, use the normal TPRO temporalization.
-var addEmisAtTimeCEM = func(t *temporalSector, time time.Time,
-	o Outputter) map[string][]*sparse.SparseArray {
-	emis := make(map[string][]*sparse.SparseArray)
+var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
+	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	p := t.c.getPeriod(time)
 	t.mu.RLock()
 	cemTimes := griddedTimeNoDST(time)
@@ -802,21 +799,9 @@ func (tp *TemporalProcessor) EmisAtTime(time time.Time, o Outputter) *TimeStepDa
 	ts.Time = time
 	ts.Emis = make(map[string][]*sparse.SparseArray) // map[pol][grid]array
 	// get sector data
-	for _, sectorData := range tp.sectors {
-		emis := sectorData.addEmisAtTime(sectorData, time, o)
-		for pol, polData := range emis {
-			if _, ok := ts.Emis[pol]; !ok {
-				ts.Emis[pol] = make([]*sparse.SparseArray, len(polData))
-				for gi := 0; gi < len(polData); gi++ {
-					ts.Emis[pol][gi] = sparse.ZerosSparse(polData[gi].Shape...)
-				}
-			}
-			for gi, gridData := range polData {
-				for ix, val := range gridData.Elements {
-					ts.Emis[pol][gi].Elements[ix] += val
-				}
-			}
-		}
+	for name, sectorData := range tp.sectors {
+		fmt.Println(name)
+		ts.Emis = sectorData.addEmisAtTime(sectorData, time, o, ts.Emis)
 	}
 	tp.temporalReport.addTstep(ts)
 	return ts
