@@ -19,15 +19,17 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
-	"bitbucket.org/ctessum/aep/lib.aep"
 	"fmt"
-	"github.com/ctessum/shapefile"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"bitbucket.org/ctessum/aep/lib.aep"
+	"github.com/ctessum/shapefile"
+	"github.com/gonum/floats"
 )
 
 const (
@@ -43,7 +45,7 @@ func init() {
 func TestModelRun(t *testing.T) {
 	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep",
 		"scripts", "config2005nei.json")
-	os.Args = append(os.Args, "-config="+config, "-testmode=true") //, "-sectors=othon")
+	os.Args = append(os.Args, "-config="+config, "-testmode=true", "-seq") //, "-sectors=othon")
 	main()
 }
 
@@ -176,6 +178,39 @@ func TestSpatialization(t *testing.T) {
 						t.Fail()
 					}
 				}
+			}
+		}
+	}
+}
+
+// Check whether the total mass of each pollutant after temporalization matches
+// the mass of the same pollutant after gridding.
+func TestTemporalization(t *testing.T) {
+	// Calculate total spatialized emissions
+	spatialData := make(map[string]map[string]float64)
+	for _, grid := range aep.Grids {
+		spatialData[grid.Name] = make(map[string]float64)
+		for _, sectorDataPeriod := range aep.Report.SectorResults {
+			numPeriods := float64(len(sectorDataPeriod))
+			for _, sectorData := range sectorDataPeriod {
+				for pol, inData := range sectorData.SpatialResults.
+					InsideDomainTotals[grid.Name] {
+					// Total emissions inside the domain
+					spatialData[grid.Name][pol] += inData.Val / numPeriods
+				}
+			}
+		}
+	}
+	for _, grid := range aep.Grids {
+		for pol, d := range aep.Report.TemporalResults.Data {
+			tData := d[grid.Name]
+			tSum := floats.Sum(tData)
+			difference := diff(tSum, spatialData[grid.Name][pol])
+			t.Logf("%v, %v:\nspatial total=%.5e, "+
+				"temporal total=%.5e, fractional difference=%.1e\n",
+				pol, grid.Name, spatialData[grid.Name][pol], tSum, difference)
+			if difference > Tolerance || math.IsNaN(difference) {
+				t.Fail()
 			}
 		}
 	}

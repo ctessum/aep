@@ -39,6 +39,7 @@ import (
 
 	"bitbucket.org/ctessum/cdf"
 	"bitbucket.org/ctessum/sparse"
+	"github.com/gonum/floats"
 )
 
 // Write a message to standard error.
@@ -139,7 +140,7 @@ var (
 )
 
 func init() {
-	Report.SectorResults = make(map[string]*Results)
+	Report.SectorResults = make(map[string]map[string]*Results)
 	// track status of all of the running sectors
 	Status = NewStatus()
 	// Start server for html report (go to localhost:6060 in web browser to view report)
@@ -148,9 +149,9 @@ func init() {
 
 type ReportHolder struct {
 	Config          *Context
-	SectorResults   map[string]*Results // map[sector]Results
-	ReportOnly      bool                // whether main program is running at the same time
-	GridNames       []string            // names of the grids
+	SectorResults   map[string]map[string]*Results // map[sector][period]Results
+	ReportOnly      bool                           // whether main program is running at the same time
+	GridNames       []string                       // names of the grids
 	TemporalResults *TemporalReport
 }
 
@@ -206,7 +207,7 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
-func (c *Context) ResultMaps(totals *SpatialTotals,
+func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
 	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray,
 ) {
 
@@ -235,7 +236,7 @@ func (c *Context) ResultMaps(totals *SpatialTotals,
 				float64(grid.Nx)*grid.Dx})
 			h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
 			for pol, _ := range d1 {
-				if d, ok := totals.InsideDomainTotals[grid.Name][pol][p.String()]; ok {
+				if d, ok := totals[p.String()].InsideDomainTotals[grid.Name][pol]; ok {
 					h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
 					h.AddAttribute(pol, "units", d.Units)
 				}
@@ -399,6 +400,7 @@ type htmlData struct {
 	IsInv         bool
 	IsSpec        bool
 	IsSpatial     bool
+	IsTemporal    bool
 }
 
 func newHtmlData() *htmlData {
@@ -541,6 +543,36 @@ func spatialHandler(w http.ResponseWriter, r *http.Request) {
 	renderHeaderFooter(w, "footer", pageData)
 }
 
+func temporalHandler(w http.ResponseWriter, r *http.Request) {
+	pageData := newHtmlData()
+	pageData.PageName = "Temporal"
+	pageData.IsTemporal = true
+	renderHeaderFooter(w, "header", pageData)
+	renderHeaderFooter(w, "nav", pageData)
+	const body1 = `
+<div class="container">
+	<h4>Temporal</h4>
+	<p>(See file Report.json in the log directory for more detail)</p>`
+	fmt.Fprint(w, body1)
+	const body2 = `
+	<div class="row">
+		<div class="span12">`
+	const body3 = `
+		</div>
+	</div>`
+
+	for _, grid := range Report.GridNames {
+		fmt.Fprint(w, body2)
+		fmt.Fprintf(w, "<h5>Fraction of spatial emissions that have been "+
+			"temporalized %v</h5>\n", grid)
+		dr := Report.PrepDataReport("Temporalization", grid)
+		DrawTable("%.3g%%", false, dr, w)
+		fmt.Fprint(w, body3)
+	}
+	fmt.Fprint(w, "\n</div")
+	renderHeaderFooter(w, "footer", pageData)
+}
+
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if Report.ReportOnly {
 		http.Redirect(w, r, "/config", http.StatusFound)
@@ -649,81 +681,112 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 	dr.units = make(map[string]string, 0)
 	dr.data = make(map[string]map[string]float64)
 
-	for sector, sectorData := range r.SectorResults {
-		dr.data[sector] = make(map[string]float64)
-		dr.sectors = append(dr.sectors, sector)
-		numPeriods := float64(len(r.Config.runPeriods))
-		for _, p := range r.Config.runPeriods {
-			switch procType {
-			case "Inventory":
-				if sectorData.InventoryResults != nil {
-					for _, fileData := range sectorData.InventoryResults {
-						switch countType {
-						case "Totals":
-							for pol, val := range fileData.Totals {
-								if !IsStringInArray(dr.pols, pol) {
-									dr.pols = append(dr.pols, pol)
-									dr.units[pol] = fileData.Units
-								}
-								dr.data[sector][pol] += val / numPeriods
-							}
-						case "DroppedTotals":
-							for pol, val := range fileData.DroppedTotals {
-								if !IsStringInArray(dr.pols, pol) {
-									dr.pols = append(dr.pols, pol)
-									dr.units[pol] = fileData.Units
-								}
-								dr.data[sector][pol] += val / numPeriods
-							}
-						}
-					}
-				}
-			case "Speciation":
-				if sectorData.SpeciationResults != nil {
-					switch countType {
-					case "Kept":
-						for pol, poldata := range sectorData.
-							SpeciationResults.Kept {
-							if !IsStringInArray(dr.pols, pol) {
-								dr.pols = append(dr.pols, pol)
-								dr.units[pol] = poldata.Units
-							}
-							dr.data[sector][pol] += poldata.Val / numPeriods
-						}
-					case "DoubleCounted":
-						for pol, poldata := range sectorData.SpeciationResults.
-							DoubleCounted {
-							if !IsStringInArray(dr.pols, pol) {
-								dr.pols = append(dr.pols, pol)
-								dr.units[pol] = poldata.Units
-							}
-							dr.data[sector][pol] += poldata.Val / numPeriods
-						}
-					case "Ungrouped":
-						for pol, poldata := range sectorData.SpeciationResults.
-							Ungrouped {
-							if !IsStringInArray(dr.pols, pol) {
-								dr.pols = append(dr.pols, pol)
-								dr.units[pol] = poldata.Units
-							}
-							dr.data[sector][pol] += poldata.Val / numPeriods
-						}
-					}
-				}
-			case "Spatialization":
-				if sectorData.SpatialResults != nil {
+	switch procType {
+	case "Temporalization":
+		if r.TemporalResults != nil {
+			// Calculate total spatialized emissions
+			spatialData := make(map[string]float64)
+			for _, sectorDataPeriod := range r.SectorResults {
+				numPeriods := float64(len(sectorDataPeriod))
+				for _, sectorData := range sectorDataPeriod {
 					for pol, inData := range sectorData.SpatialResults.
 						InsideDomainTotals[countType] {
-						outData := sectorData.SpatialResults.
-							OutsideDomainTotals[countType][pol]
 						if !IsStringInArray(dr.pols, pol) {
 							dr.pols = append(dr.pols, pol)
-							dr.units[pol] = inData[p.String()].Units
+							dr.units[pol] = inData.Units
 						}
-						// Fraction inside the domain
-						dr.data[sector][pol] += inData[p.String()].Val /
-							(inData[p.String()].Val + outData[p.String()].Val) *
-							100. / numPeriods
+						// Total emissions inside the domain
+						spatialData[pol] += inData.Val / numPeriods
+					}
+				}
+			}
+			dr.sectors = append(dr.sectors, "total")
+			dr.data["total"] = make(map[string]float64)
+			r.TemporalResults.mu.Lock()
+			for pol, d := range r.TemporalResults.Data {
+				tData := d[countType]
+				// Percent of spatialized emissions that have been temporalized
+				dr.data["total"][pol] = floats.Sum(tData) / spatialData[pol] * 100.
+			}
+			r.TemporalResults.mu.Unlock()
+		}
+	default:
+		for sector, sectorDataPeriod := range r.SectorResults {
+			dr.data[sector] = make(map[string]float64)
+			dr.sectors = append(dr.sectors, sector)
+			numPeriods := float64(len(sectorDataPeriod))
+			for _, sectorData := range sectorDataPeriod {
+				switch procType {
+				case "Inventory":
+					if sectorData.InventoryResults != nil {
+						for _, fileData := range sectorData.InventoryResults {
+							switch countType {
+							case "Totals":
+								for pol, val := range fileData.Totals {
+									if !IsStringInArray(dr.pols, pol) {
+										dr.pols = append(dr.pols, pol)
+										dr.units[pol] = fileData.Units
+									}
+									dr.data[sector][pol] += val / numPeriods
+								}
+							case "DroppedTotals":
+								for pol, val := range fileData.DroppedTotals {
+									if !IsStringInArray(dr.pols, pol) {
+										dr.pols = append(dr.pols, pol)
+										dr.units[pol] = fileData.Units
+									}
+									dr.data[sector][pol] += val / numPeriods
+								}
+							}
+						}
+					}
+				case "Speciation":
+					if sectorData.SpeciationResults != nil {
+						switch countType {
+						case "Kept":
+							for pol, poldata := range sectorData.
+								SpeciationResults.Kept {
+								if !IsStringInArray(dr.pols, pol) {
+									dr.pols = append(dr.pols, pol)
+									dr.units[pol] = poldata.Units
+								}
+								dr.data[sector][pol] += poldata.Val / numPeriods
+							}
+						case "DoubleCounted":
+							for pol, poldata := range sectorData.SpeciationResults.
+								DoubleCounted {
+								if !IsStringInArray(dr.pols, pol) {
+									dr.pols = append(dr.pols, pol)
+									dr.units[pol] = poldata.Units
+								}
+								dr.data[sector][pol] += poldata.Val / numPeriods
+							}
+						case "Ungrouped":
+							for pol, poldata := range sectorData.SpeciationResults.
+								Ungrouped {
+								if !IsStringInArray(dr.pols, pol) {
+									dr.pols = append(dr.pols, pol)
+									dr.units[pol] = poldata.Units
+								}
+								dr.data[sector][pol] += poldata.Val / numPeriods
+							}
+						}
+					}
+				case "Spatialization":
+					if sectorData.SpatialResults != nil {
+						for pol, inData := range sectorData.SpatialResults.
+							InsideDomainTotals[countType] {
+							outData := sectorData.SpatialResults.
+								OutsideDomainTotals[countType][pol]
+							if !IsStringInArray(dr.pols, pol) {
+								dr.pols = append(dr.pols, pol)
+								dr.units[pol] = inData.Units
+							}
+							// Fraction inside the domain
+							dr.data[sector][pol] += inData.Val /
+								(inData.Val + outData.Val) *
+								100. / numPeriods
+						}
 					}
 				}
 			}
@@ -791,6 +854,7 @@ func (c *Context) ReportServer(reportOnly bool) {
 	http.HandleFunc("/inventory", inventoryHandler)
 	http.HandleFunc("/speciate", speciateHandler)
 	http.HandleFunc("/spatial", spatialHandler)
+	http.HandleFunc("/temporal", temporalHandler)
 	http.HandleFunc("/config", configHandler)
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/", rootHandler)

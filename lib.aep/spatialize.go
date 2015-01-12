@@ -156,43 +156,39 @@ func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 }
 
 type SpatialTotals struct {
-	InsideDomainTotals  map[string]map[string]map[string]*SpecValUnits
-	OutsideDomainTotals map[string]map[string]map[string]*SpecValUnits
+	InsideDomainTotals  map[string]map[string]*SpecValUnits
+	OutsideDomainTotals map[string]map[string]*SpecValUnits
 }
 
 func newSpatialTotalHolder() *SpatialTotals {
 	out := new(SpatialTotals)
-	out.InsideDomainTotals = make(map[string]map[string]map[string]*SpecValUnits)
-	out.OutsideDomainTotals = make(map[string]map[string]map[string]*SpecValUnits)
+	out.InsideDomainTotals = make(map[string]map[string]*SpecValUnits)
+	out.OutsideDomainTotals = make(map[string]map[string]*SpecValUnits)
 	return out
 }
 
 func (h *SpatialTotals) Add(pol, grid string, emis float64,
-	gridEmis *sparse.SparseArray, units string, p period) {
+	gridEmis *sparse.SparseArray, units string) {
 	t := *h
 	if _, ok := t.InsideDomainTotals[grid]; !ok {
-		t.InsideDomainTotals[grid] = make(map[string]map[string]*SpecValUnits)
-		t.OutsideDomainTotals[grid] = make(map[string]map[string]*SpecValUnits)
+		t.InsideDomainTotals[grid] = make(map[string]*SpecValUnits)
+		t.OutsideDomainTotals[grid] = make(map[string]*SpecValUnits)
 	}
 	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
-		t.InsideDomainTotals[grid][pol] = make(map[string]*SpecValUnits)
-		t.OutsideDomainTotals[grid][pol] = make(map[string]*SpecValUnits)
-	}
-	if _, ok := t.InsideDomainTotals[grid][pol][p.String()]; !ok {
-		t.InsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
-		t.InsideDomainTotals[grid][pol][p.String()].Units = units
-		t.OutsideDomainTotals[grid][pol][p.String()] = new(SpecValUnits)
-		t.OutsideDomainTotals[grid][pol][p.String()].Units = units
+		t.InsideDomainTotals[grid][pol] = new(SpecValUnits)
+		t.InsideDomainTotals[grid][pol].Units = units
+		t.OutsideDomainTotals[grid][pol] = new(SpecValUnits)
+		t.OutsideDomainTotals[grid][pol].Units = units
 	} else {
-		if t.InsideDomainTotals[grid][pol][p.String()].Units != units {
+		if t.InsideDomainTotals[grid][pol].Units != units {
 			err := fmt.Errorf("Units problem: %v! = %v",
-				t.InsideDomainTotals[grid][pol][p.String()].Units, units)
+				t.InsideDomainTotals[grid][pol].Units, units)
 			panic(err)
 		}
 	}
 	gridTotal := gridEmis.Sum()
-	t.InsideDomainTotals[grid][pol][p.String()].Val += gridTotal
-	t.OutsideDomainTotals[grid][pol][p.String()].Val += emis - gridTotal
+	t.InsideDomainTotals[grid][pol].Val += gridTotal
+	t.OutsideDomainTotals[grid][pol].Val += emis - gridTotal
 	*h = t
 }
 
@@ -218,7 +214,10 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 
 	c.Log("Spatializing "+c.Sector+"...", 1)
 
-	totals := newSpatialTotalHolder()
+	totals := make(map[string]*SpatialTotals)
+	for _, p := range c.runPeriods {
+		totals[p.String()] = newSpatialTotalHolder()
+	}
 	TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
 
 	switch c.SectorType {
@@ -282,14 +281,16 @@ func (c *Context) Spatialize(InputChan chan *ParsedRecord,
 	}
 	close(OutputChan)
 	reportMx.Lock()
-	Report.SectorResults[c.Sector].SpatialResults = totals
+	for p, t := range totals {
+		Report.SectorResults[c.Sector][p].SpatialResults = t
+	}
 	reportMx.Unlock()
 	c.ResultMaps(totals, TotalGrid)
 	c.msgchan <- "Finished spatializing " + c.Sector
 	return
 }
 
-func (r *ParsedRecord) addEmisToReport(totals *SpatialTotals,
+func (r *ParsedRecord) addEmisToReport(totals map[string]*SpatialTotals,
 	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray) {
 	// Add emissions to reports
 	for p, periodEmis := range r.ANN_EMIS {
@@ -309,8 +310,8 @@ func (r *ParsedRecord) addEmisToReport(totals *SpatialTotals,
 						sparse.ZerosSparse(grid.Ny, grid.Nx)
 				}
 				TotalGrid[grid][p][pol].AddSparse(polGridEmis)
-				totals.Add(pol, grid.Name, periodEmis[pol].Val,
-					polGridEmis, units[pol], p)
+				totals[p.String()].Add(pol, grid.Name, periodEmis[pol].Val,
+					polGridEmis, units[pol])
 			}
 		}
 	}
