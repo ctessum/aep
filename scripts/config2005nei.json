@@ -9,7 +9,7 @@
     },
     "DefaultSettings": {
 		"StartDate": "2005/01/01",
-		"EndDate": "2005/02/28",
+		"EndDate": "2005/12/31",
 		"Tstep":"1h",
 		"TstepsPerFile":24,
         "OutputType": "WRF",
@@ -26,7 +26,7 @@
 		"MechAssignmentFile":"[Ancilliary]/MechAsn.csv",
 		"MechanismMWFile":"[Ancilliary]/MechMW.csv",
 		"SpeciesInfoFile":"[Ancilliary]/SpeciesTable.csv",
-		"RegenerateSpatialData": true,
+		"RegenerateSpatialData": false,
 		"SimulationName":"2005nei",
         "DebugLevel": 0,
         "Ncpus": 8,

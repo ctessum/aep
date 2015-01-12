@@ -25,6 +25,9 @@
 					{{if .IsSpatial}}
 					<li class="active"><a href="#">Spatialization</a></li>{{else}}
 					<li><a href="/spatial">Spatialization</a></li>{{end}}
+					{{if .IsTemporal}}
+					<li class="active"><a href="#">Temporalization</a></li>{{else}}
+					<li><a href="/temporal">Temporalization</a></li>{{end}}
 					<li><a href="/debug/pprof">pprof</a></li>
             </ul>
           </div><!--/.nav-collapse -->

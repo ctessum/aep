@@ -434,9 +434,12 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 	for _, p := range config.runPeriods {
 		reportMx.Lock()
 		if _, ok := Report.SectorResults[config.Sector]; !ok {
-			Report.SectorResults[config.Sector] = new(Results)
+			Report.SectorResults[config.Sector] = make(map[string]*Results)
 		}
-		Report.SectorResults[config.Sector].
+		if _, ok := Report.SectorResults[config.Sector][p.String()]; !ok {
+			Report.SectorResults[config.Sector][p.String()]= new(Results)
+		}
+		Report.SectorResults[config.Sector][p.String()].
 			InventoryResults = make(map[string]*FileInfo)
 		reportMx.Unlock()
 		for _, file := range config.InvFileNames {
@@ -510,7 +513,7 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 			}
 			fInfo.fid.Close()
 			reportMx.Lock()
-			Report.SectorResults[config.Sector].
+			Report.SectorResults[config.Sector][p.String()].
 				InventoryResults[file] = fInfo
 			reportMx.Unlock()
 		}

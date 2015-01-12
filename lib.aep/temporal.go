@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -507,63 +508,114 @@ var aggregatePoint = func(t *temporalSector, record *ParsedRecord) {
 	}
 }
 
+// add area data.
 var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time, o Outputter,
 	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	t.mu.RLock()
 	p := t.c.getPeriod(time)
-	// add area data.
+	// Start workers for concurrent processing
+	type dataHolder struct {
+		temporalCodes [3]string
+		data          map[period]map[string][]*sparse.SparseArray
+	}
+	dataChan := make(chan dataHolder)
+	var addLock sync.Mutex
+	doneChan := make(chan int)
+	nprocs := runtime.GOMAXPROCS(-1)
+	for i := 0; i < nprocs; i++ {
+		go func() {
+			for d := range dataChan {
+				tFactors := t.griddedTemporalFactors(d.temporalCodes, time)
+				for pol, gridData := range d.data[p] {
+					addLock.Lock()
+					if _, ok := emis[pol]; !ok { // initialize array
+						emis[pol] = make([]*sparse.SparseArray, len(Grids))
+						for i, grid := range Grids {
+							emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
+								grid.Ny, grid.Nx)
+						}
+					}
+					addLock.Unlock()
+					for i, g := range gridData {
+						// multiply by temporal factor to get time step
+						for _, ix := range g.Nonzero() {
+							val := g.Get1d(ix)
+							tFactor := tFactors[i].Get1d(ix)
+							index := g.IndexNd(ix)
+							addLock.Lock()
+							emis[pol][i].
+								AddVal(val*tFactor, 0, index[0], index[1])
+							addLock.Unlock()
+						}
+					}
+				}
+			}
+			doneChan <- 0
+		}()
+	}
 	for temporalCodes, data := range t.AreaData {
-		tFactors := t.griddedTemporalFactors(temporalCodes, time)
-		for pol, gridData := range data[p] {
-			if _, ok := emis[pol]; !ok { // initialize array
-				emis[pol] = make([]*sparse.SparseArray, len(Grids))
-				for i, grid := range Grids {
-					emis[pol][i] = sparse.ZerosSparse(o.Kemit(), grid.Ny, grid.Nx)
-				}
-			}
-			for i, g := range gridData {
-				// multiply by temporal factor to get time step
-				for _, ix := range g.Nonzero() {
-					val := g.Get1d(ix)
-					tFactor := tFactors[i].Get1d(ix)
-					index := g.IndexNd(ix)
-					emis[pol][i].
-						AddVal(val*tFactor, 0, index[0], index[1])
-				}
-			}
-		}
+		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
+	}
+	close(dataChan)
+	for i := 0; i < nprocs; i++ {
+		<-doneChan
 	}
 	t.mu.RUnlock()
 	return emis
 }
 
+// add point data
 var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter,
 	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	p := t.c.getPeriod(time)
 	t.mu.RLock()
-	// add point data
-	for temporalCodes, data := range t.PointData {
-		tFactors := t.griddedTemporalFactors(temporalCodes, time)
-		for _, record := range data {
-			e, kPlume := emisAtTimeTproPoint(tFactors, record, p, o)
-			for pol, polEmis := range e {
-				if _, ok := emis[pol]; !ok { // initialize array
-					emis[pol] = make([]*sparse.SparseArray, len(Grids))
-					for i, grid := range Grids {
-						emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
-							grid.Ny, grid.Nx)
-					}
-				}
-				for gi, gridEmis := range polEmis {
-					for _, ix := range gridEmis.Nonzero() {
-						val := gridEmis.Get1d(ix)
-						index := gridEmis.IndexNd(ix)
-						emis[pol][gi].
-							AddVal(val, kPlume[gi], index[0], index[1])
+	// Start workers for concurrent processing
+	type dataHolder struct {
+		temporalCodes [3]string
+		data          []*ParsedRecord
+	}
+	dataChan := make(chan dataHolder)
+	var addLock sync.Mutex
+	doneChan := make(chan int)
+	nprocs := runtime.GOMAXPROCS(-1)
+	for i := 0; i < nprocs; i++ {
+		go func() {
+			for d := range dataChan {
+				tFactors := t.griddedTemporalFactors(d.temporalCodes, time)
+				for _, record := range d.data {
+					e, kPlume := emisAtTimeTproPoint(tFactors, record, p, o)
+					for pol, polEmis := range e {
+						addLock.Lock()
+						if _, ok := emis[pol]; !ok { // initialize array
+							emis[pol] = make([]*sparse.SparseArray, len(Grids))
+							for i, grid := range Grids {
+								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
+									grid.Ny, grid.Nx)
+							}
+						}
+						addLock.Unlock()
+						for gi, gridEmis := range polEmis {
+							for _, ix := range gridEmis.Nonzero() {
+								val := gridEmis.Get1d(ix)
+								index := gridEmis.IndexNd(ix)
+								addLock.Lock()
+								emis[pol][gi].
+									AddVal(val, kPlume[gi], index[0], index[1])
+								addLock.Unlock()
+							}
+						}
 					}
 				}
 			}
-		}
+			doneChan <- 0
+		}()
+	}
+	for temporalCodes, data := range t.PointData {
+		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
+	}
+	close(dataChan)
+	for i := 0; i < nprocs; i++ {
+		<-doneChan
 	}
 	t.mu.RUnlock()
 	return emis
@@ -595,51 +647,75 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 	p := t.c.getPeriod(time)
 	t.mu.RLock()
 	cemTimes := griddedTimeNoDST(time)
-	// add point data
-	for temporalCodes, data := range t.PointData {
-		tproTFactors := t.griddedTemporalFactors(temporalCodes, time)
-		for _, record := range data {
-			kPlume := make([]int, len(Grids))
-			e := make(map[string][]*sparse.SparseArray)
-			id := [2]string{record.ORIS_FACILITY_CODE, record.ORIS_BOILER_ID}
-			if cemsum, ok := t.cemSum[id]; ok {
-				for pol, _ := range record.ANN_EMIS[p] {
-					e[pol] = make([]*sparse.SparseArray, len(Grids))
-				}
-				for gi, srg := range record.gridSrg {
-					kPlume[gi] = o.PlumeRise(gi, record)
-					for pol, emisval := range record.ANN_EMIS[p] {
-						for _, ix := range srg.Nonzero() {
-							tFactor := getCEMtFactor(emisval.PolType, cemsum,
-								t.cemArray[id][cemTimes[gi][ix]])
-							e[pol][gi] = sparse.ZerosSparse(Grids[gi].Ny,
-								Grids[gi].Nx)
-							e[pol][gi].Elements[ix] = emisval.Val * tFactor *
-								srg.Elements[ix]
+	// Start workers for concurrent processing
+	type dataHolder struct {
+		temporalCodes [3]string
+		data          []*ParsedRecord
+	}
+	dataChan := make(chan dataHolder)
+	var addLock sync.Mutex
+	doneChan := make(chan int)
+	nprocs := runtime.GOMAXPROCS(-1)
+	for i := 0; i < nprocs; i++ {
+		go func() {
+			for d := range dataChan {
+				tproTFactors := t.griddedTemporalFactors(d.temporalCodes, time)
+				for _, record := range d.data {
+					kPlume := make([]int, len(Grids))
+					e := make(map[string][]*sparse.SparseArray)
+					id := [2]string{record.ORIS_FACILITY_CODE, record.ORIS_BOILER_ID}
+					if cemsum, ok := t.cemSum[id]; ok {
+						for pol, _ := range record.ANN_EMIS[p] {
+							e[pol] = make([]*sparse.SparseArray, len(Grids))
+						}
+						for gi, srg := range record.gridSrg {
+							kPlume[gi] = o.PlumeRise(gi, record)
+							for pol, emisval := range record.ANN_EMIS[p] {
+								for _, ix := range srg.Nonzero() {
+									tFactor := getCEMtFactor(emisval.PolType, cemsum,
+										t.cemArray[id][cemTimes[gi][ix]])
+									e[pol][gi] = sparse.ZerosSparse(Grids[gi].Ny,
+										Grids[gi].Nx)
+									e[pol][gi].Elements[ix] = emisval.Val * tFactor *
+										srg.Elements[ix]
+								}
+							}
+						}
+					} else {
+						e, kPlume = emisAtTimeTproPoint(tproTFactors, record, p, o)
+					}
+					for pol, polEmis := range e {
+						addLock.Lock()
+						if _, ok := emis[pol]; !ok { // initialize array
+							emis[pol] = make([]*sparse.SparseArray, len(Grids))
+							for i, grid := range Grids {
+								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
+									grid.Ny, grid.Nx)
+							}
+						}
+						addLock.Unlock()
+						for gi, gridEmis := range polEmis {
+							for _, ix := range gridEmis.Nonzero() {
+								val := gridEmis.Get1d(ix)
+								index := gridEmis.IndexNd(ix)
+								addLock.Lock()
+								emis[pol][gi].
+									AddVal(val, kPlume[gi], index[0], index[1])
+								addLock.Unlock()
+							}
 						}
 					}
 				}
-			} else {
-				e, kPlume = emisAtTimeTproPoint(tproTFactors, record, p, o)
 			}
-			for pol, polEmis := range e {
-				if _, ok := emis[pol]; !ok { // initialize array
-					emis[pol] = make([]*sparse.SparseArray, len(Grids))
-					for i, grid := range Grids {
-						emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
-							grid.Ny, grid.Nx)
-					}
-				}
-				for gi, gridEmis := range polEmis {
-					for _, ix := range gridEmis.Nonzero() {
-						val := gridEmis.Get1d(ix)
-						index := gridEmis.IndexNd(ix)
-						emis[pol][gi].
-							AddVal(val, kPlume[gi], index[0], index[1])
-					}
-				}
-			}
-		}
+			doneChan <- 0
+		}()
+	}
+	for temporalCodes, data := range t.PointData {
+		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
+	}
+	close(dataChan)
+	for i := 0; i < nprocs; i++ {
+		<-doneChan
 	}
 	t.mu.RUnlock()
 	return emis
@@ -799,8 +875,7 @@ func (tp *TemporalProcessor) EmisAtTime(time time.Time, o Outputter) *TimeStepDa
 	ts.Time = time
 	ts.Emis = make(map[string][]*sparse.SparseArray) // map[pol][grid]array
 	// get sector data
-	for name, sectorData := range tp.sectors {
-		fmt.Println(name)
+	for _, sectorData := range tp.sectors {
 		ts.Emis = sectorData.addEmisAtTime(sectorData, time, o, ts.Emis)
 	}
 	tp.temporalReport.addTstep(ts)
@@ -810,14 +885,14 @@ func (tp *TemporalProcessor) EmisAtTime(time time.Time, o Outputter) *TimeStepDa
 type TemporalReport struct {
 	mu        sync.RWMutex
 	Time      []time.Time
-	Data      map[string][][]float64 // map[pol][time][grids]emissions
+	Data      map[string]map[string][]float64 // map[pol][grid][time]emissions
 	numTsteps int
 	Units     map[string]string // map[pol]units
 }
 
 func newTemporalReport(c *Context, units map[string]string) *TemporalReport {
 	tr := new(TemporalReport)
-	tr.Data = make(map[string][][]float64)
+	tr.Data = make(map[string]map[string][]float64)
 	tr.numTsteps = int(c.endDate.Sub(c.startDate).Hours()/c.tStep.Hours() + 0.5)
 	tr.Time = make([]time.Time, 0, tr.numTsteps)
 	tr.Units = units
@@ -827,18 +902,23 @@ func newTemporalReport(c *Context, units map[string]string) *TemporalReport {
 func (tr *TemporalReport) addTstep(ts *TimeStepData) {
 	tr.mu.Lock()
 	tr.Time = append(tr.Time, ts.Time)
-	vals := make(map[string][]float64)
+	vals := make(map[string]map[string]float64)
 	for pol, data := range ts.Emis {
-		vals[pol] = make([]float64, len(data))
+		vals[pol] = make(map[string]float64)
 		for i, gridData := range data {
-			vals[pol][i] += gridData.Sum()
+			vals[pol][Grids[i].Name] += gridData.Sum()
 		}
 	}
-	for pol, data := range vals {
-		if _, ok := tr.Data[pol]; !ok {
-			tr.Data[pol] = make([][]float64, 0, tr.numTsteps)
+	for pol, d := range vals {
+		for g, data := range d {
+			if _, ok := tr.Data[pol]; !ok {
+				for _, gg := range Grids {
+					tr.Data[pol] = make(map[string][]float64)
+					tr.Data[pol][gg.Name] = make([]float64, 0, tr.numTsteps)
+				}
+			}
+			tr.Data[pol][g] = append(tr.Data[pol][g], data)
 		}
-		tr.Data[pol] = append(tr.Data[pol], data)
 	}
 	tr.mu.Unlock()
 }

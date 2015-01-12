@@ -1006,7 +1006,10 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 		panic(err)
 	}
 
-	totals := newSpeciationTotalHolder()
+	totals := make(map[string]*SpecTotals)
+	for _, p := range c.runPeriods {
+		totals[p.String()] = newSpeciationTotalHolder()
+	}
 	polFracs := make(map[string]*SpecHolder)
 	doubleCountPolFracs := make(map[string]*SpecHolder)
 	ungroupedPolFracs := make(map[string]*SpecHolder)
@@ -1028,7 +1031,7 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 							panic(fmt.Sprintf("Units don't match: %v != %v",
 								s.Units, u))
 						}
-						totals.AddKept(newpol, s)
+						totals[p.String()].AddKept(newpol, s)
 					} else {
 						// There is not already a value for this pol
 						s := new(SpecValUnits)
@@ -1037,17 +1040,17 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 						s.Units = strings.Replace(
 							factor.Units, "/gram", "/year", -1)
 						s.PolType = c.PolsToKeep[pol]
-						totals.AddKept(newpol, s)
+						totals[p.String()].AddKept(newpol, s)
 						newAnnEmis[newpol] = s
 					}
 				}
 				for droppedpol, factor := range doubleCountPolFracs {
-					totals.AddDoubleCounted(droppedpol, AnnEmis.Val*
+					totals[p.String()].AddDoubleCounted(droppedpol, AnnEmis.Val*
 						c.InputConv*factor.Factor, strings.Replace(
 						factor.Units, "/gram", "/year", -1))
 				}
 				for droppedpol, factor := range ungroupedPolFracs {
-					totals.AddUngrouped(droppedpol, AnnEmis.Val*
+					totals[p.String()].AddUngrouped(droppedpol, AnnEmis.Val*
 						c.InputConv*factor.Factor, strings.Replace(
 						factor.Units, "/gram", "/year", -1))
 				}
@@ -1057,7 +1060,9 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 		OutputChan <- record
 	}
 	reportMx.Lock()
-	Report.SectorResults[c.Sector].SpeciationResults = totals
+	for p, t := range totals {
+		Report.SectorResults[c.Sector][p].SpeciationResults = t
+	}
 	reportMx.Unlock()
 
 	c.msgchan <- "Finished speciating " + c.Sector
