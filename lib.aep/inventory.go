@@ -201,8 +201,12 @@ func (r *ParsedRecord) parsePointLocHelperIDA(xloc, yloc string, c *Context) err
 	return nil
 }
 
+// Get rid of extra quotation marks, replace spaces with
+// zeros and copy the string so the
+// whole line from the input file isn't held in memory
 func parseFipsIDA(s string) string {
-	return strings.Replace(strings.Trim(s, "\""), " ", "0", -1)
+	return string([]byte(
+		strings.Replace(strings.Trim(s, "\""), " ", "0", -1)))
 }
 
 func stringToFloat(s string) float64 {
@@ -230,8 +234,10 @@ func stringToFloatDefault100(s string) float64 {
 	}
 }
 
+// Get rid of extra quotation marks and copy the string so the
+// whole line from the input file isn't held in memory
 func trimString(s string) string {
-	return strings.Trim(s, "\" ")
+	return string([]byte(strings.Trim(s, "\" ")))
 }
 
 // clean up NAICS code so it either has 0 or 6 characters
@@ -267,14 +273,14 @@ func (c *Context) parseRecordPointORL(record string,
 	fields.SEGMENT = trimString(splitString[4])
 	fields.PLANT = trimString(splitString[5])
 	fields.SCC = trimString(splitString[6])
-	fields.SRCTYPE = splitString[8]
+	fields.SRCTYPE = trimString(splitString[8])
 	fields.STKHGT = stringToFloat(splitString[9])
 	fields.STKDIAM = stringToFloat(splitString[10])
 	fields.STKTEMP = stringToFloat(splitString[11])
 	fields.STKFLOW = stringToFloat(splitString[12])
 	fields.STKVEL = stringToFloat(splitString[13])
 	fields.SIC = parseSIC(splitString[14])
-	fields.MACT = splitString[15]
+	fields.MACT = trimString(splitString[15])
 	fields.NAICS = parseNAICS(splitString[16])
 	err = fields.parsePointLocHelperORL(splitString[17], splitString[18],
 		splitString[19], splitString[20], c)
@@ -299,8 +305,8 @@ func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo,
 	fields.FIPS = trimString(splitString[0])
 	fields.SCC = trimString(splitString[1])
 	fields.SIC = parseSIC(splitString[2])
-	fields.MACT = splitString[3]
-	fields.SRCTYPE = splitString[4]
+	fields.MACT = trimString(splitString[3])
+	fields.SRCTYPE = trimString(splitString[4])
 	fields.NAICS = parseNAICS(splitString[5])
 	pol := fields.parseEmisHelper(p, splitString[6], splitString[7], splitString[8])
 	fields.CEFF[pol] = stringToFloat(splitString[9])
@@ -320,7 +326,7 @@ func (c *Context) parseRecordNonroadORL(record string,
 	fields.CEFF[pol] = stringToFloat(splitString[5])
 	fields.REFF[pol] = stringToFloatDefault100(splitString[6])
 	fields.RPEN[pol] = stringToFloatDefault100(splitString[7])
-	fields.SRCTYPE = splitString[8]
+	fields.SRCTYPE = trimString(splitString[8])
 	return fields
 }
 
@@ -332,7 +338,7 @@ func (c *Context) parseRecordMobileORL(record string,
 	fields.FIPS = trimString(splitString[0])
 	fields.SCC = trimString(splitString[1])
 	fields.parseEmisHelper(p, splitString[2], splitString[3], splitString[4])
-	fields.SRCTYPE = splitString[5]
+	fields.SRCTYPE = trimString(splitString[5])
 	return fields
 }
 
@@ -437,7 +443,7 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 			Report.SectorResults[config.Sector] = make(map[string]*Results)
 		}
 		if _, ok := Report.SectorResults[config.Sector][p.String()]; !ok {
-			Report.SectorResults[config.Sector][p.String()]= new(Results)
+			Report.SectorResults[config.Sector][p.String()] = new(Results)
 		}
 		Report.SectorResults[config.Sector][p.String()].
 			InventoryResults = make(map[string]*FileInfo)
