@@ -292,35 +292,39 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 	return
 }
 
-// SpawnProcessor spawns an ansychronous processor for spatializing records.
-func (sp *SpatialProcessor) SpawnSpatializer(InputChan chan *ParsedRecord,
+// SpawnSpatializer spawns an ansychronous processor for spatializing records.
+func (sp *SpatialProcessor) SpawnSpatializer(InputChan chan *ParsedRecord) (
 	OutputChan chan *ParsedRecord) {
-	defer sp.c.ErrorRecoverCloseChan(InputChan)
+	OutputChan = make(chan *ParsedRecord)
+	go func() {
+		defer sp.c.ErrorRecoverCloseChan(InputChan)
 
-	sp.c.Log("Spatializing "+sp.c.Sector+"...", 1)
+		sp.c.Log("Spatializing "+sp.c.Sector+"...", 1)
 
-	totals := make(map[string]*SpatialTotals)
-	for _, p := range sp.c.runPeriods {
-		totals[p.String()] = newSpatialTotalHolder()
-	}
-	TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
-
-	for record := range InputChan {
-		emisInRecord := sp.Spatialize(record)
-		sp.addEmisToReport(record, totals, TotalGrid)
-		if emisInRecord {
-			OutputChan <- record
+		totals := make(map[string]*SpatialTotals)
+		for _, p := range sp.c.runPeriods {
+			totals[p.String()] = newSpatialTotalHolder()
 		}
+		TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
 
-	}
-	close(OutputChan)
-	reportMx.Lock()
-	for p, t := range totals {
-		Report.SectorResults[sp.c.Sector][p].SpatialResults = t
-	}
-	reportMx.Unlock()
-	sp.c.ResultMaps(totals, TotalGrid)
-	sp.c.msgchan <- "Finished spatializing " + sp.c.Sector
+		for record := range InputChan {
+			emisInRecord := sp.Spatialize(record)
+			sp.addEmisToReport(record, totals, TotalGrid)
+			if emisInRecord {
+				OutputChan <- record
+			}
+
+		}
+		close(OutputChan)
+		reportMx.Lock()
+		for p, t := range totals {
+			Report.SectorResults[sp.c.Sector][p].SpatialResults = t
+		}
+		reportMx.Unlock()
+		sp.c.ResultMaps(totals, TotalGrid)
+		sp.c.msgchan <- "Finished spatializing " + sp.c.Sector
+		return
+	}()
 	return
 }
 
