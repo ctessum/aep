@@ -95,16 +95,16 @@ type DirInfo struct {
 	Home        string // Home directory
 	Input       string // Directory of input files
 	Ancilliary  string // Directory for ancilliary information
-	Shapefiles  string // Directory where input ShapefileDir are stored
-	GriddedSrgs string // Directory where gridded spatial surrogate ShapefileDir are to be created. Don't put anything important in here because it may get automatically deleted.
+	Shapefiles  string // Directory where input shapefiles are stored
+	GriddedSrgs string // Directory where gridded spatial surrogate shapefiles are to be created. Don't put anything important in here because it may get automatically deleted.
 	Output      string // Directory for output data and reports
 }
 
 // type Context is a container for the configuration and report info
 type Context struct {
 	outputDir              string // Output directory
-	ShapefileDir             string // Directory where input ShapefileDir are stored
-	griddedSrgs            string // Directory where gridded spatial surrogate ShapefileDir are to be created
+	ShapefileDir           string // Directory where input shapefiles are stored
+	GriddedSrgs            string // Directory where gridded spatial surrogate shapefiles are to be created
 	Sector                 string // Name of the sector
 	SectorType             string // Type of sector (point, area)
 	RunSpeciate            bool   // Whether to speciate data
@@ -445,7 +445,7 @@ func (p *Context) catPaths(d *DirInfo, e *ErrCat) {
 		e.Add(fmt.Errorf("Unable to make gridded surrogates directory `%v'.",
 			d.GriddedSrgs))
 	}
-	c.griddedSrgs = d.GriddedSrgs
+	c.GriddedSrgs = d.GriddedSrgs
 
 	paths := []*string{&d.Home, &d.Input, &d.Ancilliary, &d.Shapefiles,
 		&c.SpecRefFile, &c.SpecRefComboFile, &c.SpecProFile,

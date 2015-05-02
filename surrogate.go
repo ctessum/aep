@@ -160,7 +160,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	}
 
 	srgsFinished := 0
-	griddedSrgs := make([]*GriddedSrgData, len(inputData))
+	GriddedSrgs := make([]*GriddedSrgData, len(inputData))
 	for inputID, geom := range inputData {
 		singleShapeData := &GriddedSrgData{InputID: inputID, InputGeom: geom}
 		select {
@@ -172,7 +172,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 			singleShapeChan <- singleShapeData
 		default:
 			select {
-			case griddedSrgs[srgsFinished] = <-griddedSrgChan:
+			case GriddedSrgs[srgsFinished] = <-griddedSrgChan:
 				SrgProgress += 100. / float64(len(inputData))
 				srgsFinished++
 				singleShapeChan <- singleShapeData
@@ -184,7 +184,7 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	close(singleShapeChan)
 	// wait for remaining results
 	for i := srgsFinished; i < len(inputData); i++ {
-		griddedSrgs[i] = <-griddedSrgChan
+		GriddedSrgs[i] = <-griddedSrgChan
 		SrgProgress += 100. / float64(len(inputData))
 		srgsFinished++
 	}
@@ -216,14 +216,14 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 		gridData.srgMapCache.mutex.Unlock()
 		return
 	}
-	for fid := 0; fid < len(griddedSrgs); fid++ {
-		err = griddedSrgs[fid].WriteToShp(outShp, fid)
+	for fid := 0; fid < len(GriddedSrgs); fid++ {
+		err = GriddedSrgs[fid].WriteToShp(outShp, fid)
 		if err != nil {
 			gridData.srgMapCache.mutex.Unlock()
 			return
 		}
 		// store surrogate map in sqlite cache for faster access.
-		srg := griddedSrgs[fid]
+		srg := GriddedSrgs[fid]
 		srgOut := sparse.ZerosSparse(gridData.Ny, gridData.Nx)
 		for _, cell := range srg.Cells {
 			srgOut.Set(cell.Weight, cell.Row, cell.Col)

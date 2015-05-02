@@ -117,7 +117,7 @@ func (sp *SpatialProcessor) setupSrgs(e *ErrCat) {
 	sp.c.Log("Setting up surrogate generation...", 1)
 	if sp.c.RegenerateSpatialData {
 		// delete spatial surrogates
-		e.Add(filepath.Walk(sp.c.griddedSrgs,
+		e.Add(filepath.Walk(sp.c.GriddedSrgs,
 			func(path string, info os.FileInfo, err error) error {
 				if strings.HasSuffix(path, ".shp") ||
 					strings.HasSuffix(path, ".shx") ||
@@ -130,7 +130,7 @@ func (sp *SpatialProcessor) setupSrgs(e *ErrCat) {
 			}))
 		//} else {
 		//	// Add spatial surrogates to the cache.
-		//	e.Add(filepath.Walk(c.griddedSrgs,
+		//	e.Add(filepath.Walk(c.GriddedSrgs,
 		//		func(path string, info os.FileInfo, err error) error {
 		//			if strings.HasSuffix(path, ".dbf") &&
 		//				strings.Contains(info.Name(), "_") {
@@ -142,7 +142,7 @@ func (sp *SpatialProcessor) setupSrgs(e *ErrCat) {
 		//		}))
 	}
 	for _, grid := range sp.Grids {
-		e.Add(grid.SetupSrgMapCache(sp.c.griddedSrgs))
+		e.Add(grid.SetupSrgMapCache(sp.c.GriddedSrgs))
 	}
 	go sp.SurrogateGenerator()
 	return
@@ -160,7 +160,7 @@ func SpatialSetupRegularGrid(c *Context, e *ErrCat) *SpatialProcessor {
 			e.Add(grid.GetTimeZones(
 				filepath.Join(c.ShapefileDir, "world_timezones.shp"), "TZID"))
 		}
-		e.Add(grid.WriteToShp(c.griddedSrgs))
+		e.Add(grid.WriteToShp(c.GriddedSrgs))
 		sp.Grids = append(sp.Grids, grid)
 	}
 	sp.setupSrgs(e)
@@ -360,7 +360,7 @@ func (sp *SpatialProcessor) getSurrogate(srgNum, FIPS string, grid *GridDef,
 
 	tableName := grid.Name + "___" + srgNum
 	status := Status.GetSrgStatus(tableName,
-		filepath.Join(sp.c.griddedSrgs, tableName+".shp"))
+		filepath.Join(sp.c.GriddedSrgs, tableName+".shp"))
 	switch {
 	case status == "Generating" || status == "Waiting to generate" ||
 		status == "Empty":
@@ -514,7 +514,7 @@ func (sp *SpatialProcessor) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	surrogateFilePath := filepath.Join(sp.c.ShapefileDir, surrogateMap+".shp")
 	err = CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
-		grid, sp.c.griddedSrgs, sp.c.slaves)
+		grid, sp.c.GriddedSrgs, sp.c.slaves)
 	if err == nil {
 		//Status.Lock.Lock()
 		Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
@@ -548,7 +548,7 @@ func (sp *SpatialProcessor) genSrgMerge(srgData *SrgGenData) (err error) {
 			return
 		}
 		tableName := grid.Name + "___" + newSrgNum
-		filename := filepath.Join(sp.c.griddedSrgs, tableName+".shp")
+		filename := filepath.Join(sp.c.GriddedSrgs, tableName+".shp")
 		status := Status.GetSrgStatus(tableName, filename)
 		switch {
 		case status == "Generating" || status == "Waiting to generate" ||
