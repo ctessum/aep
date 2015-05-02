@@ -58,18 +58,18 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	sp.srgCache = make(map[string]*sparse.SparseArray)
 	sp.c = c
 
-	// Check the surrogate shapefiles to make sure they're preseht and
+	// Check the surrogate ShapefileDir to make sure they're preseht and
 	// can be opened.
 	e.Add(sp.SurrogateSpecification())
 	for _, srg := range sp.SrgSpec {
 		file := filepath.Join(
-			sp.c.shapefiles, srg.DATASHAPEFILE+".shp")
+			sp.c.ShapefileDir, srg.DATASHAPEFILE+".shp")
 		shp, err := gis.OpenShapefile(file, true)
 		e.Add(err)
 		e.Add(shp.Close())
 		if srg.WEIGHTSHAPEFILE != "" {
 			file := filepath.Join(
-				sp.c.shapefiles, srg.WEIGHTSHAPEFILE+".shp")
+				sp.c.ShapefileDir, srg.WEIGHTSHAPEFILE+".shp")
 			shp, err := gis.OpenShapefile(file, true)
 			e.Add(err)
 			e.Add(shp.Close())
@@ -158,7 +158,7 @@ func SpatialSetupRegularGrid(c *Context, e *ErrCat) *SpatialProcessor {
 			x.Nx[i], x.Ny[i], x.Dx[i], x.Dy[i], x.W[i], x.S[i], sr)
 		if c.RunTemporal {
 			e.Add(grid.GetTimeZones(
-				filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
+				filepath.Join(c.ShapefileDir, "world_timezones.shp"), "TZID"))
 		}
 		e.Add(grid.WriteToShp(c.griddedSrgs))
 		sp.Grids = append(sp.Grids, grid)
@@ -177,7 +177,7 @@ func SpatialSetupIrregularGrid(c *Context, name, shapeFilePath string,
 	grid.IrregularGrid = true
 	if c.RunTemporal {
 		e.Add(grid.GetTimeZones(
-			filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
+			filepath.Join(c.ShapefileDir, "world_timezones.shp"), "TZID"))
 	}
 	sp.Grids = append(sp.Grids, grid)
 	sp.setupSrgs(e)
@@ -510,8 +510,8 @@ func (sp *SpatialProcessor) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	//Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	//Status.Lock.Unlock()
-	inputFilePath := filepath.Join(sp.c.shapefiles, inputMap+".shp")
-	surrogateFilePath := filepath.Join(sp.c.shapefiles, surrogateMap+".shp")
+	inputFilePath := filepath.Join(sp.c.ShapefileDir, inputMap+".shp")
+	surrogateFilePath := filepath.Join(sp.c.ShapefileDir, surrogateMap+".shp")
 	err = CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
 		grid, sp.c.griddedSrgs, sp.c.slaves)

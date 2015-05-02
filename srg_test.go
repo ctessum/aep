@@ -14,7 +14,7 @@ import (
 
 const (
 	Tolerance = 1.e-5
-	shpDir    = "/media/chris/data1/2005_nei_data/shapefiles"
+	shpDir    = "/media/chris/data1/2005_nei_data/ShapefileDir"
 )
 
 var (
