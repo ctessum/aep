@@ -145,13 +145,13 @@ type Context struct {
 	Ncpus                  int      // Number of processors available for use
 	InputUnits             string   // Units of emissions in input file
 	InputConv              float64
-	ForceWesternHemisphere bool          // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
-	InvFileNames           []string      // List of input files. "[month]" can be used as a wildcard for the month name.
-	CEMFileNames           []string      // List of input files with CEM data (needs to be a whole year's worth of data
-	EarthRadius            float64       // in meters
-	WPSnamelist            string        // Path to WPS namelist file
-	WRFnamelist            string        // Path to WPS namelist file
-	OldWRFout              string        // Path to old WRF output files for plume rise calculations.
+	ForceWesternHemisphere bool     // If all data is in the western hemisphere, fix any errors where the minus sign was left out of the longitude.
+	InvFileNames           []string // List of input files. "[month]" can be used as a wildcard for the month name.
+	CEMFileNames           []string // List of input files with CEM data (needs to be a whole year's worth of data
+	EarthRadius            float64  // in meters
+	WPSnamelist            string   // Path to WPS namelist file
+	WRFnamelist            string   // Path to WPS namelist file
+	OldWRFout              string   // Path to old WRF output files for plume rise calculations.
 	//[DOMAIN] and [DATE] can be used as wildcards. If kemit > 1 in the WRF namelist.input file, these files
 	// will be needed to calculate plume rise for point sources. Otherwise, these files will not be necessary.
 	wrfData               *WRFconfigData
@@ -264,23 +264,6 @@ func (p *ConfigData) setup(e *ErrCat) {
 		c.Sectors[sector].FillWithDefaults(c.DefaultSettings, e)
 		c.Sectors[sector].setup(e)
 		c.Sectors[sector].catPaths(c.Dirs, e)
-	}
-	// Check the surrogate shapefiles to make sure they're preseht and
-	// can be opened.
-	e.Add(c.DefaultSettings.SurrogateSpecification())
-	for _, srg := range SrgSpec {
-		file := filepath.Join(
-			c.DefaultSettings.shapefiles, srg.DATASHAPEFILE+".shp")
-		shp, err := gis.OpenShapefile(file, true)
-		e.Add(err)
-		e.Add(shp.Close())
-		if srg.WEIGHTSHAPEFILE != "" {
-			file := filepath.Join(
-				c.DefaultSettings.shapefiles, srg.WEIGHTSHAPEFILE+".shp")
-			shp, err := gis.OpenShapefile(file, true)
-			e.Add(err)
-			e.Add(shp.Close())
-		}
 	}
 	*p = c
 }

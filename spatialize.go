@@ -35,19 +35,47 @@ import (
 	"github.com/lukeroth/gdal"
 )
 
-var (
-	SrgSpec                = make(map[string]*SrgSpecHolder)
-	srgCodes               = make(map[string]string)
-	Grids                  = make([]*GridDef, 0)
-	gridRef                = make(map[string]map[string]map[string]interface{})
-	SurrogateGeneratorChan = make(chan *SrgGenData)
-	srgCache               = make(map[string]*sparse.SparseArray)
+type SpatialProcessor struct {
+	SrgSpec                map[string]*SrgSpecHolder
+	srgCodes               map[string]string
+	Grids                  []*GridDef
+	gridRef                map[string]map[string]map[string]interface{}
+	SurrogateGeneratorChan chan *SrgGenData
+	srgCache               map[string]*sparse.SparseArray
 	srgCacheMx             sync.Mutex
-)
+	c                      *Context
+}
 
-func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
+func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialReference) {
 	c.Log("Setting up spatial environment...", 1)
-	DebugLevel = c.DebugLevel
+
+	sp = new(SpatialProcessor)
+	sp.SrgSpec = make(map[string]*SrgSpecHolder)
+	sp.srgCodes = make(map[string]string)
+	sp.Grids = make([]*GridDef, 0)
+	sp.gridRef = make(map[string]map[string]map[string]interface{})
+	sp.SurrogateGeneratorChan = make(chan *SrgGenData)
+	sp.srgCache = make(map[string]*sparse.SparseArray)
+	sp.c = c
+
+	// Check the surrogate shapefiles to make sure they're preseht and
+	// can be opened.
+	e.Add(sp.SurrogateSpecification())
+	for _, srg := range sp.SrgSpec {
+		file := filepath.Join(
+			sp.c.shapefiles, srg.DATASHAPEFILE+".shp")
+		shp, err := gis.OpenShapefile(file, true)
+		e.Add(err)
+		e.Add(shp.Close())
+		if srg.WEIGHTSHAPEFILE != "" {
+			file := filepath.Join(
+				sp.c.shapefiles, srg.WEIGHTSHAPEFILE+".shp")
+			shp, err := gis.OpenShapefile(file, true)
+			e.Add(err)
+			e.Add(shp.Close())
+		}
+	}
+
 	var err error
 	x := c.wrfData
 	reportMx.Lock()
@@ -81,15 +109,15 @@ func (c *Context) setupCommon(e *ErrCat) (sr gdal.SpatialReference) {
 	c.Log(msg, 0)
 	sr, err = gis.CreateSpatialReference(projInfo.ToString())
 	e.Add(err)
-	e.Add(c.GridRef())
+	e.Add(sp.GridRef())
 	return
 }
 
-func (c *Context) setupSrgs(e *ErrCat) {
-	c.Log("Setting up surrogate generation...", 1)
-	if c.RegenerateSpatialData {
+func (sp *SpatialProcessor) setupSrgs(e *ErrCat) {
+	sp.c.Log("Setting up surrogate generation...", 1)
+	if sp.c.RegenerateSpatialData {
 		// delete spatial surrogates
-		e.Add(filepath.Walk(c.griddedSrgs,
+		e.Add(filepath.Walk(sp.c.griddedSrgs,
 			func(path string, info os.FileInfo, err error) error {
 				if strings.HasSuffix(path, ".shp") ||
 					strings.HasSuffix(path, ".shx") ||
@@ -113,16 +141,16 @@ func (c *Context) setupSrgs(e *ErrCat) {
 		//			return err
 		//		}))
 	}
-	for _, grid := range Grids {
-		e.Add(grid.SetupSrgMapCache(c.griddedSrgs))
+	for _, grid := range sp.Grids {
+		e.Add(grid.SetupSrgMapCache(sp.c.griddedSrgs))
 	}
-	go c.SurrogateGenerator()
+	go sp.SurrogateGenerator()
 	return
 }
 
-func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
+func SpatialSetupRegularGrid(c *Context, e *ErrCat) *SpatialProcessor {
 	c.Log("Setting up spatial projection and database connection...", 5)
-	sr := c.setupCommon(e)
+	sp, sr := setupCommon(c, e)
 	x := c.wrfData
 	for i := 0; i < x.Max_dom; i++ {
 		c.Log(fmt.Sprintf("Setting up grid %v...", i+1), 0)
@@ -133,16 +161,16 @@ func (c *Context) SpatialSetupRegularGrid(e *ErrCat) {
 				filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 		}
 		e.Add(grid.WriteToShp(c.griddedSrgs))
-		Grids = append(Grids, grid)
+		sp.Grids = append(sp.Grids, grid)
 	}
-	c.setupSrgs(e)
+	sp.setupSrgs(e)
+	return sp
 }
 
-// Use a spatial table (which needs to be already loaded into PostGIS
-// as the grid. The table to needs to have an ID column called gid
-func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
-	columnsToKeep []string, e *ErrCat) {
-	sr := c.setupCommon(e)
+// Use a shapefile as the grid.
+func SpatialSetupIrregularGrid(c *Context, name, shapeFilePath string,
+	columnsToKeep []string, e *ErrCat) *SpatialProcessor {
+	sp, sr := setupCommon(c, e)
 	grid, err := NewGridIrregular(name, shapeFilePath,
 		columnsToKeep, sr)
 	e.Add(err)
@@ -151,8 +179,9 @@ func (c *Context) SpatialSetupIrregularGrid(name, shapeFilePath string,
 		e.Add(grid.GetTimeZones(
 			filepath.Join(c.shapefiles, "world_timezones.shp"), "TZID"))
 	}
-	Grids = append(Grids, grid)
-	c.setupSrgs(e)
+	sp.Grids = append(sp.Grids, grid)
+	sp.setupSrgs(e)
+	return sp
 }
 
 type SpatialTotals struct {
@@ -207,94 +236,99 @@ func (r *ParsedRecord) EmisToGrid(gi int, p period) (
 	return
 }
 
-func (c *Context) Spatialize(InputChan chan *ParsedRecord,
-	OutputChan chan *ParsedRecord) {
-	defer c.ErrorRecoverCloseChan(InputChan)
+// Spatialize spatializes a record.
+func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool) {
 	var err error
+	switch sp.c.SectorType {
+	case "point":
+		var ct *projgeom.CoordinateTransform
+		ct, err = projgeom.NewCoordinateTransform(sp.c.inputSr, sp.Grids[0].Sr)
+		emisInRecord = false
 
-	c.Log("Spatializing "+c.Sector+"...", 1)
+		record.gridSrg = make([]*sparse.SparseArray, len(sp.Grids))
+		for i, grid := range sp.Grids {
+			record.gridSrg[i] = sparse.ZerosSparse(grid.Ny,
+				grid.Nx)
+			var row, col int
+			var withinGrid bool
+			record.PointXcoord, record.PointYcoord, row, col,
+				withinGrid, err = grid.GetIndex(record.XLOC,
+				record.YLOC, &sp.c.inputSr, ct)
+			if err != nil {
+				panic(err)
+			}
+			if withinGrid {
+				emisInRecord = true
+				// For points, all emissions are in the same cell.
+				record.gridSrg[i].Set(1., row, col)
+			}
+		}
+	case "area", "mobile":
+		var matchedVal interface{}
+		if !sp.c.MatchFullSCC {
+			_, _, matchedVal, err = MatchCodeDouble(
+				record.SCC, record.FIPS, sp.gridRef[record.Country])
+		} else {
+			_, matchedVal, err = MatchCode(record.FIPS,
+				sp.gridRef[record.Country][record.SCC])
+		}
+		if err != nil {
+			err = fmt.Errorf("In spatial reference file: %v. (SCC=%v, FIPS=%v).",
+				err.Error(), record.SCC, record.FIPS)
+			panic(err)
+		}
+		srgNum := matchedVal.(string)
+
+		record.gridSrg = make([]*sparse.SparseArray, len(sp.Grids))
+		for i, grid := range sp.Grids {
+			record.gridSrg[i] = sp.getSurrogate(srgNum, record.FIPS, grid,
+				make([]string, 0))
+		}
+		emisInRecord = true
+	default:
+		err = fmt.Errorf("Unknown sectorType %v", sp.c.SectorType)
+		panic(err)
+	}
+	return
+}
+
+// SpawnProcessor spawns an ansychronous processor for spatializing records.
+func (sp *SpatialProcessor) SpawnSpatializer(InputChan chan *ParsedRecord,
+	OutputChan chan *ParsedRecord) {
+	defer sp.c.ErrorRecoverCloseChan(InputChan)
+
+	sp.c.Log("Spatializing "+sp.c.Sector+"...", 1)
 
 	totals := make(map[string]*SpatialTotals)
-	for _, p := range c.runPeriods {
+	for _, p := range sp.c.runPeriods {
 		totals[p.String()] = newSpatialTotalHolder()
 	}
 	TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
 
-	switch c.SectorType {
-	case "point":
-		var ct *projgeom.CoordinateTransform
-		ct, err = projgeom.NewCoordinateTransform(c.inputSr, Grids[0].Sr)
-		for record := range InputChan {
-			emisInRecord := false
-
-			record.gridSrg = make([]*sparse.SparseArray, len(Grids))
-			for i, grid := range Grids {
-				record.gridSrg[i] = sparse.ZerosSparse(grid.Ny,
-					grid.Nx)
-				var row, col int
-				var withinGrid bool
-				record.PointXcoord, record.PointYcoord, row, col,
-					withinGrid, err = grid.GetIndex(record.XLOC,
-					record.YLOC, &c.inputSr, ct)
-				if err != nil {
-					panic(err)
-				}
-				if withinGrid {
-					emisInRecord = true
-					// For points, all emissions are in the same cell.
-					record.gridSrg[i].Set(1., row, col)
-				}
-			}
-			record.addEmisToReport(totals, TotalGrid)
-			if emisInRecord {
-				OutputChan <- record
-			}
-		}
-	case "area", "mobile":
-		for record := range InputChan {
-			var matchedVal interface{}
-			if !c.MatchFullSCC {
-				_, _, matchedVal, err = MatchCodeDouble(
-					record.SCC, record.FIPS, gridRef[record.Country])
-			} else {
-				_, matchedVal, err = MatchCode(record.FIPS,
-					gridRef[record.Country][record.SCC])
-			}
-			if err != nil {
-				err = fmt.Errorf("In spatial reference file: %v. (SCC=%v, FIPS=%v).",
-					err.Error(), record.SCC, record.FIPS)
-				panic(err)
-			}
-			srgNum := matchedVal.(string)
-
-			record.gridSrg = make([]*sparse.SparseArray, len(Grids))
-			for i, grid := range Grids {
-				record.gridSrg[i] = c.getSurrogate(srgNum, record.FIPS, grid,
-					make([]string, 0))
-			}
-			record.addEmisToReport(totals, TotalGrid)
+	for record := range InputChan {
+		emisInRecord := sp.Spatialize(record)
+		sp.addEmisToReport(record, totals, TotalGrid)
+		if emisInRecord {
 			OutputChan <- record
 		}
-	default:
-		err = fmt.Errorf("Unknown sectorType %v", c.SectorType)
-		panic(err)
+
 	}
 	close(OutputChan)
 	reportMx.Lock()
 	for p, t := range totals {
-		Report.SectorResults[c.Sector][p].SpatialResults = t
+		Report.SectorResults[sp.c.Sector][p].SpatialResults = t
 	}
 	reportMx.Unlock()
-	c.ResultMaps(totals, TotalGrid)
-	c.msgchan <- "Finished spatializing " + c.Sector
+	sp.c.ResultMaps(totals, TotalGrid)
+	sp.c.msgchan <- "Finished spatializing " + sp.c.Sector
 	return
 }
 
-func (r *ParsedRecord) addEmisToReport(totals map[string]*SpatialTotals,
+func (sp *SpatialProcessor) addEmisToReport(r *ParsedRecord, totals map[string]*SpatialTotals,
 	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray) {
 	// Add emissions to reports
 	for p, periodEmis := range r.ANN_EMIS {
-		for i, grid := range Grids {
+		for i, grid := range sp.Grids {
 			gridEmis, units := r.EmisToGrid(i, p)
 			if _, ok := TotalGrid[grid]; !ok {
 				TotalGrid[grid] =
@@ -317,12 +351,12 @@ func (r *ParsedRecord) addEmisToReport(totals map[string]*SpatialTotals,
 	}
 }
 
-func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
+func (sp *SpatialProcessor) getSurrogate(srgNum, FIPS string, grid *GridDef,
 	upstreamSrgs []string) (srg *sparse.SparseArray) {
 
 	tableName := grid.Name + "___" + srgNum
 	status := Status.GetSrgStatus(tableName,
-		filepath.Join(c.griddedSrgs, tableName+".shp"))
+		filepath.Join(sp.c.griddedSrgs, tableName+".shp"))
 	switch {
 	case status == "Generating" || status == "Waiting to generate" ||
 		status == "Empty":
@@ -332,7 +366,7 @@ func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
 			//Status.Lock.Unlock()
 		}
 		srgGenData := NewSrgGenData(srgNum, grid)
-		SurrogateGeneratorChan <- srgGenData
+		sp.SurrogateGeneratorChan <- srgGenData
 		err := <-srgGenData.finishedChan
 		if err != nil {
 			panic(err)
@@ -341,31 +375,31 @@ func (c *Context) getSurrogate(srgNum, FIPS string, grid *GridDef,
 	default:
 		panic(fmt.Sprintf("Unknown status \"%v\"", status))
 	}
-	srg = c.retrieveSurrogate(srgNum, FIPS, grid, upstreamSrgs)
+	srg = sp.retrieveSurrogate(srgNum, FIPS, grid, upstreamSrgs)
 	return
 }
 
 // It is important not to edit the returned surrogate in place, because the
 // same copy is used over and over again.
-func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
+func (sp *SpatialProcessor) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	upstreamSrgs []string) *sparse.SparseArray {
 
 	var err error
 	cacheKey := grid.Name + srgNum + FIPS
 
 	// Check if surrogate is already in the cache.
-	srgCacheMx.Lock()
-	if srg, found := srgCache[cacheKey]; found {
-		srgCacheMx.Unlock()
+	sp.srgCacheMx.Lock()
+	if srg, found := sp.srgCache[cacheKey]; found {
+		sp.srgCacheMx.Unlock()
 		return srg
 	}
-	srgCacheMx.Unlock()
+	sp.srgCacheMx.Unlock()
 
 	var srg *sparse.SparseArray
-	secondarySrg := SrgSpec[srgNum].SECONDARYSURROGATE
-	tertiarySrg := SrgSpec[srgNum].TERTIARYSURROGATE
-	quarternarySrg := SrgSpec[srgNum].QUARTERNARYSURROGATE
-	MergeFunction := SrgSpec[srgNum].MergeFunction
+	secondarySrg := sp.SrgSpec[srgNum].SECONDARYSURROGATE
+	tertiarySrg := sp.SrgSpec[srgNum].TERTIARYSURROGATE
+	quarternarySrg := sp.SrgSpec[srgNum].QUARTERNARYSURROGATE
+	MergeFunction := sp.SrgSpec[srgNum].MergeFunction
 	if MergeFunction == nil {
 		srg, err = RetrieveGriddingSurrogate(
 			srgNum, FIPS, grid)
@@ -378,9 +412,9 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 			backupNames := []string{secondarySrg, tertiarySrg, quarternarySrg}
 			for _, backupName := range backupNames {
 				if backupName != "" {
-					newSrgNum := srgCodes[backupName]
+					newSrgNum := sp.srgCodes[backupName]
 					if !IsStringInArray(upstreamSrgs, newSrgNum) {
-						srg = c.getSurrogate(newSrgNum, FIPS, grid,
+						srg = sp.getSurrogate(newSrgNum, FIPS, grid,
 							append(upstreamSrgs, newSrgNum))
 					}
 				}
@@ -392,12 +426,12 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	} else {
 		srg = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for _, mrgval := range MergeFunction {
-			newSrgNum, ok := srgCodes[mrgval.name]
+			newSrgNum, ok := sp.srgCodes[mrgval.name]
 			if !ok {
 				panic("No match for surrogate named " + mrgval.name)
 			}
 			weight := mrgval.val
-			tempSrg := c.retrieveSurrogate(newSrgNum, FIPS, grid,
+			tempSrg := sp.retrieveSurrogate(newSrgNum, FIPS, grid,
 				append(upstreamSrgs, newSrgNum))
 			if tempSrg != nil {
 				srg.AddSparse(tempSrg.ScaleCopy(weight))
@@ -414,9 +448,9 @@ func (c *Context) retrieveSurrogate(srgNum, FIPS string, grid *GridDef,
 	//	}
 	//}
 	// store surrogate in cache for faster access.
-	srgCacheMx.Lock()
-	srgCache[cacheKey] = srg
-	srgCacheMx.Unlock()
+	sp.srgCacheMx.Lock()
+	sp.srgCache[cacheKey] = srg
+	sp.srgCacheMx.Unlock()
 	return srg
 }
 
@@ -436,47 +470,47 @@ func NewSrgGenData(srgNum string, grid *GridDef) (
 }
 
 // Generate spatial surrogates
-func (c *Context) SurrogateGenerator() {
-	for srgData := range SurrogateGeneratorChan {
+func (sp *SpatialProcessor) SurrogateGenerator() {
+	for srgData := range sp.SurrogateGeneratorChan {
 		var err error
 		srgNum := srgData.srgNum
-		c.Log(SrgSpec[srgNum], 2)
-		if _, ok := SrgSpec[srgNum]; !ok {
+		sp.c.Log(sp.SrgSpec[srgNum], 2)
+		if _, ok := sp.SrgSpec[srgNum]; !ok {
 			err := fmt.Errorf("There is no surrogate specification for surrogate "+
-				"number %v. This needs to be fixed in %v.", srgNum, c.SrgSpecFile)
+				"number %v. This needs to be fixed in %v.", srgNum, sp.c.SrgSpecFile)
 			//Status.Lock.Lock()
 			Status.Surrogates[srgData.grid.Name+"___"+srgNum] = "Failed!"
 			//Status.Lock.Unlock()
 			srgData.finishedChan <- err
 			continue
 		}
-		MergeFunction := SrgSpec[srgNum].MergeFunction
+		MergeFunction := sp.SrgSpec[srgNum].MergeFunction
 		if MergeFunction == nil {
-			err = c.genSrgNoMerge(srgData)
+			err = sp.genSrgNoMerge(srgData)
 		} else {
-			err = c.genSrgMerge(srgData)
+			err = sp.genSrgMerge(srgData)
 		}
 		srgData.finishedChan <- err
 	}
 }
 
 // Generate a surrogate that doesn't require merging
-func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
+func (sp *SpatialProcessor) genSrgNoMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
-	inputMap := SrgSpec[srgNum].DATASHAPEFILE
-	inputColumn := SrgSpec[srgNum].DATAATTRIBUTE
-	surrogateMap := SrgSpec[srgNum].WEIGHTSHAPEFILE
-	WeightColumns := SrgSpec[srgNum].WeightColumns
-	FilterFunction := SrgSpec[srgNum].FilterFunction
+	inputMap := sp.SrgSpec[srgNum].DATASHAPEFILE
+	inputColumn := sp.SrgSpec[srgNum].DATAATTRIBUTE
+	surrogateMap := sp.SrgSpec[srgNum].WEIGHTSHAPEFILE
+	WeightColumns := sp.SrgSpec[srgNum].WeightColumns
+	FilterFunction := sp.SrgSpec[srgNum].FilterFunction
 	//Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	//Status.Lock.Unlock()
-	inputFilePath := filepath.Join(c.shapefiles, inputMap+".shp")
-	surrogateFilePath := filepath.Join(c.shapefiles, surrogateMap+".shp")
+	inputFilePath := filepath.Join(sp.c.shapefiles, inputMap+".shp")
+	surrogateFilePath := filepath.Join(sp.c.shapefiles, surrogateMap+".shp")
 	err = CreateGriddingSurrogate(srgNum, inputFilePath,
 		inputColumn, surrogateFilePath, WeightColumns, FilterFunction,
-		grid, c.griddedSrgs, c.slaves)
+		grid, sp.c.griddedSrgs, sp.c.slaves)
 	if err == nil {
 		//Status.Lock.Lock()
 		Status.Surrogates[grid.Name+"___"+srgNum] = "Ready"
@@ -495,32 +529,32 @@ func (c *Context) genSrgNoMerge(srgData *SrgGenData) (err error) {
 // surrogate merging: create a surrogate from other surrogates
 // Here, we just create weight surrogate tables if they don't exist.
 // The actual merging happens elsewhere.
-func (c *Context) genSrgMerge(srgData *SrgGenData) (err error) {
+func (sp *SpatialProcessor) genSrgMerge(srgData *SrgGenData) (err error) {
 	srgNum := srgData.srgNum
 	grid := srgData.grid
-	c.Log(SrgSpec[srgNum], 2)
-	MergeFunction := SrgSpec[srgNum].MergeFunction
+	sp.c.Log(sp.SrgSpec[srgNum], 2)
+	MergeFunction := sp.SrgSpec[srgNum].MergeFunction
 	//Status.Lock.Lock()
 	Status.Surrogates[grid.Name+"___"+srgNum] = "Generating"
 	//Status.Lock.Unlock()
 	for _, mrgval := range MergeFunction {
-		newSrgNum, ok := srgCodes[mrgval.name]
+		newSrgNum, ok := sp.srgCodes[mrgval.name]
 		if !ok {
 			err = fmt.Errorf("No match for surrogate named %v.", mrgval.name)
 			return
 		}
 		tableName := grid.Name + "___" + newSrgNum
-		filename := filepath.Join(c.griddedSrgs, tableName+".shp")
+		filename := filepath.Join(sp.c.griddedSrgs, tableName+".shp")
 		status := Status.GetSrgStatus(tableName, filename)
 		switch {
 		case status == "Generating" || status == "Waiting to generate" ||
 			status == "Empty":
 			newSrgData := NewSrgGenData(newSrgNum, grid)
-			newMergeFunction := SrgSpec[newSrgNum].MergeFunction
+			newMergeFunction := sp.SrgSpec[newSrgNum].MergeFunction
 			if newMergeFunction == nil {
-				err = c.genSrgNoMerge(newSrgData)
+				err = sp.genSrgNoMerge(newSrgData)
 			} else {
-				err = c.genSrgMerge(newSrgData)
+				err = sp.genSrgMerge(newSrgData)
 			}
 			if err != nil {
 				return
@@ -562,9 +596,9 @@ type SrgMerge struct {
 	val  float64
 }
 
-func (c *Context) SurrogateSpecification() (err error) {
+func (sp *SpatialProcessor) SurrogateSpecification() (err error) {
 	var record []string
-	fid, err := os.Open(c.SrgSpecFile)
+	fid, err := os.Open(sp.c.SrgSpecFile)
 	if err != nil {
 		return
 	}
@@ -581,7 +615,7 @@ func (c *Context) SurrogateSpecification() (err error) {
 				break
 			} else {
 				err = fmt.Errorf("SurrogateSpecification: %v \nFile= %v\nRecord= ",
-					err.Error(), c.SrgSpecFile, record)
+					err.Error(), sp.c.SrgSpecFile, record)
 				return
 			}
 		}
@@ -654,19 +688,19 @@ func (c *Context) SurrogateSpecification() (err error) {
 			}
 		}
 
-		SrgSpec[srg.REGION+srg.SURROGATECODE] = srg
-		srgCodes[srg.REGION+srg.SURROGATE] = srg.REGION + srg.SURROGATECODE
+		sp.SrgSpec[srg.REGION+srg.SURROGATECODE] = srg
+		sp.srgCodes[srg.REGION+srg.SURROGATE] = srg.REGION + srg.SURROGATECODE
 	}
 	return
 }
 
 // GridRef reads the SMOKE gref file, which maps FIPS and SCC codes to grid surrogates
-func (c *Context) GridRef() (err error) {
+func (sp *SpatialProcessor) GridRef() (err error) {
 	var record string
-	fid, err := os.Open(c.GridRefFile)
+	fid, err := os.Open(sp.c.GridRefFile)
 	if err != nil {
 		err = fmt.Errorf("GridRef: %v \nFile= %v\nRecord= ",
-			err.Error(), c.GridRefFile, record)
+			err.Error(), sp.c.GridRefFile, record)
 		return
 	} else {
 		defer fid.Close()
@@ -680,7 +714,7 @@ func (c *Context) GridRef() (err error) {
 				break
 			} else {
 				err = fmt.Errorf("GridRef: %v \nFile= %v\nRecord= ",
-					err.Error(), c.GridRefFile, record)
+					err.Error(), sp.c.GridRefFile, record)
 				return
 			}
 		}
@@ -699,13 +733,13 @@ func (c *Context) GridRef() (err error) {
 			FIPS := splitLine[0][1:]
 			srg := strings.Trim(splitLine[2], "\"\n")
 
-			if _, ok := gridRef[country]; !ok {
-				gridRef[country] = make(map[string]map[string]interface{})
+			if _, ok := sp.gridRef[country]; !ok {
+				sp.gridRef[country] = make(map[string]map[string]interface{})
 			}
-			if _, ok := gridRef[country][SCC]; !ok {
-				gridRef[country][SCC] = make(map[string]interface{})
+			if _, ok := sp.gridRef[country][SCC]; !ok {
+				sp.gridRef[country][SCC] = make(map[string]interface{})
 			}
-			gridRef[country][SCC][FIPS] = country + srg
+			sp.gridRef[country][SCC][FIPS] = country + srg
 		}
 	}
 	return

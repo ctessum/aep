@@ -106,11 +106,13 @@ type wrfFiles struct {
 	config       *WRFconfigData
 	polsAndUnits map[string]string
 	oldWRFout    string
+	grids        []*GridDef
 }
 
 func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
 	var err error
 	w.files = new(wrfFiles)
+	w.files.grids = w.tp.grids
 	w.files.fids = make([]*cdf.File, w.c.wrfData.Max_dom)
 	w.files.fidsToClose = make([]*os.File, w.c.wrfData.Max_dom)
 	w.files.config = w.c.wrfData
@@ -552,6 +554,7 @@ type MetData struct {
 	Sclass       [][][][]string  // Stability class
 	h            int             // file record index
 	Kemit        int             // number of levels in emissions file
+	grids        []*GridDef
 }
 
 // This assumes that the wrfout and wrfchemi files each have 24 frames in
@@ -559,9 +562,10 @@ type MetData struct {
 func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	var err error
 	m := new(MetData)
+	m.grids = w.grids
 	m.h = timeIndex
-	m.wrfout = make([]*cdf.File, len(Grids))
-	m.fid = make([]*os.File, len(Grids))
+	m.wrfout = make([]*cdf.File, len(m.grids))
+	m.fid = make([]*os.File, len(m.grids))
 	m.Kemit = w.config.Kemit
 	// Open old wrfout files
 	var WRFdateFormat string
@@ -572,7 +576,7 @@ func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	}
 	filename := strings.Replace(w.oldWRFout, "[DATE]",
 		date.Format(WRFdateFormat), -1)
-	for i, grid := range Grids {
+	for i, grid := range m.grids {
 		file2 := strings.Replace(filename, "[DOMAIN]", grid.Name, -1)
 		m.fid[i], err = os.Open(file2)
 		if err != nil {
@@ -611,7 +615,7 @@ func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int
 	j, i := index[0], index[1]
 
 	// deal with points that are inside one grid but not inside the others
-	if j >= Grids[gi].Nx || i >= Grids[gi].Ny || j < 0 || i < 0 {
+	if j >= w.tp.grids[gi].Nx || i >= w.tp.grids[gi].Ny || j < 0 || i < 0 {
 		return
 	}
 	stackHeight := math.Max(0, point.STKHGT*feetToMeters) // m

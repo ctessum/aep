@@ -39,15 +39,17 @@ type TemporalProcessor struct {
 	temporalReport *TemporalReport
 	Units          map[string]string // map[pol]units
 	mu             sync.RWMutex
+	grids          []*GridDef
 }
 
 // Read in data and start up subroutines for temporal processing.
-func (c *Context) NewTemporalProcessor() *TemporalProcessor {
+func (c *Context) NewTemporalProcessor(grids []*GridDef) *TemporalProcessor {
 	tp := new(TemporalProcessor)
 	tp.c = c
+	tp.grids = grids
 	tp.sectors = make(map[string]*temporalSector)
 	tp.Units = make(map[string]string)
-	tp.temporalReport = newTemporalReport(c, tp.Units)
+	tp.temporalReport = tp.newTemporalReport(c, tp.Units)
 	reportMx.Lock()
 	Report.TemporalResults = tp.temporalReport
 	reportMx.Unlock()
@@ -454,7 +456,7 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	}
 	// Add data from record into matricies.
 	for p, _ := range record.ANN_EMIS {
-		for i, _ := range Grids {
+		for i, _ := range t.tp.grids {
 			gridEmis, gridUnits := record.EmisToGrid(i, p)
 			for pol, emis := range gridEmis {
 				if _, ok := t.AreaData[temporalCodes][p]; !ok {
@@ -463,8 +465,8 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 				}
 				if _, ok := t.AreaData[temporalCodes][p][pol]; !ok {
 					t.AreaData[temporalCodes][p][pol] =
-						make([]*sparse.SparseArray, len(Grids))
-					for i, grid := range Grids {
+						make([]*sparse.SparseArray, len(t.tp.grids))
+					for i, grid := range t.tp.grids {
 						t.AreaData[temporalCodes][p][pol][i] =
 							sparse.ZerosSparse(grid.Ny, grid.Nx)
 					}
@@ -529,8 +531,8 @@ var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time, o Outputter,
 				for pol, gridData := range d.data[p] {
 					addLock.Lock()
 					if _, ok := emis[pol]; !ok { // initialize array
-						emis[pol] = make([]*sparse.SparseArray, len(Grids))
-						for i, grid := range Grids {
+						emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
+						for i, grid := range t.tp.grids {
 							emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
 								grid.Ny, grid.Nx)
 						}
@@ -587,8 +589,8 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 					for pol, polEmis := range e {
 						addLock.Lock()
 						if _, ok := emis[pol]; !ok { // initialize array
-							emis[pol] = make([]*sparse.SparseArray, len(Grids))
-							for i, grid := range Grids {
+							emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
+							for i, grid := range t.tp.grids {
 								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
 									grid.Ny, grid.Nx)
 							}
@@ -624,15 +626,15 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 	record *ParsedRecord, p period, o Outputter) (
 	map[string][]*sparse.SparseArray, []int) {
-	kPlume := make([]int, len(Grids))
+	kPlume := make([]int, len(tFactors))
 	out := make(map[string][]*sparse.SparseArray)
 	for pol, _ := range record.ANN_EMIS[p] {
-		out[pol] = make([]*sparse.SparseArray, len(Grids))
+		out[pol] = make([]*sparse.SparseArray, len(tFactors))
 	}
-	for gi, _ := range Grids {
+	for gi, tFac := range tFactors {
 		kPlume[gi] = o.PlumeRise(gi, record)
 		for pol, val := range record.ANN_EMIS[p] {
-			out[pol][gi] = sparse.ArrayMultiply(record.gridSrg[gi], tFactors[gi])
+			out[pol][gi] = sparse.ArrayMultiply(record.gridSrg[gi], tFac)
 			out[pol][gi].Scale(val.Val)
 		}
 	}
@@ -646,7 +648,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
 	p := t.c.getPeriod(time)
 	t.mu.RLock()
-	cemTimes := griddedTimeNoDST(time)
+	cemTimes := t.tp.griddedTimeNoDST(time)
 	// Start workers for concurrent processing
 	type dataHolder struct {
 		temporalCodes [3]string
@@ -661,12 +663,12 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 			for d := range dataChan {
 				tproTFactors := t.griddedTemporalFactors(d.temporalCodes, time)
 				for _, record := range d.data {
-					kPlume := make([]int, len(Grids))
+					kPlume := make([]int, len(t.tp.grids))
 					e := make(map[string][]*sparse.SparseArray)
 					id := [2]string{record.ORIS_FACILITY_CODE, record.ORIS_BOILER_ID}
 					if cemsum, ok := t.cemSum[id]; ok {
 						for pol, _ := range record.ANN_EMIS[p] {
-							e[pol] = make([]*sparse.SparseArray, len(Grids))
+							e[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
 						}
 						for gi, srg := range record.gridSrg {
 							kPlume[gi] = o.PlumeRise(gi, record)
@@ -674,8 +676,8 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 								for _, ix := range srg.Nonzero() {
 									tFactor := getCEMtFactor(emisval.PolType, cemsum,
 										t.cemArray[id][cemTimes[gi][ix]])
-									e[pol][gi] = sparse.ZerosSparse(Grids[gi].Ny,
-										Grids[gi].Nx)
+									e[pol][gi] = sparse.ZerosSparse(
+										t.tp.grids[gi].Ny, t.tp.grids[gi].Nx)
 									e[pol][gi].Elements[ix] = emisval.Val * tFactor *
 										srg.Elements[ix]
 								}
@@ -687,8 +689,8 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 					for pol, polEmis := range e {
 						addLock.Lock()
 						if _, ok := emis[pol]; !ok { // initialize array
-							emis[pol] = make([]*sparse.SparseArray, len(Grids))
-							for i, grid := range Grids {
+							emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
+							for i, grid := range t.tp.grids {
 								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
 									grid.Ny, grid.Nx)
 							}
@@ -807,8 +809,8 @@ type tFacRequest struct {
 // daylight savings time.
 func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 	outputTime time.Time) []*sparse.SparseArray {
-	out := make([]*sparse.SparseArray, len(Grids))
-	for i, grid := range Grids {
+	out := make([]*sparse.SparseArray, len(t.tp.grids))
+	for i, grid := range t.tp.grids {
 		out[i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
 		for tz, cells := range grid.TimeZones {
 			location, err := time.LoadLocation(
@@ -825,10 +827,11 @@ func (t *temporalSector) griddedTemporalFactors(codes [3]string,
 }
 
 // get times in grid cells with no daylight savings (needed for CEM data)
-func griddedTimeNoDST(outputTime time.Time) []map[int]string {
+func (tp *TemporalProcessor) griddedTimeNoDST(
+	outputTime time.Time) []map[int]string {
 	const format = "060102 15"
-	out := make([]map[int]string, len(Grids))
-	for i, grid := range Grids {
+	out := make([]map[int]string, len(tp.grids))
+	for i, grid := range tp.grids {
 		out[i] = make(map[int]string)
 		for tz, cells := range grid.TimeZones {
 			location, err := time.LoadLocation(
@@ -888,10 +891,13 @@ type TemporalReport struct {
 	Data      map[string]map[string][]float64 // map[pol][grid][time]emissions
 	numTsteps int
 	Units     map[string]string // map[pol]units
+	tp        *TemporalProcessor
 }
 
-func newTemporalReport(c *Context, units map[string]string) *TemporalReport {
+func (tp *TemporalProcessor) newTemporalReport(c *Context,
+	units map[string]string) *TemporalReport {
 	tr := new(TemporalReport)
+	tr.tp = tp
 	tr.Data = make(map[string]map[string][]float64)
 	tr.numTsteps = int(c.endDate.Sub(c.startDate).Hours()/c.tStep.Hours() + 0.5)
 	tr.Time = make([]time.Time, 0, tr.numTsteps)
@@ -906,13 +912,13 @@ func (tr *TemporalReport) addTstep(ts *TimeStepData) {
 	for pol, data := range ts.Emis {
 		vals[pol] = make(map[string]float64)
 		for i, gridData := range data {
-			vals[pol][Grids[i].Name] += gridData.Sum()
+			vals[pol][tr.tp.grids[i].Name] += gridData.Sum()
 		}
 	}
 	for pol, d := range vals {
 		for g, data := range d {
 			if _, ok := tr.Data[pol]; !ok {
-				for _, gg := range Grids {
+				for _, gg := range tr.tp.grids {
 					tr.Data[pol] = make(map[string][]float64)
 					tr.Data[pol][gg.Name] = make([]float64, 0, tr.numTsteps)
 				}
