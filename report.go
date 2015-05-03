@@ -208,7 +208,7 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
 func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
-	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray,
+	TotalGrid map[*GridDef]map[Period]map[string]*sparse.SparseArray,
 ) {
 
 	dir := filepath.Join(c.outputDir, "maps")

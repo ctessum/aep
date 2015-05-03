@@ -93,7 +93,7 @@ func (c *Context) SpecRef() (specRef map[string]map[string]interface{}, err erro
 
 // SpecRefCombo reads the SMOKE gspro_combo file, which maps location
 // codes to chemical speciation profiles for mobile sources.
-func (c *Context) SpecRefCombo(runPeriod period) (specRef map[string]map[string]interface{}, err error) {
+func (c *Context) SpecRefCombo(runPeriod Period) (specRef map[string]map[string]interface{}, err error) {
 	specRef = make(map[string]map[string]interface{})
 	// map[pol][FIPS][code]frac
 	var record string
@@ -752,7 +752,7 @@ func (sp *SpecRef) GetProfileAggregateSpecies(number, specType string,
 // Match SCC in record to speciation profile. If none matches exactly, find a
 // more general SCC that matches.
 func (sp *SpecRef) getSccFracs(record *ParsedRecord, pol string, c *Context,
-	p period) (
+	p Period) (
 	specFactors, doubleCountSpecFactors,
 	ungroupedSpecFactors map[string]*SpecHolder) {
 	var err error

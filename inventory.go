@@ -87,7 +87,7 @@ type ParsedRecord struct {
 	//  If CTYPE = L, Latitude (decimal degrees)
 	UTMZ int //	UTM zone (required if CTYPE = U)
 	//	CAS                string  // Pollutant CAS number or other code (16 characters maximum) (required, this is called the pollutant code in the NIF)
-	ANN_EMIS map[period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
+	ANN_EMIS map[Period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
 	gridSrg  []*sparse.SparseArray               // Surrogate to apply emissions to grid cells
 	CEFF     map[string]float64                  //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
 	REFF     map[string]float64                  //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
@@ -107,9 +107,9 @@ type SpecValUnits struct {
 	PolType *PolHolder
 }
 
-func (c Context) newParsedRecord(p period) (rec *ParsedRecord) {
+func (c Context) newParsedRecord(p Period) (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
-	rec.ANN_EMIS = make(map[period]map[string]*SpecValUnits)
+	rec.ANN_EMIS = make(map[Period]map[string]*SpecValUnits)
 	rec.ANN_EMIS[p] = make(map[string]*SpecValUnits)
 	rec.CEFF = make(map[string]float64)
 	rec.REFF = make(map[string]float64)
@@ -145,7 +145,7 @@ func cleanRecordORL(record string) string {
 	return record
 }
 
-func (r *ParsedRecord) parseEmisHelper(p period, pol, ann_emis,
+func (r *ParsedRecord) parseEmisHelper(p Period, pol, ann_emis,
 	avd_emis string) string {
 	pol = trimString(pol)
 	ann := stringToFloat(ann_emis)
@@ -261,7 +261,7 @@ func parseSIC(s string) string {
 }
 
 func (c *Context) parseRecordPointORL(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
@@ -298,7 +298,7 @@ func (c *Context) parseRecordPointORL(record string,
 }
 
 func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo,
-	p period) *ParsedRecord {
+	p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
@@ -316,7 +316,7 @@ func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo,
 }
 
 func (c *Context) parseRecordNonroadORL(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
@@ -331,7 +331,7 @@ func (c *Context) parseRecordNonroadORL(record string,
 }
 
 func (c *Context) parseRecordMobileORL(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	record = cleanRecordORL(record)
 	splitString := strings.Split(record, ",")
@@ -358,7 +358,7 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 }
 
 func (c *Context) parseRecordPointIDA(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 249, 52)
 	fields.FIPS = parseFipsIDA(record[0:5])
@@ -391,7 +391,7 @@ func (c *Context) parseRecordPointIDA(record string,
 }
 
 func (c *Context) parseRecordAreaIDA(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 15, 47)
 	fields.FIPS = parseFipsIDA(record[0:5])
@@ -407,7 +407,7 @@ func (c *Context) parseRecordAreaIDA(record string,
 	return fields
 }
 func (c *Context) parseRecordMobileIDA(record string,
-	fInfo *FileInfo, p period) *ParsedRecord {
+	fInfo *FileInfo, p Period) *ParsedRecord {
 	fields := c.newParsedRecord(p)
 	checkRecordLengthIDA(record, fInfo, 25, 20)
 	fields.FIPS = parseFipsIDA(record[0:5])
@@ -616,7 +616,7 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 }
 
 func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
-	config *Context, p period) {
+	config *Context, p Period) {
 	numProcs := runtime.GOMAXPROCS(-1)
 	lineChan := make(chan string)
 	var wg sync.WaitGroup

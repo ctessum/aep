@@ -71,7 +71,7 @@ type temporalSector struct {
 	InputChan     chan *ParsedRecord
 	OutputChan    chan *ParsedRecord
 	PointData     map[[3]string][]*ParsedRecord
-	AreaData      map[[3]string]map[period]map[string][]*sparse.SparseArray
+	AreaData      map[[3]string]map[Period]map[string][]*sparse.SparseArray
 	aggregate     func(*temporalSector, *ParsedRecord)
 	addEmisAtTime func(*temporalSector, time.Time, Outputter,
 		map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray
@@ -89,7 +89,7 @@ func (tp *TemporalProcessor) NewSector(c *Context,
 	t.OutputChan = OutputChan
 	t.c = c
 	t.PointData = make(map[[3]string][]*ParsedRecord)
-	t.AreaData = make(map[[3]string]map[period]map[string][]*sparse.SparseArray)
+	t.AreaData = make(map[[3]string]map[Period]map[string][]*sparse.SparseArray)
 	// Choose which temporal aggregation function to use.
 	switch t.c.SectorType {
 	case "point":
@@ -452,7 +452,7 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	temporalCodes := t.getTemporalCodes(record.SCC, record.FIPS)
 	// Create matrices if they don't exist
 	if _, ok := t.AreaData[temporalCodes]; !ok {
-		t.AreaData[temporalCodes] = make(map[period]map[string][]*sparse.SparseArray)
+		t.AreaData[temporalCodes] = make(map[Period]map[string][]*sparse.SparseArray)
 	}
 	// Add data from record into matricies.
 	for p, _ := range record.ANN_EMIS {
@@ -518,7 +518,7 @@ var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time, o Outputter,
 	// Start workers for concurrent processing
 	type dataHolder struct {
 		temporalCodes [3]string
-		data          map[period]map[string][]*sparse.SparseArray
+		data          map[Period]map[string][]*sparse.SparseArray
 	}
 	dataChan := make(chan dataHolder)
 	var addLock sync.Mutex
@@ -624,7 +624,7 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 }
 
 func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
-	record *ParsedRecord, p period, o Outputter) (
+	record *ParsedRecord, p Period, o Outputter) (
 	map[string][]*sparse.SparseArray, []int) {
 	kPlume := make([]int, len(tFactors))
 	out := make(map[string][]*sparse.SparseArray)

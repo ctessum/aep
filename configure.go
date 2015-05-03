@@ -139,7 +139,7 @@ type Context struct {
 	TemporalProFile        string   // Location of the temporal profile file
 	HolidayFile            string   // Location of the file specifying which days are holidays
 	InventoryFreq          string   // The temporal frequency of the inventory data files. Currently the options are "annual", "monthly", and "cem".
-	runPeriods             []period // Periods (annual, or individual months, etc.) to be run for this sector
+	runPeriods             []Period // Periods (annual, or individual months, etc.) to be run for this sector
 	MatchFullSCC           bool     // Whether to only match codes which are identical, or to accept partial matches.
 	DebugLevel             int      // Sets the volume of output printed to the screen. Set to 0 for least output, 3 for most output. Also, if DebugLevel > 0, any errors encountered will cause the entire program to crash with a stack trace, rather than just printing an error message and continuing.
 	Ncpus                  int      // Number of processors available for use
@@ -172,72 +172,71 @@ type PolHolder struct {
 	SpecProf  map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
 }
 
-type period int
+type Period int
 
 const (
-	jan period = iota + 1
-	feb
-	mar
-	apr
-	may
-	jun
-	jul
-	aug
-	sep
-	oct
-	nov
-	dec
-	annual
-	cem
+	Jan Period = iota + 1
+	Feb
+	Mar
+	Apr
+	May
+	Jun
+	Jul
+	Aug
+	Sep
+	Oct
+	Nov
+	Dec
+	Annual
+	Cem
 )
 
-func (p period) String() string {
+func (p Period) String() string {
 	switch p {
-	case jan:
-		return "jan"
-	case feb:
-		return "feb"
-	case mar:
-		return "mar"
-	case apr:
-		return "apr"
-	case may:
-		return "may"
-	case jun:
-		return "jun"
-	case jul:
-		return "jul"
-	case aug:
-		return "aug"
-	case sep:
-		return "sep"
-	case oct:
-		return "oct"
-	case nov:
-		return "nov"
-	case dec:
-		return "dec"
-	case annual:
-		return "annual"
-	case cem:
-		return "cem"
+	case Jan:
+		return "Jan"
+	case Feb:
+		return "Feb"
+	case Mar:
+		return "Mar"
+	case Apr:
+		return "Apr"
+	case May:
+		return "May"
+	case Jun:
+		return "Jun"
+	case Jul:
+		return "Jul"
+	case Aug:
+		return "Aug"
+	case Sep:
+		return "Sep"
+	case Oct:
+		return "Oct"
+	case Nov:
+		return "Nov"
+	case Dec:
+		return "Dec"
+	case Annual:
+		return "Annual"
+	case Cem:
+		return "Cem"
 	default:
 		panic(fmt.Sprintf("Unknown period: %v", p))
 		return ""
 	}
 }
 
-func (c *Context) getPeriod(t time.Time) period {
+func (c *Context) getPeriod(t time.Time) Period {
 	switch c.InventoryFreq {
 	case "annual":
-		return annual
+		return Annual
 	case "cem":
-		return cem
+		return Cem
 	case "monthly":
-		return period(t.Month())
+		return Period(t.Month())
 	default:
 		panic("getPeriod error")
-		return 0
 	}
 }
 
@@ -370,14 +369,14 @@ func (p *Context) setup(e *ErrCat) {
 	}
 	switch c.InventoryFreq {
 	case "annual":
-		c.runPeriods = []period{annual}
+		c.runPeriods = []Period{Annual}
 	case "cem":
-		c.runPeriods = []period{cem}
+		c.runPeriods = []Period{Cem}
 	case "monthly":
-		c.runPeriods = make([]period, 0)
+		c.runPeriods = make([]Period, 0)
 		for m := int(c.startDate.Month()); m <= int(c.endDate.Month()); m++ {
 			// period 1 is january
-			c.runPeriods = append(c.runPeriods, period(m))
+			c.runPeriods = append(c.runPeriods, Period(m))
 		}
 	}
 	switch c.InputUnits {

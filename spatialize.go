@@ -222,7 +222,7 @@ func (h *SpatialTotals) Add(pol, grid string, emis float64,
 }
 
 // EmisToGrid returns gridded emissions for a given grid index and period.
-func (r *ParsedRecord) EmisToGrid(gi int, p period) (
+func (r *ParsedRecord) EmisToGrid(gi int, p Period) (
 	emis map[string]*sparse.SparseArray, units map[string]string) {
 	emis = make(map[string]*sparse.SparseArray)
 	units = make(map[string]string)
@@ -305,7 +305,7 @@ func (sp *SpatialProcessor) SpawnSpatializer(InputChan chan *ParsedRecord) (
 		for _, p := range sp.c.runPeriods {
 			totals[p.String()] = newSpatialTotalHolder()
 		}
-		TotalGrid := make(map[*GridDef]map[period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
+		TotalGrid := make(map[*GridDef]map[Period]map[string]*sparse.SparseArray) // map[grid][period][pol]data
 
 		for record := range InputChan {
 			emisInRecord := sp.Spatialize(record)
@@ -329,14 +329,14 @@ func (sp *SpatialProcessor) SpawnSpatializer(InputChan chan *ParsedRecord) (
 }
 
 func (sp *SpatialProcessor) addEmisToReport(r *ParsedRecord, totals map[string]*SpatialTotals,
-	TotalGrid map[*GridDef]map[period]map[string]*sparse.SparseArray) {
+	TotalGrid map[*GridDef]map[Period]map[string]*sparse.SparseArray) {
 	// Add emissions to reports
 	for p, periodEmis := range r.ANN_EMIS {
 		for i, grid := range sp.Grids {
 			gridEmis, units := r.EmisToGrid(i, p)
 			if _, ok := TotalGrid[grid]; !ok {
 				TotalGrid[grid] =
-					make(map[period]map[string]*sparse.SparseArray)
+					make(map[Period]map[string]*sparse.SparseArray)
 			}
 			if _, ok := TotalGrid[grid][p]; !ok {
 				TotalGrid[grid][p] =
