@@ -80,49 +80,82 @@ func absBias(a, b float64) (o float64) {
 	return
 }
 
-func getCountryCode(country string) (code string) {
-	switch country {
-	case "USA":
-		code = "0"
-	case "CA": // Canada
-		code = "1"
-	case "CANADA":
-		code = "1"
-	case "MEXICO":
-		code = "2"
-	case "CUBA":
-		code = "3"
-	case "BAHAMAS":
-		code = "4"
-	case "HAITI":
-		code = "5"
-	case "DOMINICANREPUBLIC":
-		code = "6"
+type Country int
+
+const (
+	USA               Country = 0
+	Canada                    = 1
+	Mexico                    = 2
+	Cuba                      = 3
+	Bahamas                   = 4
+	Haiti                     = 5
+	DominicanRepublic         = 6
+)
+
+func (c Country) String() string {
+	switch c {
+	case USA:
+		return "USA"
+	case Canada:
+		return "CA"
+	case Mexico:
+		return "MEXICO"
+	case Cuba:
+		return "CUBA"
+	case Bahamas:
+		return "BAHAMAS"
+	case Haiti:
+		return "HAITI"
+	case DominicanRepublic:
+		return "DOMINICANREPUBLIC"
 	default:
-		err := fmt.Errorf("Unknown country %v.", country)
-		panic(err)
+		panic(fmt.Errorf("Unknown country %v", c))
 	}
-	return
 }
-func getCountryName(code string) (country string) {
+
+func getCountryCode(country Country) string {
+	return fmt.Sprintf("%d", country)
+}
+func getCountryFromID(code string) Country {
 	switch code {
 	case "0":
-		country = "USA"
+		return USA
 	case "1":
-		country = "CA" // Canada
+		return Canada
 	case "2":
-		country = "MEXICO"
+		return Mexico
 	case "3":
-		country = "CUBA"
+		return Cuba
 	case "4":
-		country = "BAHAMAS"
+		return Bahamas
 	case "5":
-		country = "HAITI"
+		return Haiti
 	case "6":
-		country = "DOMINICANREPUBLIC"
+		return DominicanRepublic
 	default:
 		err := fmt.Errorf("Unknown country code %v.", code)
 		panic(err)
 	}
-	return
+}
+
+func getCountryFromName(name string) Country {
+	switch name {
+	case "USA", "US":
+		return USA
+	case "CANADA", "CA":
+		return Canada
+	case "MEXICO":
+		return Mexico
+	case "CUBA":
+		return Cuba
+	case "BAHAMAS":
+		return Bahamas
+	case "HAITI":
+		return Haiti
+	case "DOMINICANREPUBLIC":
+		return DominicanRepublic
+	default:
+		panic(fmt.Errorf("Unkown country %s", name))
+	}
+
 }

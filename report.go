@@ -106,6 +106,10 @@ func (e *ErrCat) statOS(path string, varname string) {
 func (e *ErrCat) Add(err error) {
 	if err != nil && strings.Index(e.str, err.Error()) == -1 {
 		e.str += err.Error() + "\n"
+		if DebugLevel >= 3 {
+			e.str += "Stack trace:\n"
+			e.str += fmt.Sprintf("%s\n", debug.Stack())
+		}
 	}
 	return
 }

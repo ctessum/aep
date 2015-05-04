@@ -39,7 +39,7 @@ type SpatialProcessor struct {
 	SrgSpec                map[string]*SrgSpecHolder
 	srgCodes               map[string]string
 	Grids                  []*GridDef
-	gridRef                map[string]map[string]map[string]interface{}
+	gridRef                map[Country]map[string]map[string]interface{}
 	SurrogateGeneratorChan chan *SrgGenData
 	srgCache               map[string]*sparse.SparseArray
 	srgCacheMx             sync.Mutex
@@ -53,7 +53,7 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	sp.SrgSpec = make(map[string]*SrgSpecHolder)
 	sp.srgCodes = make(map[string]string)
 	sp.Grids = make([]*GridDef, 0)
-	sp.gridRef = make(map[string]map[string]map[string]interface{})
+	sp.gridRef = make(map[Country]map[string]map[string]interface{})
 	sp.SurrogateGeneratorChan = make(chan *SrgGenData)
 	sp.srgCache = make(map[string]*sparse.SparseArray)
 	sp.c = c
@@ -77,7 +77,16 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	}
 
 	var err error
+
+	c.wrfData, err = ParseWRFConfig(c.WPSnamelist, c.WRFnamelist)
+	if err != nil {
+		e.Add(err)
+	}
+
 	x := c.wrfData
+	if x == nil {
+		panic("wrfData needs to be initialized")
+	}
 	reportMx.Lock()
 	Report.GridNames = x.DomainNames
 	reportMx.Unlock()
@@ -171,6 +180,9 @@ func SpatialSetupRegularGrid(c *Context, e *ErrCat) *SpatialProcessor {
 func SpatialSetupIrregularGrid(c *Context, name, shapeFilePath string,
 	columnsToKeep []string, e *ErrCat) *SpatialProcessor {
 	sp, sr := setupCommon(c, e)
+	if shapeFilePath == "" {
+		e.Add(fmt.Errorf("In SpatialSetupIrregularGrid, shapeFilePath is empty"))
+	}
 	grid, err := NewGridIrregular(name, shapeFilePath,
 		columnsToKeep, sr)
 	e.Add(err)
@@ -733,7 +745,7 @@ func (sp *SpatialProcessor) GridRef() (err error) {
 			if len(SCC) == 8 {
 				SCC = "00" + SCC
 			}
-			country := getCountryName(splitLine[0][0:1])
+			country := getCountryFromID(splitLine[0][0:1])
 			FIPS := splitLine[0][1:]
 			srg := strings.Trim(splitLine[2], "\"\n")
 
@@ -743,7 +755,7 @@ func (sp *SpatialProcessor) GridRef() (err error) {
 			if _, ok := sp.gridRef[country][SCC]; !ok {
 				sp.gridRef[country][SCC] = make(map[string]interface{})
 			}
-			sp.gridRef[country][SCC][FIPS] = country + srg
+			sp.gridRef[country][SCC][FIPS] = country.String() + srg
 		}
 	}
 	return

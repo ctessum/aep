@@ -242,7 +242,6 @@ func (c *Context) getPeriod(t time.Time) Period {
 
 func (p *ConfigData) setup(e *ErrCat) {
 	c := *p
-	var err error
 	if c.DefaultSettings.InventoryFreq == "" {
 		c.DefaultSettings.InventoryFreq = "annual"
 	}
@@ -250,11 +249,6 @@ func (p *ConfigData) setup(e *ErrCat) {
 		strings.ToLower(c.DefaultSettings.OutputType)
 	c.DefaultSettings.setup(e)
 	c.DefaultSettings.catPaths(c.Dirs, e)
-	c.DefaultSettings.wrfData, err = ParseWRFConfig(
-		c.DefaultSettings.WPSnamelist, c.DefaultSettings.WRFnamelist)
-	if err != nil {
-		e.Add(err)
-	}
 	if c.DefaultSettings.testMode {
 		c.DefaultSettings.SpecType = "mass"
 	}

@@ -781,6 +781,10 @@ func (g *GridDef) SetupSrgMapCache(srgDir string) (err error) {
 	g.srgMapCache.mutex.Lock()
 	g.srgMapCache.cache = make(map[string]map[string]*sparse.SparseArray)
 	fname := filepath.Join(srgDir, "srgMapCache_"+g.Name+".sqlite")
+	err = os.MkdirAll(srgDir, os.ModePerm)
+	if err != nil {
+		return
+	}
 	g.srgMapCache.db, err = sql.Open("sqlite3", fname)
 	if err != nil {
 		g.srgMapCache.mutex.Unlock()

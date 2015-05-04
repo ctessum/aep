@@ -98,7 +98,7 @@ type ParsedRecord struct {
 	PointXcoord        float64  // Projected coordinate for point sources
 	PointYcoord        float64  // Projected coordinate for point sources
 	DoubleCountPols    []string // Pols that should not be included in the speciation of this record to avoid double counting
-	Country            string
+	Country            Country
 }
 
 type SpecValUnits struct {
@@ -665,12 +665,7 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 				}
 
 				// set which country this record is for
-				record.Country = fInfo.Country
-				if record.Country == "US" {
-					record.Country = "USA"
-				} else if record.Country == "CANADA" {
-					record.Country = "CA"
-				}
+				record.Country = getCountryFromName(fInfo.Country)
 				recordChan <- record
 			}
 			wg.Done()
