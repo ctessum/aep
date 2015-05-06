@@ -586,7 +586,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	pkg, err := build.Import("bitbucket.org/ctessum/aep", "", build.FindOnly)
+	pkg, err := build.Import("github.com/ctessum/aep", "", build.FindOnly)
 	if err != nil {
 		panic(err)
 	}
