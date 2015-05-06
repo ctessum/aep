@@ -61,18 +61,20 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	// Check the surrogate ShapefileDir to make sure they're preseht and
 	// can be opened.
 	e.Add(sp.SurrogateSpecification())
-	for _, srg := range sp.SrgSpec {
-		file := filepath.Join(
-			sp.c.ShapefileDir, srg.DATASHAPEFILE+".shp")
-		shp, err := gis.OpenShapefile(file, true)
-		e.Add(err)
-		e.Add(shp.Close())
-		if srg.WEIGHTSHAPEFILE != "" {
+	if c.CheckSrgs {
+		for _, srg := range sp.SrgSpec {
 			file := filepath.Join(
-				sp.c.ShapefileDir, srg.WEIGHTSHAPEFILE+".shp")
+				sp.c.ShapefileDir, srg.DATASHAPEFILE+".shp")
 			shp, err := gis.OpenShapefile(file, true)
 			e.Add(err)
 			e.Add(shp.Close())
+			if srg.WEIGHTSHAPEFILE != "" {
+				file := filepath.Join(
+					sp.c.ShapefileDir, srg.WEIGHTSHAPEFILE+".shp")
+				shp, err := gis.OpenShapefile(file, true)
+				e.Add(err)
+				e.Add(shp.Close())
+			}
 		}
 	}
 

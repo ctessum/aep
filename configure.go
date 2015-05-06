@@ -162,6 +162,8 @@ type Context struct {
 	testMode              bool // testMode is set by a command line flag and is used for testing the program. In ensures that SpecType is set to "mass" and turns off the conversion from VOCs to TOGs so that speciated emissions totals can be compared to total emissions in the inventory
 	msgchan               chan string
 	slaves                []string // Addresses for available slaves when in distributed mode.
+
+	CheckSrgs bool // Should we check the surrogate shapefiles before running?
 }
 
 // PolHolder allows the configuration of chemical speciation settings for individual pollutants.
