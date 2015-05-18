@@ -29,10 +29,9 @@ import (
 	"strings"
 	"sync"
 
-	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
-	"github.com/ctessum/projgeom"
-	"github.com/lukeroth/gdal"
+	"github.com/ctessum/geom/encoding/shp"
+	"github.com/ctessum/geom/proj"
 )
 
 type SpatialProcessor struct {
@@ -46,7 +45,7 @@ type SpatialProcessor struct {
 	c                      *Context
 }
 
-func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialReference) {
+func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr proj.SR) {
 	c.Log("Setting up spatial environment...", 1)
 
 	sp = new(SpatialProcessor)
@@ -58,22 +57,22 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	sp.srgCache = make(map[string]*sparse.SparseArray)
 	sp.c = c
 
-	// Check the surrogate ShapefileDir to make sure they're preseht and
-	// can be opened.
+	// Check the surrogate ShapefileDir to make sure the shapefiles are
+	// present and can be opened.
 	e.Add(sp.SurrogateSpecification())
 	if c.CheckSrgs {
 		for _, srg := range sp.SrgSpec {
 			file := filepath.Join(
 				sp.c.ShapefileDir, srg.DATASHAPEFILE+".shp")
-			shp, err := gis.OpenShapefile(file, true)
+			shpf, err := shp.NewDecoder(file)
 			e.Add(err)
-			e.Add(shp.Close())
+			shpf.Close()
 			if srg.WEIGHTSHAPEFILE != "" {
 				file := filepath.Join(
 					sp.c.ShapefileDir, srg.WEIGHTSHAPEFILE+".shp")
-				shp, err := gis.OpenShapefile(file, true)
+				shpf, err := shp.NewDecoder(file)
 				e.Add(err)
-				e.Add(shp.Close())
+				shpf.Close()
 			}
 		}
 	}
@@ -92,14 +91,14 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	reportMx.Lock()
 	Report.GridNames = x.DomainNames
 	reportMx.Unlock()
-	var proj string
+	var mapProj string
 	switch x.Map_proj {
 	case "lambert":
-		proj = "lcc"
+		mapProj = "lcc"
 	case "lat-lon":
-		proj = "longlat"
+		mapProj = "longlat"
 	case "merc":
-		proj = "merc"
+		mapProj = "merc"
 	default:
 		e.Add(fmt.Errorf("ERROR: `lambert', `lat-lon', and `merc' "+
 			"are the only map projections"+
@@ -107,8 +106,8 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 			x.Map_proj))
 		return
 	}
-	projInfo := new(gis.ParsedProj4)
-	projInfo.Proj = proj
+	projInfo := new(proj.ParsedProj4)
+	projInfo.Proj = mapProj
 	projInfo.Lat_1 = x.Truelat1
 	projInfo.Lat_2 = x.Truelat2
 	projInfo.Lat_0 = x.Ref_lat
@@ -118,7 +117,7 @@ func setupCommon(c *Context, e *ErrCat) (sp *SpatialProcessor, sr gdal.SpatialRe
 	projInfo.To_meter = 1.
 	msg := fmt.Sprintf("Output projection is:\n%v", projInfo.ToString())
 	c.Log(msg, 0)
-	sr, err = gis.CreateSpatialReference(projInfo.ToString())
+	sr, err = proj.FromProj4(projInfo.ToString())
 	e.Add(err)
 	e.Add(sp.GridRef())
 	return
@@ -255,8 +254,8 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 	var err error
 	switch sp.c.SectorType {
 	case "point":
-		var ct *projgeom.CoordinateTransform
-		ct, err = projgeom.NewCoordinateTransform(sp.c.inputSr, sp.Grids[0].Sr)
+		var ct *proj.CoordinateTransform
+		ct, err = proj.NewCoordinateTransform(sp.c.inputSr, sp.Grids[0].Sr)
 		emisInRecord = false
 
 		record.gridSrg = make([]*sparse.SparseArray, len(sp.Grids))
@@ -267,7 +266,7 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 			var withinGrid bool
 			record.PointXcoord, record.PointYcoord, row, col,
 				withinGrid, err = grid.GetIndex(record.XLOC,
-				record.YLOC, &sp.c.inputSr, ct)
+				record.YLOC, sp.c.inputSr, ct)
 			if err != nil {
 				panic(err)
 			}

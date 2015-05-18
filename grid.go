@@ -21,22 +21,19 @@ package aep
 import (
 	"encoding/gob"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
-	"bitbucket.org/ctessum/gis"
 	"bitbucket.org/ctessum/sparse"
-	"github.com/ctessum/geomconv"
-	"github.com/ctessum/geomop"
-	"github.com/ctessum/projgeom"
-	"github.com/ctessum/shapefile"
-	"github.com/lukeroth/gdal"
-	"github.com/patrick-higgins/rtreego"
-	"github.com/twpayne/gogeom/geom"
+	"github.com/ctessum/geom"
+	"github.com/ctessum/geom/encoding/shp"
+	"github.com/ctessum/geom/index/rtree"
+	"github.com/ctessum/geom/op"
+	"github.com/ctessum/geom/proj"
+	goshp "github.com/jonas-p/go-shp"
 )
 
 func init() {
@@ -50,32 +47,26 @@ type GridDef struct {
 	X0, Y0          float64
 	TimeZones       map[string]*sparse.SparseArray
 	Cells           []*GridCell
-	Sr              gdal.SpatialReference
+	Sr              proj.SR
 	Extent          geom.T
 	IrregularGrid   bool     // whether the grid is a regular grid
 	OtherFieldNames []string // names of other columns we want to keep
-	rtree           *rtreego.Rtree
+	rtree           *rtree.Rtree
 	srgMapCache     cacheDB
 }
 
 type GridCell struct {
-	Geom           geom.T
+	geom.T
 	Row, Col       int
 	OtherFieldData []interface{} // data for the other columns we want to keep
 	Weight         float64
-	rtreebounds    *rtreego.Rect
 }
 
 func (c *GridCell) Copy() *GridCell {
 	o := new(GridCell)
-	o.Geom = c.Geom
+	o.T = c.T
 	o.Row, o.Col = c.Row, c.Col
-	o.rtreebounds = c.rtreebounds
 	return o
-}
-
-func (g *GridCell) Bounds() *rtreego.Rect {
-	return g.rtreebounds
 }
 
 func (g *GridDef) AddOtherFieldNames(names ...string) {
@@ -97,15 +88,14 @@ func (c *GridCell) AddOtherFieldData(data ...interface{}) {
 }
 
 func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
-	sr gdal.SpatialReference) (grid *GridDef) {
-	var err error
+	sr proj.SR) (grid *GridDef) {
 	grid = new(GridDef)
 	grid.Name = Name
 	grid.Nx, grid.Ny = Nx, Ny
 	grid.Dx, grid.Dy = Dx, Dy
 	grid.X0, grid.Y0 = X0, Y0
 	grid.Sr = sr
-	grid.rtree = rtreego.NewTree(25, 50)
+	grid.rtree = rtree.NewTree(25, 50)
 	// Create geometry
 	grid.Cells = make([]*GridCell, grid.Nx*grid.Ny)
 	i := 0
@@ -115,68 +105,65 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			x := grid.X0 + float64(ix)*grid.Dx
 			y := grid.Y0 + float64(iy)*grid.Dy
 			cell.Row, cell.Col = iy, ix
-			cell.Geom = geom.T(geom.Polygon{[][]geom.Point{{
+			cell.T = geom.T(geom.Polygon([][]geom.Point{{
 				{x, y}, {x + grid.Dx, y},
-				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}}})
-			cell.rtreebounds, err = geomconv.GeomToRect(cell.Geom)
-			if err != nil {
-				panic(err)
-			}
+				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}}))
 			grid.rtree.Insert(cell)
 			grid.Cells[i] = cell
 			i++
 		}
 	}
-	grid.Extent = geom.T(geom.Polygon{[][]geom.Point{{{X0, Y0},
+	grid.Extent = geom.T(geom.Polygon([][]geom.Point{{{X0, Y0},
 		{X0 + Dx*float64(Nx), Y0},
 		{X0 + Dx*float64(Nx), Y0 + Dy*float64(Ny)},
-		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}}})
+		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}}))
 	return
 }
 
 // Irregular grids have 1 column and n rows, where n is the number of
 // shapes in the shapefile.
 func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
-	outputSr gdal.SpatialReference) (grid *GridDef, err error) {
+	outputSr proj.SR) (grid *GridDef, err error) {
 	grid = new(GridDef)
 	grid.Name = Name
 	grid.Sr = outputSr
 	grid.IrregularGrid = true
-	var shp *gis.Shapefile
-	shp, err = gis.OpenShapefile(shapefilePath, true)
+	var shpf *shp.Decoder
+	shpf, err = shp.NewDecoder(shapefilePath)
 	if err != nil {
 		return
 	}
-	grid.Cells = make([]*GridCell, shp.NumFeatures)
-	grid.Ny = shp.NumFeatures
+	var srf *os.File
+	srf, err = os.Open(strings.TrimSuffix(shapefilePath, ".shp") + ".prj")
+	if err != nil {
+		return
+	}
+	var shpSR proj.SR
+	shpSR, err = proj.ReadPrj(srf)
+	if err != nil {
+		return
+	}
+	grid.Cells = make([]*GridCell, shpf.AttributeCount())
+	grid.Ny = shpf.AttributeCount()
 	grid.Nx = 1
 	grid.OtherFieldNames = columnsToKeep
-	columnIndicies := make([]int, len(columnsToKeep))
-	for i, name := range columnsToKeep {
-		columnIndicies[i], err = shp.GetColumnIndex(name)
-		if err != nil {
-			return
-		}
-	}
-	var ct *projgeom.CoordinateTransform
-	ct, err = projgeom.NewCoordinateTransform(shp.Sr, grid.Sr)
+	var ct *proj.CoordinateTransform
+	ct, err = proj.NewCoordinateTransform(shpSR, grid.Sr)
 	if err != nil {
 		return
 	}
-	grid.rtree = rtreego.NewTree(25, 50)
+	grid.rtree = rtree.NewTree(25, 50)
 	i := 0
 	for {
 		cell := new(GridCell)
-		cell.Geom, cell.OtherFieldData, err =
-			shp.ReadNextFeature(columnIndicies...)
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-				break
-			}
-			return
+		g, fields, more := shpf.DecodeRowFields(columnsToKeep...)
+		if !more {
+			break
 		}
-		cell.Geom, err = ct.Reproject(cell.Geom)
+		for _, col := range columnsToKeep {
+			cell.OtherFieldData = append(cell.OtherFieldData, fields[col])
+		}
+		cell.T, err = ct.Reproject(g)
 		if err != nil {
 			return
 		}
@@ -184,16 +171,12 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 		grid.Cells[i] = cell
 
 		if grid.Extent == nil {
-			grid.Extent = cell.Geom
+			grid.Extent = cell.T
 		} else {
-			grid.Extent, err = geomop.Construct(grid.Extent, cell.Geom, geomop.UNION)
+			grid.Extent, err = op.Construct(grid.Extent, cell.T, op.UNION)
 			if err != nil {
 				return
 			}
-		}
-		cell.rtreebounds, err = geomconv.GeomToRect(cell.Geom)
-		if err != nil {
-			return
 		}
 		grid.rtree.Insert(cell)
 		i++
@@ -205,7 +188,7 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 
 	var err error
-	var timezones *rtreego.Rtree
+	var timezones *rtree.Rtree
 	timezones, err = getTimeZones(tzFile, tzColumn)
 	if err != nil {
 		return err
@@ -217,12 +200,12 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 	if err != nil {
 		return err
 	}
-	tzsr, err := projgeom.ReadPrj(f)
+	tzsr, err := proj.ReadPrj(f)
 	if err != nil {
 		return err
 	}
-	var ct *projgeom.CoordinateTransform
-	ct, err = projgeom.NewCoordinateTransform(grid.Sr, tzsr)
+	var ct *proj.CoordinateTransform
+	ct, err = proj.NewCoordinateTransform(grid.Sr, tzsr)
 	if err != nil {
 		return err
 	}
@@ -234,14 +217,13 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 		go func(proc int) {
 			var err2 error
 			var cellCenter geom.T
-			var pointRect *rtreego.Rect
 			for ii := proc; ii < len(grid.Cells); ii += nprocs {
 				cell := grid.Cells[ii]
 				// find timezone nearest to the center of the cell.
 				// Need to project grid to timezone projection rather than the
 				// other way around because the timezones can include the north
 				// and south poles which don't convert well to other projections.
-				cellCenter, err2 = geomop.Centroid(cell.Geom)
+				cellCenter, err2 = op.Centroid(cell.T)
 				if err2 != nil {
 					errChan <- err2
 					return
@@ -251,16 +233,11 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 					errChan <- err2
 					return
 				}
-				pointRect, err2 = geomconv.GeomToRect(cellCenter)
-				if err2 != nil {
-					errChan <- err2
-					return
-				}
 				var tz string
 				var foundtz, intersects bool
-				for _, tzDataI := range timezones.SearchIntersect(pointRect) {
+				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds(nil)) {
 					tzData := tzDataI.(*tzHolder)
-					intersects, err2 = geomop.Within(cellCenter, tzData.Geom)
+					intersects, err2 = op.Within(cellCenter, tzData.T)
 					if err2 != nil {
 						errChan <- err2
 						return
@@ -304,66 +281,34 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 }
 
 type tzHolder struct {
-	tz     string
-	Geom   geom.T
-	bounds *rtreego.Rect
+	tz string
+	geom.T
 }
 
-func (t *tzHolder) Bounds() *rtreego.Rect {
-	return t.bounds
-}
+func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
+	timezones := rtree.NewTree(25, 50)
 
-func getTimeZones(tzFile, tzColumn string) (*rtreego.Rtree, error) {
-	timezones := rtreego.NewTree(25, 50)
-
-	f1, err := os.Open(tzFile)
+	tzShp, err := shp.NewDecoder(tzFile)
 	if err != nil {
 		return nil, err
 	}
-	defer f1.Close()
-	tzShp, err := shapefile.OpenShapefile(f1)
-	if err != nil {
-		return nil, err
-	}
-	f2, err := os.Open(strings.Replace(tzFile, ".shp", ".dbf", -1))
-	if err != nil {
-		return nil, err
-	}
-	defer f2.Close()
-	tzDBF, err := shapefile.OpenDBFFile(f2)
-	if err != nil {
-		return nil, err
-	}
-	tzIndex, ok := tzDBF.FieldIndicies[tzColumn]
-	if !ok {
-		err = fmt.Errorf("TZ shapefile doesn't contain column %v", tzColumn)
-	}
+	defer tzShp.Close()
 	for {
-		rec, err := tzShp.NextRecord()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
+		g, fields, more := tzShp.DecodeRowFields(tzColumn)
+		if !more {
+			break
 		}
+
 		tzData := new(tzHolder)
-		tzData.Geom = rec.Geometry
-		fields, err := tzDBF.NextRecord()
-		if err != nil {
-			return nil, err
-		}
-		tzData.tz = fields[tzIndex].(string)
-		tzData.bounds, err = geomconv.GeomToRect(tzData.Geom)
-		if err != nil {
-			return nil, err
-		}
+		tzData.T = g
+		tzData.tz = fields[tzColumn].(string)
 		timezones.Insert(tzData)
 	}
-	return timezones, nil
+	return timezones, tzShp.Error()
 }
 
-func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
-	ct *projgeom.CoordinateTransform) (
+func (grid *GridDef) GetIndex(x, y float64, inputSr proj.SR,
+	ct *proj.CoordinateTransform) (
 	X, Y float64, row, col int, withinGrid bool, err error) {
 	g := geom.T(geom.Point{x, y})
 	g, err = ct.Reproject(g)
@@ -372,15 +317,11 @@ func (grid *GridDef) GetIndex(x, y float64, inputSr *gdal.SpatialReference,
 	}
 	gp := g.(geom.Point)
 	X, Y = gp.X, gp.Y // coordinates transformed to output projection
-	withinGrid, err = geomop.Within(g, grid.Extent)
+	withinGrid, err = op.Within(g, grid.Extent)
 	if err != nil || !withinGrid {
 		return
 	}
-	bbox, err := geomconv.GeomToRect(g)
-	if err != nil {
-		return
-	}
-	gridCellsTemp := grid.rtree.SearchIntersect(bbox)
+	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds(nil))
 	cell := gridCellsTemp[0].(*GridCell)
 	row = cell.Row
 	col = cell.Col
@@ -392,35 +333,40 @@ func (g *GridDef) WriteToShp(outdir string) error {
 	for _, ext := range []string{".shp", ".prj", ".dbf", ".shx"} {
 		os.Remove(filepath.Join(outdir, g.Name+ext))
 	}
-	colNames := []string{"row", "col"}
-	exampleData := []interface{}{0, 0}
 	if len(g.OtherFieldNames) != len(g.Cells[0].OtherFieldData) {
 		return fmt.Errorf("OtherFieldNames (%v) is not the same length "+
 			"as OtherFieldData (%v)", g.OtherFieldNames,
 			g.Cells[0].OtherFieldData)
 	}
+	fields := make([]goshp.Field, 2+len(g.OtherFieldNames))
+	fields[0] = goshp.NumberField("row", 10)
+	fields[1] = goshp.NumberField("col", 10)
 	for i, name := range g.OtherFieldNames {
-		colNames = append(colNames, name)
-		exampleData = append(exampleData, g.Cells[0].OtherFieldData[i])
+		switch g.Cells[0].OtherFieldData[i].(type) {
+		case float64:
+			fields[i+2] = goshp.FloatField(name, 20, 10)
+		case int:
+			fields[i+2] = goshp.NumberField(name, 10)
+		case string:
+			fields[i+2] = goshp.StringField(name, 20)
+		}
 	}
-	var shp *gis.Shapefile
-	shp, err = gis.CreateShapefile(outdir, g.Name,
-		g.Sr, gdal.GT_Polygon, colNames, exampleData...)
+	var shpf *shp.Encoder
+	shpf, err = shp.NewEncoderFromFields(filepath.Join(outdir, g.Name),
+		goshp.POLYGON, fields...)
 	if err != nil {
 		return err
 	}
-	for fid, cell := range g.Cells {
+	for _, cell := range g.Cells {
 		data := []interface{}{cell.Row, cell.Col}
-		index := []int{0, 1}
-		for i, d := range cell.OtherFieldData {
+		for _, d := range cell.OtherFieldData {
 			data = append(data, d)
-			index = append(index, i+2)
 		}
-		err = shp.WriteFeature(fid, cell.Geom, index, data...)
+		err = shpf.EncodeFields(cell.T, data...)
 		if err != nil {
 			return err
 		}
 	}
-	shp.Close()
+	shpf.Close()
 	return nil
 }

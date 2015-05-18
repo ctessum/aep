@@ -19,16 +19,16 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/gis"
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/lukeroth/gdal"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ctessum/geom/proj"
 )
 
 const (
@@ -132,7 +132,7 @@ type Context struct {
 	specFrac               map[string]map[string]map[string]SpecHolder
 	PolsToKeep             map[string]*PolHolder // List and characteristics of pollutants to extract from the inventory and process
 	InputProj4             string                // Proj4 specification of the spatial projection of the input emissions data.
-	inputSr                gdal.SpatialReference
+	inputSr                proj.SR
 	GridRefFile            string   // Location of the gridding reference file
 	SrgSpecFile            string   // Location of the surrogate specification file
 	TemporalRefFile        string   // Location of the temporal reference file
@@ -339,7 +339,7 @@ func (p *Context) FillWithDefaults(d *Context, e *ErrCat) {
 		}
 	}
 	var err error
-	c.inputSr, err = gis.CreateSpatialReference(c.InputProj4)
+	c.inputSr, err = proj.FromProj4(c.InputProj4)
 	e.Add(err)
 	c.slaves = d.slaves
 	*p = c
