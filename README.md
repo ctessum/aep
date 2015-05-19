@@ -100,4 +100,4 @@ AEP is able to utilize a distributed computing system when generating spatial su
 
 * Add capability to process meteorology-dependent emissions (e.g., vehicle tailpipe, wood smoke, road dust)
 
-* Add capability to use hourly (CEMS) data inputs for electricity generation units
+* Add capability to integrate with the MOVES vehicle emissions model.
