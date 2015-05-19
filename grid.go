@@ -177,6 +177,10 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 			if err != nil {
 				return
 			}
+			grid.Extent, err = op.Simplify(grid.Extent, 1.e-8)
+			if err != nil {
+				return
+			}
 		}
 		grid.rtree.Insert(cell)
 		i++
@@ -301,7 +305,7 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
 
 		tzData := new(tzHolder)
 		tzData.T = g
-		tzData.tz = fields[tzColumn].(string)
+		tzData.tz = fields[tzColumn]
 		timezones.Insert(tzData)
 	}
 	return timezones, tzShp.Error()

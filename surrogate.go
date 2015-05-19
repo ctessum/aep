@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -196,7 +197,8 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 	fields[3] = goshp.FloatField("shapeFrac", 20, 10)
 	fields[4] = goshp.StringField("allCovered", 1)
 	var outShp *shp.Encoder
-	outShp, err = shp.NewEncoderFromFields(filepath.Join(outputDir, OutName),
+	outShp, err = shp.NewEncoderFromFields(
+		filepath.Join(outputDir, OutName+".shp"),
 		goshp.POLYGON, fields...)
 	defer outShp.Close()
 	var tx *sql.Tx
@@ -261,8 +263,14 @@ func CreateGriddingSurrogate(srgCode, inputShapeFile,
 
 func (g *GriddedSrgData) WriteToShp(s *shp.Encoder) error {
 	for _, cell := range g.Cells {
+		var covered string
+		if g.CoveredByGrid {
+			covered = "T"
+		} else {
+			covered = "F"
+		}
 		err := s.EncodeFields(cell.T,
-			cell.Row, cell.Col, g.InputID, cell.Weight, g.CoveredByGrid)
+			cell.Row, cell.Col, g.InputID, cell.Weight, covered)
 		if err != nil {
 			return err
 		}
@@ -284,13 +292,16 @@ func getInputData(inputShapeFile, ShapeColumn string,
 		return nil, err
 	}
 	inputSR, err := proj.ReadPrj(prjf)
+	if err != nil {
+		return nil, err
+	}
 	ct, err := proj.NewCoordinateTransform(inputSR, gridData.Sr)
 	if err != nil {
 		return nil, err
 	}
 	inputData := make(map[string]geom.T)
 	var ggeom geom.T
-	var fields map[string]interface{}
+	var fields map[string]string
 	var intersects bool
 	var more bool
 	gridBounds := gridData.Extent.Bounds(nil)
@@ -305,7 +316,7 @@ func getInputData(inputShapeFile, ShapeColumn string,
 		}
 		intersects = ggeom.Bounds(nil).Overlaps(gridBounds)
 		if intersects {
-			inputID := fields[ShapeColumn].(string)
+			inputID := fields[ShapeColumn]
 			// Extend existing polygon if one already exists for this InputID
 			if _, ok := inputData[inputID]; !ok {
 				inputData[inputID] = ggeom
@@ -344,10 +355,16 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 	if err != nil {
 		return nil, err
 	}
-	fieldNames := append([]string{FilterFunction.Column}, WeightColumns...)
+	var fieldNames []string
+	if FilterFunction != nil {
+		fieldNames = append(fieldNames, FilterFunction.Column)
+	}
+	if WeightColumns != nil {
+		fieldNames = append(fieldNames, WeightColumns...)
+	}
 	srgData := rtree.NewTree(25, 50)
 	var recGeom geom.T
-	var data map[string]interface{}
+	var data map[string]string
 	var intersects bool
 	var keepFeature bool
 	var featureVal string
@@ -392,18 +409,11 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 				if WeightColumns != nil {
 					weightval := 0.
 					for _, name := range WeightColumns {
-						switch t := data[name].(type) {
-						case float64:
-							weightval += data[name].(float64)
-						case int:
-							weightval += float64(data[name].(int))
-						case error: // can't parse value
-							Log(data[name].(error).Error(), 1)
-							//weightval += 0.
-						default:
-							err = fmt.Errorf("Can't deal with data type %t", t)
+						v, err := strconv.ParseFloat(data[name], 64)
+						if err != nil {
 							return srgData, err
 						}
+						weightval += v
 					}
 					switch srg.T.(type) {
 					case geom.Polygon, geom.MultiPolygon:
@@ -585,7 +595,7 @@ func (s *SrgGenWorker) intersections1(
 	singleShapeSrgWeight = 0.
 	srgs = make([]*SrgHolder, 0, 500)
 	wg.Add(nprocs)
-	srgsWithinBounds := s.surrogates.SearchIntersect(data.InputGeom.Bounds(nil))
+	srgsWithinBounds := s.surrogates.SearchIntersect(inputBounds)
 	errChan := make(chan error)
 	for procnum := 0; procnum < nprocs; procnum++ {
 		go func(procnum int) {
