@@ -9,7 +9,7 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 * AEP's spatial surrogate generator is integrated into the program and generates surrogates automatically, instead of requiring a completely separate program to generate spatial surrogates. This greatly reduces the time and effort required to produce emissions for a new model domain.
 * In AEP, the spatial domain is set up automatically based on WRF `namelist.input` and `namelist.wps` files, and meteorology information for plume rise is read directly from WRF output files from a previous run. This avoids the need for a seperate meteorology preprocesser and a multiple spatial domain configuration files in different formats.
 * AEP extracts chemical speciation information directly from the [SPECIATE](http://www.epa.gov/ttnchie1/software/speciate/) database, eliminating the need for a separate program to create speciation files and greatly reducing the effort required to change the chemical speciation mechanism used when processing emissions.
-* AEP outputs emissions information directly to the WRF/Chem file format and RADM2 chemical mechanism, eliminating the need to convert emissions from the CMAQ file format and CB05 chemical mechanism.
+* AEP outputs emissions information directly to the WRF/Chem file format; other file formats can be added.
 * AEP is designed to take advantage of multiprocessor computers, with automatic concurrancy on a single machine and the option of using a distributed cluster of computers to generate spatial surrogates.
 
 ## Installation
