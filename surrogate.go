@@ -409,9 +409,15 @@ func getSrgData(surrogateShapeFile string, WeightColumns []string,
 				if WeightColumns != nil {
 					weightval := 0.
 					for _, name := range WeightColumns {
-						v, err := strconv.ParseFloat(data[name], 64)
-						if err != nil {
-							return srgData, err
+						var v float64
+						if data[name] == "************************" {
+							// null value
+							v = 0.
+						} else {
+							v, err = strconv.ParseFloat(data[name], 64)
+							if err != nil {
+								return srgData, err
+							}
 						}
 						weightval += v
 					}
