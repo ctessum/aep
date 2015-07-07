@@ -296,7 +296,6 @@ func (r *ParsedRecord) ParseSCC() {
 	} else if len(r.SCC) == 2 {
 		r.SCC = "00" + r.SCC + "000000"
 	}
-
 }
 
 func (r *ParsedRecord) setup(c *Context) error {
