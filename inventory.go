@@ -62,29 +62,29 @@ func newFileInfo() (f *FileInfo) {
 // input file type.
 type ParsedRecord struct {
 	// Five digit FIPS code for state and county (required)
-	FIPS string `pointorl:"0",areaorl:"0",nonroadorl:"0",mobileorl:"0",pointida:"0:5",areaida:"0:5",mobileida:"0:5",pointff10:"1"`
+	FIPS string `pointorl:"0" areaorl:"0" nonroadorl:"0" mobileorl:"0" pointida:"0:5" areaida:"0:5" mobileida:"0:5" pointff10:"1"`
 
 	// Plant Identification Code (15 characters maximum) (required,
 	// this is the same as the State Facility Identifier in the NIF)
-	PLANTID string `pointorl:"1",pointida:"5:20",pointff10:"3"`
+	PLANTID string `pointorl:"1" pointida:"5:20" pointff10:"3"`
 
 	// Point Identification Code (15 characters maximum) (required,
 	// this is the same as the Emission Unit ID in the NIF)
-	POINTID string `pointorl:"2",pointida:"20:35",pointff10:"4"`
+	POINTID string `pointorl:"2" pointida:"20:35" pointff10:"4"`
 
 	// Stack Identification Code (15 characters maximum) (recommended,
 	// this is the same as the Emissions Release Point ID in the NIF)
-	STACKID string `pointorl:"3",pointida:"35:47",pointff10:"5"`
+	STACKID string `pointorl:"3" pointida:"35:47" pointff10:"5"`
 
 	// DOE Plant ID (15 characters maximum) (recommended, this is the
 	// same as the Process ID in the NIF)
-	SEGMENT string `pointorl:"4",pointida:"59:61",pointff10:"6"`
+	SEGMENT string `pointorl:"4" pointida:"59:61" pointff10:"6"`
 
 	// Plant Name (40 characters maximum) (recommended)
-	PLANT string `pointorl:"5",pointida:"61:101",pointff10:"15"`
+	PLANT string `pointorl:"5" pointida:"61:101" pointff10:"15"`
 
 	// Ten character Source Classification Code (required)
-	SCC string `pointorl:"6",areaorl:"1",nonroadorl:"1",mobileorl:"1",pointida:"101:111",areaida:"5:15",mobileida:"15:25",pointff10:"11"`
+	SCC string `pointorl:"6" areaorl:"1" nonroadorl:"1" mobileorl:"1" pointida:"101:111" areaida:"5:15" mobileida:"15:25" pointff10:"11"`
 
 	// Source type (2 characters maximum), used by SMOKE in determining
 	// applicable MACT-based controls (required)
@@ -92,48 +92,48 @@ type ParsedRecord struct {
 	// 	02 = Section 12 area source
 	// 	03 = nonroad
 	// 	04 = onroad
-	SRCTYPE string `pointorl:"8",areaorl:"4",nonroadorl:"8",mobileorl:"5",pointff10:"16"`
+	SRCTYPE string `pointorl:"8" areaorl:"4" nonroadorl:"8" mobileorl:"5" pointff10:"16"`
 
 	// Stack Height (ft) (required)
-	STKHGT float64 `pointorl:"9",pointida:"119:123",pointff10:"17"`
+	STKHGT float64 `pointorl:"9" pointida:"119:123" pointff10:"17"`
 
 	// Stack Diameter (ft) (required)
-	STKDIAM float64 `pointorl:"10",pointida:"123:129",pointff10:"18"`
+	STKDIAM float64 `pointorl:"10" pointida:"123:129" pointff10:"18"`
 
 	// Stack Gas Exit Temperature (°F) (required)
-	STKTEMP float64 `pointorl:"11",pointida:"129:133",pointff10:"19"`
+	STKTEMP float64 `pointorl:"11" pointida:"129:133" pointff10:"19"`
 
 	// Stack Gas Flow Rate (ft3/sec) (optional)
-	STKFLOW float64 `pointorl:"12",pointida:"133:143",pointff10:"20"`
+	STKFLOW float64 `pointorl:"12" pointida:"133:143" pointff10:"20"`
 
 	// Stack Gas Exit Velocity (ft/sec) (required)
-	STKVEL float64 `pointorl:"13",pointida:"143:152",pointff10:"21"`
+	STKVEL float64 `pointorl:"13" pointida:"143:152" pointff10:"21"`
 
 	// Standard Industrial Classification Code (recommended)
-	SIC string `pointorl:"14",areaorl:"2",pointida:"226:230"`
+	SIC string `pointorl:"14" areaorl:"2" pointida:"226:230"`
 
 	// Maximum Available Control Technology Code
 	// (6 characters maximum) (optional)
-	MACT string `pointorl:"15",areaorl:"3"`
+	MACT string `pointorl:"15" areaorl:"3"`
 
 	// North American Industrial Classification System Code
 	// (6 characters maximum) (optional)
-	NAICS string `pointorl:"16",areaorl:"5",pointff10:"22"`
+	NAICS string `pointorl:"16" areaorl:"5" pointff10:"22"`
 
 	// Coordinate system type (1 character maximum) (required)
 	// U = Universal Transverse Mercator
 	// L = Latitude/longitude
-	CTYPE string `pointorl:"17",default:"L"`
+	CTYPE string `pointorl:"17" default:"L"`
 
 	// X location (required)
 	// If CTYPE = U, Easting value (meters)
 	// If CTYPE = L, Longitude (decimal degrees)
-	XLOC float64 `pointorl:"18",pointida:"239:248",pointff10:"23"`
+	XLOC float64 `pointorl:"18" pointida:"239:248" pointff10:"23"`
 
 	// Y location (required)
 	// If CTYPE = U, Northing value (meters)
 	// If CTYPE = L, Latitude (decimal degrees)
-	YLOC float64 `pointorl:"19",pointida:"230:239",pointff10:"24"`
+	YLOC float64 `pointorl:"19" pointida:"230:239" pointff10:"24"`
 
 	//	UTM zone (required if CTYPE = U)
 	UTMZ int `pointorl:"20"`
@@ -150,29 +150,29 @@ type ParsedRecord struct {
 	// average day emissions fields.
 	// For FF10 record, the first number is the location of the pollutant and
 	// the second number (followed by "...") is the location of January emissions.
-	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23",areaorl:"6,7,8",nonroadorl:"2,3,4",mobileorl:"2,3,4",pointida:"249:13:26",areaida:"15:10:20",mobileida:"25:10:20",pointff10:"12,52..."`
+	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23" areaorl:"6,7,8" nonroadorl:"2,3,4" mobileorl:"2,3,4" pointida:"249:13:26" areaida:"15:10:20" mobileida:"25:10:20" pointff10:"12,52..."`
 
 	// Control efficiency percentage (give value of 0-100) (recommended,
 	// if left blank, SMOKE default is 0).
 	// This can have different values for different pollutants.
-	CEFF map[string]float64 `pointorl:"24",areaorl:"9",nonroadorl:"5",pointida:"249;26:33",areaida:"15:31:38",mobileida:"25:20:20"`
+	CEFF map[string]float64 `pointorl:"24" areaorl:"9" nonroadorl:"5" pointida:"249;26:33" areaida:"15:31:38" mobileida:"25:20:20"`
 
 	// Rule Effectiveness percentage (give value of 0-100) (recommended,
 	// if left blank, SMOKE default is 100)
 	// This can have different values for different pollutants.
-	REFF map[string]float64 `pointorl:"25",areaorl:"10",nonroadorl:"6",pointida:"249:26:33",areaida:"15:38:41",mobileida:"25:20:20",default:"100"`
+	REFF map[string]float64 `pointorl:"25" areaorl:"10" nonroadorl:"6" pointida:"249:26:33" areaida:"15:38:41" mobileida:"25:20:20" default:"100"`
 
 	// Rule Penetration percentage (give value of 0-100) (recommended,
 	// if left blank, SMOKE default is 100)
 	// This can have different values for different pollutants.
-	RPEN map[string]float64 `areaorl:"11",nonroadorl:"7",pointida:"249:33:40",areaida:"14:41:47",mobileida:"25:20:20",default:"100"`
+	RPEN map[string]float64 `areaorl:"11" nonroadorl:"7" pointida:"249:33:40" areaida:"14:41:47" mobileida:"25:20:20" default:"100"`
 
 	//DOE Plant ID (generally recommended, and required if matching
 	// to hour-specific CEM data)
-	ORIS_FACILITY_CODE string `pointorl:"29",pointida:"47:53",pointff10:"41"`
+	ORIS_FACILITY_CODE string `pointorl:"29" pointida:"47:53" pointff10:"41"`
 
 	// Boiler Identification Code (recommended)
-	ORIS_BOILER_ID string `pointorl:"30",pointida:"53:59",pointff10:"42"`
+	ORIS_BOILER_ID string `pointorl:"30" pointida:"53:59" pointff10:"42"`
 
 	PointXcoord float64 // Projected coordinate for point sources
 	PointYcoord float64 // Projected coordinate for point sources
@@ -277,6 +277,28 @@ func (r *ParsedRecord) parseSIC() {
 	}
 }
 
+// Add zeros to 8 digit SCCs so that all SCCs are 10 digits
+// If SCC is less than 8 digits, add 2 zeros to the front and
+// the rest to the end.
+func (r *ParsedRecord) ParseSCC() {
+	if len(r.SCC) == 8 {
+		r.SCC = "00" + r.SCC
+	} else if len(r.SCC) == 7 {
+		r.SCC = "00" + r.SCC + "0"
+	} else if len(r.SCC) == 6 {
+		r.SCC = "00" + r.SCC + "00"
+	} else if len(r.SCC) == 5 {
+		r.SCC = "00" + r.SCC + "000"
+	} else if len(r.SCC) == 4 {
+		r.SCC = "00" + r.SCC + "0000"
+	} else if len(r.SCC) == 3 {
+		r.SCC = "00" + r.SCC + "00000"
+	} else if len(r.SCC) == 2 {
+		r.SCC = "00" + r.SCC + "000000"
+	}
+
+}
+
 func (r *ParsedRecord) setup(c *Context) error {
 	r.parseSIC()
 	r.parseNAICS()
@@ -329,11 +351,18 @@ func (r *ParsedRecord) setVal(fileType string, fInfo *FileInfo,
 	}
 
 	loc := fieldType.Tag.Get(fileType)
-	if loc == "" {
-		return pol
-	}
 	defaultVal := fieldType.Tag.Get("default")
-	valStr := getValStr(loc, defaultVal, line)
+	var valStr string
+	if loc == "" {
+		if defaultVal != "" { // if there is no loc, fill in the default.
+			valStr = defaultVal
+		} else {
+			return pol
+		}
+	}
+	if valStr == "" {
+		valStr = getValStr(loc, defaultVal, line)
+	}
 	switch fieldType.Type.Kind() {
 	case reflect.Float64:
 		fieldVal.SetFloat(stringToFloat(valStr))
@@ -600,6 +629,8 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 		}
 	} else if strings.Index(record, "IDA") >= 0 {
 		fInfo.Format = "IDA"
+	} else if strings.Index(record, "FF10") >= 0 {
+		fInfo.Format = "FF10"
 	} else {
 		panic("Unknown file type for: " + file)
 	}
@@ -615,7 +646,7 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 			fInfo.Ftype = strings.Replace(strings.Trim(record[5:], "\n "), ",", " ", -1)
 		}
 		if len(record) > 8 && record[1:8] == "COUNTRY" {
-			fInfo.Country = strings.Trim(record[8:], "\n ")
+			fInfo.Country = strings.Trim(record[8:], "\n =")
 		}
 		if len(record) > 5 && record[1:5] == "YEAR" {
 			fInfo.Year = strings.Trim(record[5:], "\n ")
@@ -658,7 +689,7 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 			for line = range lineChan {
 				record := new(ParsedRecord)
 				switch fInfo.Format + config.SectorType {
-				case "FF10_POINTpoint":
+				case "FF10point":
 					record = config.parseRecord("pointff10", line, fInfo, p)
 				case "ORLpoint":
 					record = config.parseRecord("pointorl", line, fInfo, p)
@@ -675,26 +706,7 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 				case "IDAmobile":
 					record = config.parseRecord("mobileida", line, fInfo, p)
 				default:
-					panic("Unknown format: " + fInfo.Format + " " +
-						config.SectorType)
-				}
-				// Add zeros to 8 digit SCCs so that all SCCs are 10 digits
-				// If SCC is less than 8 digits, add 2 zeros to the front and
-				// the rest to the end.
-				if len(record.SCC) == 8 {
-					record.SCC = "00" + record.SCC
-				} else if len(record.SCC) == 7 {
-					record.SCC = "00" + record.SCC + "0"
-				} else if len(record.SCC) == 6 {
-					record.SCC = "00" + record.SCC + "00"
-				} else if len(record.SCC) == 5 {
-					record.SCC = "00" + record.SCC + "000"
-				} else if len(record.SCC) == 4 {
-					record.SCC = "00" + record.SCC + "0000"
-				} else if len(record.SCC) == 3 {
-					record.SCC = "00" + record.SCC + "00000"
-				} else if len(record.SCC) == 2 {
-					record.SCC = "00" + record.SCC + "000000"
+					panic("Unknown format: " + fInfo.Format + config.SectorType)
 				}
 
 				// set which country this record is for
@@ -706,6 +718,7 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 	}
 	r := csv.NewReader(fInfo.fid)
 	r.Comment = '#'
+	firstLine := true
 	for {
 		line, err := r.Read()
 		if err != nil {
@@ -718,6 +731,10 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 				panic(fInfo.fname + "\n" + strings.Join(line, ",") + "\n" +
 					err.Error())
 			}
+		}
+		if firstLine && fInfo.Format == "FF10" {
+			firstLine = false // skip header row in FF10 files
+			continue
 		}
 		lineChan <- line
 	}
