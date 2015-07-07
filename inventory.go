@@ -24,6 +24,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -148,9 +149,10 @@ type ParsedRecord struct {
 	// For IDA records, the first number is the start of the first pollutant,
 	// and the second two numbers are offsets for the ends of the annual and
 	// average day emissions fields.
-	// For FF10 record, the first number is the location of the pollutant and
-	// the second number (followed by "...") is the location of January emissions.
-	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23" areaorl:"6,7,8" nonroadorl:"2,3,4" mobileorl:"2,3,4" pointida:"249:13:26" areaida:"15:10:20" mobileida:"25:10:20" pointff10:"12,52..."`
+	// For FF10 record, the first number is the location of the pollutant, the
+	// second number is the location of the annual emissions, and
+	// the third number (followed by "...") is the location of January emissions.
+	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23" areaorl:"6,7,8" nonroadorl:"2,3,4" mobileorl:"2,3,4" pointida:"249:13:26" areaida:"15:10:20" mobileida:"25:10:20" pointff10:"12,13,52..."`
 
 	// Control efficiency percentage (give value of 0-100) (recommended,
 	// if left blank, SMOKE default is 0).
@@ -228,6 +230,14 @@ func (r *ParsedRecord) setupPointLoc(c *Context) error {
 	return nil
 }
 
+func (r *ParsedRecord) fixStack() {
+	if r.STKVEL == 0 && r.STKFLOW != 0 {
+		r.STKVEL = r.STKFLOW / r.STKDIAM * 2 / math.Pi / math.Pi
+	} else if r.STKVEL != 0 && r.STKFLOW == 0 {
+		r.STKFLOW = r.STKVEL * r.STKDIAM / 2 * math.Pi * math.Pi
+	}
+}
+
 // Get rid of extra quotation marks, replace spaces with
 // zeros.
 func (r *ParsedRecord) parseFIPS() {
@@ -280,7 +290,7 @@ func (r *ParsedRecord) parseSIC() {
 // Add zeros to 8 digit SCCs so that all SCCs are 10 digits
 // If SCC is less than 8 digits, add 2 zeros to the front and
 // the rest to the end.
-func (r *ParsedRecord) ParseSCC() {
+func (r *ParsedRecord) parseSCC() {
 	if len(r.SCC) == 8 {
 		r.SCC = "00" + r.SCC
 	} else if len(r.SCC) == 7 {
@@ -302,6 +312,8 @@ func (r *ParsedRecord) setup(c *Context) error {
 	r.parseSIC()
 	r.parseNAICS()
 	r.parseFIPS()
+	r.parseSCC()
+	r.fixStack()
 	err := r.setupPointLoc(c)
 	return err
 }
@@ -425,7 +437,13 @@ func (r *ParsedRecord) setEmis(fileType string, fInfo *FileInfo,
 		strings.Contains(loc, "...") { // FF10 format
 		fields := strings.Split(loc, ",")
 		pol = getValStr(fields[0], "", line)
-		emisStr := trimString(line[stringToInt(fields[1])+int(p)-1])
+		var emisStr string
+		if p == Annual {
+			emisStr = getValStr(fields[1], "-9", line)
+		} else {
+			fields[2] = strings.Replace(fields[2], "...", "", -1)
+			emisStr = trimString(line[stringToInt(fields[2])+int(p)-1])
+		}
 		ann := stringToFloat(emisStr)
 		const avd = -9. // FF10 doesn't have average day emissions
 		r.parseEmisHelper(p, pol, ann, avd)
