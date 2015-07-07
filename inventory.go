@@ -21,9 +21,11 @@ package aep
 import (
 	"bitbucket.org/ctessum/sparse"
 	"bufio"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -41,7 +43,7 @@ type FileInfo struct {
 	DroppedTotals map[string]float64
 	Units         string  // Units for emissions values
 	InputConv     float64 // factor for converting emissions to grams
-	polid         string
+	polid         []string
 	fid           *os.File
 	buf           *bufio.Reader
 }
@@ -53,52 +55,137 @@ func newFileInfo() (f *FileInfo) {
 	return
 }
 
-// The ParsedRecord type is a container for all of the needed information in the ORL or IDA files.
+// The ParsedRecord type is a container for all of the needed
+// information in the FF10, ORL, and IDA files.
 // See the SMOKE manual for file format specification.
+// The struct tags indicate the location of the record in each
+// input file type.
 type ParsedRecord struct {
-	FIPS    string //	Five digit FIPS code for state and county (required)
-	PLANTID string //	Plant Identification Code (15 characters maximum) (required, this is the same as the State Facility Identifier in the NIF)
-	POINTID string //	Point Identification Code (15 characters maximum) (required, this is the same as the Emission Unit ID in the NIF)
-	STACKID string //	Stack Identification Code (15 characters maximum) (recommended, this is the same as the Emissions Release Point ID in the NIF)
-	SEGMENT string //	DOE Plant ID (15 characters maximum) (recommended, this is the same as the Process ID in the NIF)
-	PLANT   string //	Plant Name (40 characters maximum) (recommended)
-	SCC     string //	Ten character Source Classification Code (required)
-	SRCTYPE string // Source type (2 characters maximum), used by SMOKE in determining applicable MACT-based controls (required)
-	// 01 = major
-	// 02 = Section 12 area source
-	// 03 = nonroad
-	// 04 = onroad
-	STKHGT  float64 //	Stack Height (ft) (required)
-	STKDIAM float64 //	Stack Diameter (ft) (required)
-	STKTEMP float64 //	Stack Gas Exit Temperature (°F) (required)
-	STKFLOW float64 //	Stack Gas Flow Rate (ft3/sec) (optional, automatically calculated by Smkinven from velocity and diameter if not given in file)
-	STKVEL  float64 //	Stack Gas Exit Velocity (ft/sec) (required)
-	SIC     string  //		Standard Industrial Classification Code (recommended)
-	MACT    string  // Maximum Available Control Technology Code (6 characters maximum) (optional)
-	NAICS   string  //North American Industrial Classification System Code (6 characters maximum) (optional)
-	CTYPE   string  //Coordinate system type (1 character maximum) (required)
-	//U = Universal Transverse Mercator
-	//  L = Latitude/longitude
-	XLOC float64 //X location (required)
-	//If CTYPE = U, Easting value (meters)
-	//  If CTYPE = L, Longitude (decimal degrees)
-	YLOC float64 //Y location (required)
-	//If CTYPE = U, Northing value (meters)
-	//  If CTYPE = L, Latitude (decimal degrees)
-	UTMZ int //	UTM zone (required if CTYPE = U)
-	//	CAS                string  // Pollutant CAS number or other code (16 characters maximum) (required, this is called the pollutant code in the NIF)
-	ANN_EMIS map[Period]map[string]*SpecValUnits // Annual Emissions (tons/year) (required)
-	gridSrg  []*sparse.SparseArray               // Surrogate to apply emissions to grid cells
-	CEFF     map[string]float64                  //	Control Efficiency percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 0)
-	REFF     map[string]float64                  //	Rule Effectiveness percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
-	RPEN     map[string]float64                  //	Rule Penetration percentage (give value of 0-100) (recommended, if left blank, SMOKE default is 100)
-	//NEI_UNIQUE_ID      string                              //Unique ID that ties together HAP and CAP emissions within a common facility ID and also ties together emissions obtained from muptiple data sources which may have different State facility identifiers but really belong to a single facility (optional, not currently used by SMOKE)
-	ORIS_FACILITY_CODE string   //DOE Plant ID (generally recommended, and required if matching to hour-specific CEM data)
-	ORIS_BOILER_ID     string   //Boiler Identification Code (recommended)
-	PointXcoord        float64  // Projected coordinate for point sources
-	PointYcoord        float64  // Projected coordinate for point sources
-	DoubleCountPols    []string // Pols that should not be included in the speciation of this record to avoid double counting
-	Country            Country
+	// Five digit FIPS code for state and county (required)
+	FIPS string `pointorl:"0",areaorl:"0",nonroadorl:"0",mobileorl:"0",pointida:"0:5",areaida:"0:5",mobileida:"0:5",pointff10:"1"`
+
+	// Plant Identification Code (15 characters maximum) (required,
+	// this is the same as the State Facility Identifier in the NIF)
+	PLANTID string `pointorl:"1",pointida:"5:20",pointff10:"3"`
+
+	// Point Identification Code (15 characters maximum) (required,
+	// this is the same as the Emission Unit ID in the NIF)
+	POINTID string `pointorl:"2",pointida:"20:35",pointff10:"4"`
+
+	// Stack Identification Code (15 characters maximum) (recommended,
+	// this is the same as the Emissions Release Point ID in the NIF)
+	STACKID string `pointorl:"3",pointida:"35:47",pointff10:"5"`
+
+	// DOE Plant ID (15 characters maximum) (recommended, this is the
+	// same as the Process ID in the NIF)
+	SEGMENT string `pointorl:"4",pointida:"59:61",pointff10:"6"`
+
+	// Plant Name (40 characters maximum) (recommended)
+	PLANT string `pointorl:"5",pointida:"61:101",pointff10:"15"`
+
+	// Ten character Source Classification Code (required)
+	SCC string `pointorl:"6",areaorl:"1",nonroadorl:"1",mobileorl:"1",pointida:"101:111",areaida:"5:15",mobileida:"15:25",pointff10:"11"`
+
+	// Source type (2 characters maximum), used by SMOKE in determining
+	// applicable MACT-based controls (required)
+	// 	01 = major
+	// 	02 = Section 12 area source
+	// 	03 = nonroad
+	// 	04 = onroad
+	SRCTYPE string `pointorl:"8",areaorl:"4",nonroadorl:"8",mobileorl:"5",pointff10:"16"`
+
+	// Stack Height (ft) (required)
+	STKHGT float64 `pointorl:"9",pointida:"119:123",pointff10:"17"`
+
+	// Stack Diameter (ft) (required)
+	STKDIAM float64 `pointorl:"10",pointida:"123:129",pointff10:"18"`
+
+	// Stack Gas Exit Temperature (°F) (required)
+	STKTEMP float64 `pointorl:"11",pointida:"129:133",pointff10:"19"`
+
+	// Stack Gas Flow Rate (ft3/sec) (optional)
+	STKFLOW float64 `pointorl:"12",pointida:"133:143",pointff10:"20"`
+
+	// Stack Gas Exit Velocity (ft/sec) (required)
+	STKVEL float64 `pointorl:"13",pointida:"143:152",pointff10:"21"`
+
+	// Standard Industrial Classification Code (recommended)
+	SIC string `pointorl:"14",areaorl:"2",pointida:"226:230"`
+
+	// Maximum Available Control Technology Code
+	// (6 characters maximum) (optional)
+	MACT string `pointorl:"15",areaorl:"3"`
+
+	// North American Industrial Classification System Code
+	// (6 characters maximum) (optional)
+	NAICS string `pointorl:"16",areaorl:"5",pointff10:"22"`
+
+	// Coordinate system type (1 character maximum) (required)
+	// U = Universal Transverse Mercator
+	// L = Latitude/longitude
+	CTYPE string `pointorl:"17",default:"L"`
+
+	// X location (required)
+	// If CTYPE = U, Easting value (meters)
+	// If CTYPE = L, Longitude (decimal degrees)
+	XLOC float64 `pointorl:"18",pointida:"239:248",pointff10:"23"`
+
+	// Y location (required)
+	// If CTYPE = U, Northing value (meters)
+	// If CTYPE = L, Latitude (decimal degrees)
+	YLOC float64 `pointorl:"19",pointida:"230:239",pointff10:"24"`
+
+	//	UTM zone (required if CTYPE = U)
+	UTMZ int `pointorl:"20"`
+
+	// Annual Emissions (tons/year) (required)
+	// Emissions values must be positive because numbers are used
+	// to represent missing data.
+	// In the struct tags, there are three numbers. for ORL records,
+	// the first number is
+	// the pollutant location, the second number is the annual emissions
+	// location, and the third number is the average day emissions location.
+	// For IDA records, the first number is the start of the first pollutant,
+	// and the second two numbers are offsets for the ends of the annual and
+	// average day emissions fields.
+	// For FF10 record, the first number is the location of the pollutant and
+	// the second number (followed by "...") is the location of January emissions.
+	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23",areaorl:"6,7,8",nonroadorl:"2,3,4",mobileorl:"2,3,4",pointida:"249:13:26",areaida:"15:10:20",mobileida:"25:10:20",pointff10:"12,52..."`
+
+	// Control efficiency percentage (give value of 0-100) (recommended,
+	// if left blank, SMOKE default is 0).
+	// This can have different values for different pollutants.
+	CEFF map[string]float64 `pointorl:"24",areaorl:"9",nonroadorl:"5",pointida:"249;26:33",areaida:"15:31:38",mobileida:"25:20:20"`
+
+	// Rule Effectiveness percentage (give value of 0-100) (recommended,
+	// if left blank, SMOKE default is 100)
+	// This can have different values for different pollutants.
+	REFF map[string]float64 `pointorl:"25",areaorl:"10",nonroadorl:"6",pointida:"249:26:33",areaida:"15:38:41",mobileida:"25:20:20",default:"100"`
+
+	// Rule Penetration percentage (give value of 0-100) (recommended,
+	// if left blank, SMOKE default is 100)
+	// This can have different values for different pollutants.
+	RPEN map[string]float64 `areaorl:"11",nonroadorl:"7",pointida:"249:33:40",areaida:"14:41:47",mobileida:"25:20:20",default:"100"`
+
+	//DOE Plant ID (generally recommended, and required if matching
+	// to hour-specific CEM data)
+	ORIS_FACILITY_CODE string `pointorl:"29",pointida:"47:53",pointff10:"41"`
+
+	// Boiler Identification Code (recommended)
+	ORIS_BOILER_ID string `pointorl:"30",pointida:"53:59",pointff10:"42"`
+
+	PointXcoord float64 // Projected coordinate for point sources
+	PointYcoord float64 // Projected coordinate for point sources
+
+	// Pols that should not be included in the speciation of this record
+	// to avoid double counting
+	DoubleCountPols []string
+
+	// The country that this record applies to.
+	Country Country
+
+	// Surrogate to apply emissions to grid cells
+	gridSrg []*sparse.SparseArray
 }
 
 type SpecValUnits struct {
@@ -117,41 +204,9 @@ func (c Context) newParsedRecord(p Period) (rec *ParsedRecord) {
 	return
 }
 
-// remove commas from csv quotes as necessary
-// This is done because otherwise commas within
-// quoted strings cause problems.
-func cleanRecordORL(record string) string {
-	startindex := 0
-	endindex := 0
-	for {
-		index := strings.Index(record[startindex:], "\"")
-		if index == -1 {
-			break
-		}
-		startindex += index
-		endindex = startindex + strings.Index(record[startindex+1:], "\"") + 2
-		if endindex == -1 {
-			panic("ERROR: Start quotes don't match end quotes")
-		}
-		for {
-			i := strings.Index(record[startindex:endindex], ",")
-			if i == -1 {
-				break
-			}
-			record = record[0:startindex+i] + " " + record[startindex+i+1:]
-		}
-		startindex = endindex + 1
-	}
-	return record
-}
-
-func (r *ParsedRecord) parseEmisHelper(p Period, pol, ann_emis,
-	avd_emis string) string {
-	pol = trimString(pol)
-	ann := stringToFloat(ann_emis)
+func (r *ParsedRecord) parseEmisHelper(p Period, pol string, ann, avd float64) {
 	// if annual emissions not present, fill with average day
 	if ann <= 0. {
-		avd := stringToFloat(avd_emis)
 		if avd >= 0. {
 			r.ANN_EMIS[p][pol] = new(SpecValUnits)
 			r.ANN_EMIS[p][pol].Val = avd * 365.
@@ -160,57 +215,27 @@ func (r *ParsedRecord) parseEmisHelper(p Period, pol, ann_emis,
 		r.ANN_EMIS[p][pol] = new(SpecValUnits)
 		r.ANN_EMIS[p][pol].Val = ann
 	}
-	return pol
 }
 
-func (r *ParsedRecord) parsePointLocHelperORL(ctype, xloc, yloc, utmz string,
-	c *Context) error {
-	ctypeClean := trimString(ctype)
-	if ctypeClean != "L" {
+func (r *ParsedRecord) setupPointLoc(c *Context) error {
+	if r.CTYPE != "L" {
 		return fmt.Errorf("ctype needs to equal `L'. It is instead `%v'.",
-			ctypeClean)
+			r.CTYPE)
 	}
-	x, err := strconv.ParseFloat(trimString(xloc), 64)
-	if err != nil {
-		return fmt.Errorf("Problem parsing latitude.")
+	if r.XLOC > 0 && c.ForceWesternHemisphere {
+		r.XLOC *= -1
 	}
-	y, err := strconv.ParseFloat(trimString(yloc), 64)
-	if err != nil {
-		return fmt.Errorf("Problem parsing longitude.")
-	}
-	if x > 0 && c.ForceWesternHemisphere {
-		x = x * -1
-	}
-	r.CTYPE, r.XLOC, r.YLOC, r.UTMZ = ctypeClean, x, y, stringToInt(utmz)
-	return nil
-}
-
-func (r *ParsedRecord) parsePointLocHelperIDA(xloc, yloc string, c *Context) error {
-	x, err := strconv.ParseFloat(trimString(xloc), 64)
-	if err != nil {
-		return fmt.Errorf("Problem parsing latitude.")
-	}
-	y, err := strconv.ParseFloat(trimString(yloc), 64)
-	if err != nil {
-		return fmt.Errorf("Problem parsing longitude.")
-	}
-	if x > 0 && c.ForceWesternHemisphere {
-		x = x * -1
-	}
-	r.XLOC, r.YLOC = x, y
 	return nil
 }
 
 // Get rid of extra quotation marks, replace spaces with
-// zeros and copy the string so the
-// whole line from the input file isn't held in memory
-func parseFipsIDA(s string) string {
-	return string([]byte(
-		strings.Replace(strings.Trim(s, "\""), " ", "0", -1)))
+// zeros.
+func (r *ParsedRecord) parseFIPS() {
+	r.FIPS = strings.Replace(strings.Trim(r.FIPS, "\""), " ", "0", -1)
 }
 
 func stringToFloat(s string) float64 {
-	f, err := strconv.ParseFloat(trimString(s), 64)
+	f, err := strconv.ParseFloat(s, 64) // string should already be trimmed
 	if err != nil {
 		return 0.
 	} else {
@@ -218,19 +243,11 @@ func stringToFloat(s string) float64 {
 	}
 }
 func stringToInt(s string) int {
-	i, err := strconv.ParseInt(trimString(s), 0, 32)
+	i, err := strconv.ParseInt(s, 0, 32) // string should already be trimmed
 	if err != nil {
 		return 0.
 	} else {
 		return int(i)
-	}
-}
-func stringToFloatDefault100(s string) float64 {
-	f, err := strconv.ParseFloat(trimString(s), 64)
-	if err != nil {
-		return 100.
-	} else {
-		return f
 	}
 }
 
@@ -241,183 +258,196 @@ func trimString(s string) string {
 }
 
 // clean up NAICS code so it either has 0 or 6 characters
-func parseNAICS(s string) string {
-	s2 := trimString(s)
-	if s2 == "" || s2 == "-9" {
-		return ""
+func (r *ParsedRecord) parseNAICS() {
+	r.NAICS = trimString(r.NAICS)
+	if r.NAICS == "" || r.NAICS == "-9" {
+		r.NAICS = ""
 	} else {
-		return strings.Replace(fmt.Sprintf("%-6s", s2), " ", "0", -1)
+		r.NAICS = strings.Replace(fmt.Sprintf("%-6s", r.NAICS), " ", "0", -1)
 	}
 }
 
 // clean up SIC code so it either has 0 or 4 characters
-func parseSIC(s string) string {
-	s2 := trimString(s)
-	if s2 == "" || s2 == "-9" {
-		return ""
+func (r *ParsedRecord) parseSIC() {
+	r.SIC = trimString(r.SIC)
+	if r.SIC == "" || r.SIC == "-9" {
+		r.SIC = ""
 	} else {
-		return strings.Replace(fmt.Sprintf("%-4s", s2), " ", "0", -1)
+		r.SIC = strings.Replace(fmt.Sprintf("%-4s", r.SIC), " ", "0", -1)
 	}
 }
 
-func (c *Context) parseRecordPointORL(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	record = cleanRecordORL(record)
-	splitString := strings.Split(record, ",")
-	var err error
-	fields.FIPS = trimString(splitString[0])
-	fields.PLANTID = trimString(splitString[1])
-	fields.POINTID = trimString(splitString[2])
-	fields.STACKID = trimString(splitString[3])
-	fields.SEGMENT = trimString(splitString[4])
-	fields.PLANT = trimString(splitString[5])
-	fields.SCC = trimString(splitString[6])
-	fields.SRCTYPE = trimString(splitString[8])
-	fields.STKHGT = stringToFloat(splitString[9])
-	fields.STKDIAM = stringToFloat(splitString[10])
-	fields.STKTEMP = stringToFloat(splitString[11])
-	fields.STKFLOW = stringToFloat(splitString[12])
-	fields.STKVEL = stringToFloat(splitString[13])
-	fields.SIC = parseSIC(splitString[14])
-	fields.MACT = trimString(splitString[15])
-	fields.NAICS = parseNAICS(splitString[16])
-	err = fields.parsePointLocHelperORL(splitString[17], splitString[18],
-		splitString[19], splitString[20], c)
-	if err != nil {
-		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
-	}
-	pol := fields.parseEmisHelper(p, splitString[21], splitString[22],
-		splitString[23])
-	fields.CEFF[pol] = stringToFloat(splitString[24])
-	fields.REFF[pol] = stringToFloatDefault100(splitString[25])
-	//fields.NEI_UNIQUE_ID = splitString[28]
-	fields.ORIS_FACILITY_CODE = trimString(splitString[29])
-	fields.ORIS_BOILER_ID = trimString(splitString[30])
-	return fields
+func (r *ParsedRecord) setup(c *Context) error {
+	r.parseSIC()
+	r.parseNAICS()
+	r.parseFIPS()
+	err := r.setupPointLoc(c)
+	return err
 }
 
-func (c *Context) parseRecordAreaORL(record string, fInfo *FileInfo,
+func (c *Context) parseRecord(ftype string, line []string, fInfo *FileInfo,
 	p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	record = cleanRecordORL(record)
-	splitString := strings.Split(record, ",")
-	fields.FIPS = trimString(splitString[0])
-	fields.SCC = trimString(splitString[1])
-	fields.SIC = parseSIC(splitString[2])
-	fields.MACT = trimString(splitString[3])
-	fields.SRCTYPE = trimString(splitString[4])
-	fields.NAICS = parseNAICS(splitString[5])
-	pol := fields.parseEmisHelper(p, splitString[6], splitString[7], splitString[8])
-	fields.CEFF[pol] = stringToFloat(splitString[9])
-	fields.REFF[pol] = stringToFloatDefault100(splitString[10])
-	fields.RPEN[pol] = stringToFloatDefault100(splitString[11])
-	return fields
+
+	r := c.newParsedRecord(p)
+	v := reflect.Indirect(reflect.ValueOf(r))
+	t := v.Type()
+	var pol string
+	for i := 0; i < v.NumField(); i++ {
+		fieldType := t.Field(i)
+		fieldVal := v.Field(i)
+		pol = r.setVal(ftype, fInfo, fieldType, fieldVal, line, pol, p)
+	}
+	err := r.setup(c)
+	handleInventoryError(err, fInfo, line)
+	return r
 }
 
-func (c *Context) parseRecordNonroadORL(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	record = cleanRecordORL(record)
-	splitString := strings.Split(record, ",")
-	fields.FIPS = trimString(splitString[0])
-	fields.SCC = trimString(splitString[1])
-	pol := fields.parseEmisHelper(p, splitString[2], splitString[3], splitString[4])
-	fields.CEFF[pol] = stringToFloat(splitString[5])
-	fields.REFF[pol] = stringToFloatDefault100(splitString[6])
-	fields.RPEN[pol] = stringToFloatDefault100(splitString[7])
-	fields.SRCTYPE = trimString(splitString[8])
-	return fields
+func handleInventoryError(err error, fInfo *FileInfo, line []string) {
+	if err != nil {
+		panic(fmt.Sprintf("In file:\n%s\nthere was an error with the "+
+			"following record:\n%v\nThe error message was:\n%v",
+			fInfo.fname, line, err.Error()))
+	}
 }
 
-func (c *Context) parseRecordMobileORL(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	record = cleanRecordORL(record)
-	splitString := strings.Split(record, ",")
-	fields.FIPS = trimString(splitString[0])
-	fields.SCC = trimString(splitString[1])
-	fields.parseEmisHelper(p, splitString[2], splitString[3], splitString[4])
-	fields.SRCTYPE = trimString(splitString[5])
-	return fields
+func (r *ParsedRecord) setVal(fileType string, fInfo *FileInfo,
+	fieldType reflect.StructField,
+	fieldVal reflect.Value, line []string, pol string, p Period) string {
+
+	switch fieldType.Type.Kind() {
+	case reflect.Map:
+		switch fieldType.Type.Key().Kind() { // what is the type of the map key?
+		case reflect.Int: // annual emissions
+			pol = r.setEmis(fileType, fInfo, fieldType, line, p)
+			return pol
+		case reflect.String: // control penetration or efficiency
+			setMap(fileType, fInfo, fieldType, fieldVal, line, pol)
+			return pol
+		default:
+			panic("wrong type of map")
+		}
+	}
+
+	loc := fieldType.Tag.Get(fileType)
+	if loc == "" {
+		return pol
+	}
+	defaultVal := fieldType.Tag.Get("default")
+	valStr := getValStr(loc, defaultVal, line)
+	switch fieldType.Type.Kind() {
+	case reflect.Float64:
+		fieldVal.SetFloat(stringToFloat(valStr))
+	case reflect.Int:
+		fieldVal.SetInt(int64(stringToInt(valStr)))
+	case reflect.String:
+		fieldVal.SetString(valStr)
+	default:
+		panic("Type can only be string, int, float64")
+	}
+	return pol
+}
+
+func getValStr(loc, defaultVal string, line []string) string {
+	var valStr string
+	if strings.Contains(loc, ":") {
+		// Width delimited file
+		endpoints := strings.Split(loc, ":")
+		e1 := stringToInt(endpoints[0])
+		e2 := stringToInt(endpoints[1])
+		valStr = line[0][e1:e2]
+	} else {
+		valStr = line[stringToInt(loc)]
+	}
+	valStr = trimString(valStr)
+	if valStr == "" {
+		// If field is empty, set it to the default if there is one.
+		valStr = defaultVal
+	}
+	return valStr
+}
+
+func (r *ParsedRecord) setEmis(fileType string, fInfo *FileInfo,
+	fieldType reflect.StructField,
+	line []string, p Period) (pol string) {
+
+	loc := fieldType.Tag.Get(fileType)
+	if loc == "" {
+		panic("loc tag not set for emissions")
+	}
+	if strings.Contains(loc, ",") &&
+		!strings.Contains(loc, "...") { // ORL format
+		fields := strings.Split(loc, ",")
+		pol = getValStr(fields[0], "", line)
+		ann := stringToFloat(getValStr(fields[1], "-9", line))
+		avd := stringToFloat(getValStr(fields[2], "-9", line))
+		r.parseEmisHelper(p, pol, ann, avd)
+		return
+	} else if strings.Contains(loc, ":") { // IDA format
+		endpoints := strings.Split(loc, ":")
+		for i, pol := range fInfo.polid {
+			off2 := stringToInt(endpoints[2])
+			off1 := stringToInt(endpoints[1])
+			start := stringToInt(endpoints[0]) + off2*i
+			ann := stringToFloat(line[0][start : start+off1])
+			avd := stringToFloat(line[0][start+off1 : start+off2])
+			r.parseEmisHelper(p, pol, ann, avd)
+		}
+		return
+	} else if strings.Contains(loc, ",") &&
+		strings.Contains(loc, "...") { // FF10 format
+		fields := strings.Split(loc, ",")
+		pol = getValStr(fields[0], "", line)
+		emisStr := trimString(line[stringToInt(fields[1])+int(p)-1])
+		ann := stringToFloat(emisStr)
+		const avd = -9. // FF10 doesn't have average day emissions
+		r.parseEmisHelper(p, pol, ann, avd)
+		return
+	} else {
+		panic("Invalid loc format")
+	}
+}
+
+func setMap(fileType string, fInfo *FileInfo, fieldType reflect.StructField,
+	fieldVal reflect.Value, line []string, pol string) {
+
+	loc := fieldType.Tag.Get(fileType)
+	if loc == "" {
+		return
+	}
+	defaultVal := fieldType.Tag.Get("default")
+	if strings.Contains(loc, ":") {
+		endpoints := strings.Split(loc, ":")
+		for i, pol := range fInfo.polid {
+			off1 := stringToInt(endpoints[1])
+			off2 := stringToInt(endpoints[2])
+			start := stringToInt(endpoints[0]) + off2*i
+			loc2 := fmt.Sprintf("%d:%d", start+off1,
+				start+off2)
+			valStr := getValStr(loc2, defaultVal, line)
+			fieldVal.SetMapIndex(reflect.ValueOf(pol),
+				reflect.ValueOf(stringToFloat(valStr)))
+		}
+		return
+	}
+	valStr := getValStr(loc, defaultVal, line)
+	// Only set up to work for float values.
+	fieldVal.SetMapIndex(reflect.ValueOf(pol),
+		reflect.ValueOf(stringToFloat(valStr)))
 }
 
 func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
-	pols := len(strings.Split(fInfo.polid, " "))
+	pols := len(fInfo.polid)
 	if len(record) < start+length*pols {
 		err := "In the file:\n" + fInfo.fname + "\n"
 		err += "Format type: " + fInfo.Ftype + "\n"
 		err += "The following IDA record:\n" + record + "\n"
 		err += "is not the right length for the these pollutants:\n"
-		err += fInfo.polid + "\nRequired length = "
+		err += strings.Join(fInfo.polid, ",") + "\nRequired length = "
 		err += strconv.Itoa(start + length*pols)
 		err += "\nRecord length = " + strconv.Itoa(len(record))
 		panic(err)
 	}
 	return
-}
-
-func (c *Context) parseRecordPointIDA(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	checkRecordLengthIDA(record, fInfo, 249, 52)
-	fields.FIPS = parseFipsIDA(record[0:5])
-	fields.PLANTID = trimString(record[5:20])
-	fields.POINTID = trimString(record[20:35])
-	fields.STACKID = trimString(record[35:47])
-	fields.ORIS_FACILITY_CODE = trimString(record[47:53])
-	fields.ORIS_BOILER_ID = trimString(record[53:59])
-	fields.SEGMENT = trimString(record[59:61])
-	fields.PLANT = trimString(record[61:101])
-	fields.SCC = trimString(record[101:111])
-	fields.STKHGT = stringToFloat(record[119:123])
-	fields.STKDIAM = stringToFloat(record[123:129])
-	fields.STKTEMP = stringToFloat(record[129:133])
-	fields.STKFLOW = stringToFloat(record[133:143])
-	fields.STKVEL = stringToFloat(record[143:152])
-	fields.SIC = parseSIC(record[226:230])
-	err := fields.parsePointLocHelperIDA(record[239:248], record[230:239], c)
-	if err != nil {
-		panic(fInfo.fname + "\n" + record + "\n" + err.Error())
-	}
-	for i, pol := range strings.Split(fInfo.polid, " ") {
-		start := 249 + 52*i
-		pol = fields.parseEmisHelper(p, pol, record[start:start+13],
-			record[start+13:start+26])
-		fields.CEFF[pol] = stringToFloat(record[start+26 : start+33])
-		fields.REFF[pol] = stringToFloatDefault100(record[start+33 : start+40])
-	}
-	return fields
-}
-
-func (c *Context) parseRecordAreaIDA(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	checkRecordLengthIDA(record, fInfo, 15, 47)
-	fields.FIPS = parseFipsIDA(record[0:5])
-	fields.SCC = trimString(record[5:15])
-	for i, pol := range strings.Split(fInfo.polid, " ") {
-		start := 15 + 47*i
-		pol = fields.parseEmisHelper(p, pol, record[start:start+10],
-			record[start+10:start+20])
-		fields.CEFF[pol] = stringToFloat(record[start+31 : start+38])
-		fields.REFF[pol] = stringToFloatDefault100(record[start+38 : start+41])
-		fields.RPEN[pol] = stringToFloatDefault100(record[start+41 : start+47])
-	}
-	return fields
-}
-func (c *Context) parseRecordMobileIDA(record string,
-	fInfo *FileInfo, p Period) *ParsedRecord {
-	fields := c.newParsedRecord(p)
-	checkRecordLengthIDA(record, fInfo, 25, 20)
-	fields.FIPS = parseFipsIDA(record[0:5])
-	fields.SCC = trimString(record[15:25])
-	for i, pol := range strings.Split(fInfo.polid, " ") {
-		start := 25 + 20*i
-		fields.parseEmisHelper(p, pol, record[start:start+10],
-			record[start+10:start+20])
-	}
-	return fields
 }
 
 func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
@@ -591,10 +621,10 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 			fInfo.Year = strings.Trim(record[5:], "\n ")
 		}
 		if len(record) > 6 && record[1:6] == "POLID" {
-			fInfo.polid = strings.Trim(record[6:], " \n\r")
+			fInfo.polid = strings.Split(strings.Trim(record[6:], " \n\r"), " ")
 		}
 		if len(record) > 5 && record[1:5] == "DATA" {
-			fInfo.polid = strings.Trim(record[5:], " \n\r")
+			fInfo.polid = strings.Split(strings.Trim(record[5:], " \n\r"), "  ")
 		}
 		var nextChar []byte
 		nextChar, err = fInfo.buf.Peek(1)
@@ -607,6 +637,7 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 			break
 		}
 	}
+	fInfo.fid.Seek(0, 0)
 
 	// Make sure nonroad files are properly assigned
 	if fInfo.Format == "ORL" && strings.Index(fInfo.Ftype, "nonroad") >= 0 {
@@ -618,29 +649,31 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 	config *Context, p Period) {
 	numProcs := runtime.GOMAXPROCS(-1)
-	lineChan := make(chan string)
+	lineChan := make(chan []string)
 	var wg sync.WaitGroup
 	wg.Add(numProcs)
 	for i := 0; i < numProcs; i++ {
 		go func() {
-			var line string
+			var line []string
 			for line = range lineChan {
 				record := new(ParsedRecord)
 				switch fInfo.Format + config.SectorType {
+				case "FF10_POINTpoint":
+					record = config.parseRecord("pointff10", line, fInfo, p)
 				case "ORLpoint":
-					record = config.parseRecordPointORL(line, fInfo, p)
+					record = config.parseRecord("pointorl", line, fInfo, p)
 				case "ORLarea":
-					record = config.parseRecordAreaORL(line, fInfo, p)
+					record = config.parseRecord("areaorl", line, fInfo, p)
 				case "ORLNONROADarea":
-					record = config.parseRecordNonroadORL(line, fInfo, p)
+					record = config.parseRecord("nonroadorl", line, fInfo, p)
 				case "ORLmobile":
-					record = config.parseRecordMobileORL(line, fInfo, p)
+					record = config.parseRecord("mobileorl", line, fInfo, p)
 				case "IDApoint":
-					record = config.parseRecordPointIDA(line, fInfo, p)
+					record = config.parseRecord("pointida", line, fInfo, p)
 				case "IDAarea":
-					record = config.parseRecordAreaIDA(line, fInfo, p)
+					record = config.parseRecord("areaida", line, fInfo, p)
 				case "IDAmobile":
-					record = config.parseRecordMobileIDA(line, fInfo, p)
+					record = config.parseRecord("mobileida", line, fInfo, p)
 				default:
 					panic("Unknown format: " + fInfo.Format + " " +
 						config.SectorType)
@@ -671,8 +704,10 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 			wg.Done()
 		}()
 	}
+	r := csv.NewReader(fInfo.fid)
+	r.Comment = '#'
 	for {
-		line, err := fInfo.buf.ReadString('\n')
+		line, err := r.Read()
 		if err != nil {
 			if err == io.EOF {
 				close(lineChan)
@@ -680,7 +715,8 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 				close(recordChan)
 				return
 			} else {
-				panic(fInfo.fname + "\n" + line + "\n" + err.Error())
+				panic(fInfo.fname + "\n" + strings.Join(line, ",") + "\n" +
+					err.Error())
 			}
 		}
 		lineChan <- line

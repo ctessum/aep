@@ -96,8 +96,6 @@ AEP is able to utilize a distributed computing system when generating spatial su
 
 ### TODO (Things that SMOKE can do that AEP cannot)
 
-* Add capability to use the FF10 SMOKE file format so that the 2008 NEI can also be processed
-
 * Add capability to process meteorology-dependent emissions (e.g., vehicle tailpipe, wood smoke, road dust)
 
 * Add capability to integrate with the MOVES vehicle emissions model.
