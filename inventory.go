@@ -34,7 +34,7 @@ import (
 	"bitbucket.org/ctessum/sparse"
 )
 
-// type FileInfo holds information about each inventory file
+// FileInfo holds information about an inventory file
 type FileInfo struct {
 	fname         string
 	Format        string
@@ -191,6 +191,7 @@ type ParsedRecord struct {
 	gridSrg []*sparse.SparseArray
 }
 
+// SpecValUnits holds emissions species type, value, and units information.
 type SpecValUnits struct {
 	Val     float64
 	Units   string
@@ -222,7 +223,7 @@ func (r *ParsedRecord) parseEmisHelper(p Period, pol string, ann, avd float64) {
 
 func (r *ParsedRecord) setupPointLoc(c *Context) error {
 	if r.CTYPE != "L" {
-		return fmt.Errorf("ctype needs to equal `L'. It is instead `%v'.",
+		return fmt.Errorf("ctype needs to equal `L'. It is instead `%v'",
 			r.CTYPE)
 	}
 	if r.XLOC > 0 && c.ForceWesternHemisphere {
@@ -236,7 +237,7 @@ func circleArea(d float64) float64 {
 }
 
 func (r *ParsedRecord) fixStack() {
-	if r.STKVEL == 0 && r.STKFLOW != 0 {
+	if r.STKVEL == 0 && r.STKFLOW != 0 && r.STKDIAM != 0 {
 		r.STKVEL = r.STKFLOW / circleArea(r.STKDIAM)
 	} else if r.STKVEL != 0 && r.STKFLOW == 0 {
 		r.STKFLOW = r.STKVEL * circleArea(r.STKDIAM)
@@ -253,17 +254,15 @@ func stringToFloat(s string) float64 {
 	f, err := strconv.ParseFloat(s, 64) // string should already be trimmed
 	if err != nil {
 		return 0.
-	} else {
-		return f
 	}
+	return f
 }
 func stringToInt(s string) int {
 	i, err := strconv.ParseInt(s, 0, 32) // string should already be trimmed
 	if err != nil {
 		return 0.
-	} else {
-		return int(i)
 	}
+	return int(i)
 }
 
 // Get rid of extra quotation marks and copy the string so the
@@ -453,9 +452,8 @@ func (r *ParsedRecord) setEmis(fileType string, fInfo *FileInfo,
 		const avd = -9. // FF10 doesn't have average day emissions
 		r.parseEmisHelper(p, pol, ann, avd)
 		return
-	} else {
-		panic("Invalid loc format")
 	}
+	panic("invalid loc format")
 }
 
 func setMap(fileType string, fInfo *FileInfo, fieldType reflect.StructField,
@@ -501,12 +499,14 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 	return
 }
 
-func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
-	defer config.ErrorRecover()
+// Inventory processes emissions inventory files into emissions records
+// and sends the records to OutputChan.
+func (c *Context) Inventory(OutputChan chan *ParsedRecord) {
+	defer c.ErrorRecover()
 
 	// make a list of species that can possibly be double counted.
-	doubleCountablePols := make([]string, 0)
-	for pol, polInfo := range config.PolsToKeep {
+	var doubleCountablePols []string
+	for pol, polInfo := range c.PolsToKeep {
 		if polInfo.SpecNames != nil {
 			if !IsStringInArray(doubleCountablePols, pol) {
 				doubleCountablePols = append(
@@ -516,31 +516,31 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 	}
 	records := make(map[string]*ParsedRecord)
 
-	config.Log("Importing inventory for "+config.Sector+"...", 1)
+	c.Log("Importing inventory for "+c.Sector+"...", 1)
 
-	for _, p := range config.runPeriods {
+	for _, p := range c.runPeriods {
 		reportMx.Lock()
-		if _, ok := Report.SectorResults[config.Sector]; !ok {
-			Report.SectorResults[config.Sector] = make(map[string]*Results)
+		if _, ok := Report.SectorResults[c.Sector]; !ok {
+			Report.SectorResults[c.Sector] = make(map[string]*Results)
 		}
-		if _, ok := Report.SectorResults[config.Sector][p.String()]; !ok {
-			Report.SectorResults[config.Sector][p.String()] = new(Results)
+		if _, ok := Report.SectorResults[c.Sector][p.String()]; !ok {
+			Report.SectorResults[c.Sector][p.String()] = new(Results)
 		}
-		Report.SectorResults[config.Sector][p.String()].
+		Report.SectorResults[c.Sector][p.String()].
 			InventoryResults = make(map[string]*FileInfo)
 		reportMx.Unlock()
-		for _, file := range config.InvFileNames {
-			if config.InventoryFreq == "monthly" {
+		for _, file := range c.InvFileNames {
+			if c.InventoryFreq == "monthly" {
 				file = strings.Replace(file, "[month]", p.String(), -1)
 			}
-			config.Log("Processing file "+file, 1)
-			fInfo := config.OpenFile(file)
+			c.Log("Processing file "+file, 1)
+			fInfo := c.openFile(file)
 			recordChan := make(chan *ParsedRecord)
-			go fInfo.ParseLines(recordChan, config, p)
+			go fInfo.parseLines(recordChan, c, p)
 			for record := range recordChan {
 				// add emissions to totals for report
 				for pol, emis := range record.ANN_EMIS[p] {
-					if _, ok := config.PolsToKeep[cleanPol(pol)]; ok {
+					if _, ok := c.PolsToKeep[cleanPol(pol)]; ok {
 						fInfo.Totals[pol] += emis.Val
 					} else {
 						// delete value if we don't want to keep it
@@ -584,12 +584,12 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 				// contain a specific pollutant as well as a pollutant
 				// group that contains the specific pollutant as one
 				// of its component species.
-				for pol, _ := range currentRec.ANN_EMIS[p] {
+				for pol := range currentRec.ANN_EMIS[p] {
 					if IsStringInArray(doubleCountablePols, pol) {
 						if currentRec.DoubleCountPols == nil {
 							currentRec.DoubleCountPols = make([]string, 0)
 						}
-						for _, specName := range config.PolsToKeep[cleanPol(pol)].SpecNames {
+						for _, specName := range c.PolsToKeep[cleanPol(pol)].SpecNames {
 							if !IsStringInArray(currentRec.DoubleCountPols, specName) {
 								currentRec.DoubleCountPols = append(
 									currentRec.DoubleCountPols, specName)
@@ -600,7 +600,7 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 			}
 			fInfo.fid.Close()
 			reportMx.Lock()
-			Report.SectorResults[config.Sector][p.String()].
+			Report.SectorResults[c.Sector][p.String()].
 				InventoryResults[file] = fInfo
 			reportMx.Unlock()
 		}
@@ -611,7 +611,7 @@ func (config *Context) Inventory(OutputChan chan *ParsedRecord) {
 		OutputChan <- record
 		delete(records, key)
 	}
-	config.msgchan <- "Finished importing inventory for " + config.Sector
+	c.msgchan <- "Finished importing inventory for " + c.Sector
 	// Close output channel to indicate input is finished.
 	close(OutputChan)
 }
@@ -626,14 +626,15 @@ func cleanPol(pol string) (cleanedPol string) {
 	return
 }
 
-func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
+// openFile opens an emissions file and extracts header information.
+func (c *Context) openFile(file string) (fInfo *FileInfo) {
 	var record string
 	var err error
 	fInfo = newFileInfo()
 	fInfo.fname = file
 	fInfo.fid, err = os.Open(file)
-	fInfo.Units = config.InputUnits
-	fInfo.InputConv = config.InputConv
+	fInfo.Units = c.InputUnits
+	fInfo.InputConv = c.InputConv
 	if err != nil {
 		err = fmt.Errorf("While opening file %v\n Error= %v",
 			file, err.Error())
@@ -699,8 +700,9 @@ func (config *Context) OpenFile(file string) (fInfo *FileInfo) {
 	return
 }
 
-func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
-	config *Context, p Period) {
+// parseLines parses the lines of a file
+func (fInfo *FileInfo) parseLines(recordChan chan *ParsedRecord,
+	c *Context, p Period) {
 	numProcs := runtime.GOMAXPROCS(-1)
 	lineChan := make(chan []string)
 	var wg sync.WaitGroup
@@ -710,25 +712,25 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 			var line []string
 			for line = range lineChan {
 				record := new(ParsedRecord)
-				switch fInfo.Format + config.SectorType {
+				switch fInfo.Format + c.SectorType {
 				case "FF10point":
-					record = config.parseRecord("pointff10", line, fInfo, p)
+					record = c.parseRecord("pointff10", line, fInfo, p)
 				case "ORLpoint":
-					record = config.parseRecord("pointorl", line, fInfo, p)
+					record = c.parseRecord("pointorl", line, fInfo, p)
 				case "ORLarea":
-					record = config.parseRecord("areaorl", line, fInfo, p)
+					record = c.parseRecord("areaorl", line, fInfo, p)
 				case "ORLNONROADarea":
-					record = config.parseRecord("nonroadorl", line, fInfo, p)
+					record = c.parseRecord("nonroadorl", line, fInfo, p)
 				case "ORLmobile":
-					record = config.parseRecord("mobileorl", line, fInfo, p)
+					record = c.parseRecord("mobileorl", line, fInfo, p)
 				case "IDApoint":
-					record = config.parseRecord("pointida", line, fInfo, p)
+					record = c.parseRecord("pointida", line, fInfo, p)
 				case "IDAarea":
-					record = config.parseRecord("areaida", line, fInfo, p)
+					record = c.parseRecord("areaida", line, fInfo, p)
 				case "IDAmobile":
-					record = config.parseRecord("mobileida", line, fInfo, p)
+					record = c.parseRecord("mobileida", line, fInfo, p)
 				default:
-					panic("Unknown format: " + fInfo.Format + config.SectorType)
+					panic("Unknown format: " + fInfo.Format + c.SectorType)
 				}
 
 				// set which country this record is for
@@ -749,10 +751,9 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 				wg.Wait()
 				close(recordChan)
 				return
-			} else {
-				panic(fInfo.fname + "\n" + strings.Join(line, ",") + "\n" +
-					err.Error())
 			}
+			panic(fInfo.fname + "\n" + strings.Join(line, ",") + "\n" +
+				err.Error())
 		}
 		if firstLine && fInfo.Format == "FF10" {
 			firstLine = false // skip header row in FF10 files
@@ -760,5 +761,4 @@ func (fInfo *FileInfo) ParseLines(recordChan chan *ParsedRecord,
 		}
 		lineChan <- line
 	}
-	return
 }
