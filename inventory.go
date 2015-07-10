@@ -19,7 +19,6 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bitbucket.org/ctessum/sparse"
 	"bufio"
 	"encoding/csv"
 	"fmt"
@@ -31,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"bitbucket.org/ctessum/sparse"
 )
 
 // type FileInfo holds information about each inventory file
@@ -230,11 +231,15 @@ func (r *ParsedRecord) setupPointLoc(c *Context) error {
 	return nil
 }
 
+func circleArea(d float64) float64 {
+	return d * d / 4 * math.Pi
+}
+
 func (r *ParsedRecord) fixStack() {
 	if r.STKVEL == 0 && r.STKFLOW != 0 {
-		r.STKVEL = r.STKFLOW / r.STKDIAM * 2 / math.Pi / math.Pi
+		r.STKVEL = r.STKFLOW / circleArea(r.STKDIAM)
 	} else if r.STKVEL != 0 && r.STKFLOW == 0 {
-		r.STKFLOW = r.STKVEL * r.STKDIAM / 2 * math.Pi * math.Pi
+		r.STKFLOW = r.STKVEL * circleArea(r.STKDIAM)
 	}
 }
 
