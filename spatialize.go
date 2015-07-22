@@ -744,6 +744,8 @@ func (sp *SpatialProcessor) GridRef() (err error) {
 			splitLine := strings.Split(record, ";")
 			SCC := splitLine[1]
 			if len(SCC) == 8 {
+				// TODO: make this work with different types of codes; i.e. some sort of
+				// fuzzy matching instead of just adding 2 zeros.
 				SCC = "00" + SCC
 			}
 			country := getCountryFromID(splitLine[0][0:1])
