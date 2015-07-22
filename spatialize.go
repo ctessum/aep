@@ -750,7 +750,7 @@ func (sp *SpatialProcessor) GridRef() (err error) {
 			}
 			country := getCountryFromID(splitLine[0][0:1])
 			FIPS := splitLine[0][1:]
-			srg := strings.Trim(splitLine[2], "\"\n")
+			srg := strings.Trim(splitLine[2], "\"\n ")
 
 			if _, ok := sp.gridRef[country]; !ok {
 				sp.gridRef[country] = make(map[string]map[string]interface{})
