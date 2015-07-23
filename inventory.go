@@ -188,7 +188,7 @@ type ParsedRecord struct {
 	Country Country
 
 	// Surrogate to apply emissions to grid cells
-	gridSrg []*sparse.SparseArray
+	GridSrgs []*sparse.SparseArray
 }
 
 // SpecValUnits holds emissions species type, value, and units information.

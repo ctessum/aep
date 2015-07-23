@@ -611,7 +611,7 @@ func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int
 	}
 
 	gi := gridIndex
-	index := point.gridSrg[gi].IndexNd(point.gridSrg[gi].Nonzero()[0])
+	index := point.GridSrgs[gi].IndexNd(point.GridSrgs[gi].Nonzero()[0])
 	j, i := index[0], index[1]
 
 	// deal with points that are inside one grid but not inside the others

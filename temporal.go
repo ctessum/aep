@@ -634,7 +634,7 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 	for gi, tFac := range tFactors {
 		kPlume[gi] = o.PlumeRise(gi, record)
 		for pol, val := range record.ANN_EMIS[p] {
-			out[pol][gi] = sparse.ArrayMultiply(record.gridSrg[gi], tFac)
+			out[pol][gi] = sparse.ArrayMultiply(record.GridSrgs[gi], tFac)
 			out[pol][gi].Scale(val.Val)
 		}
 	}
@@ -670,7 +670,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 						for pol, _ := range record.ANN_EMIS[p] {
 							e[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
 						}
-						for gi, srg := range record.gridSrg {
+						for gi, srg := range record.GridSrgs {
 							kPlume[gi] = o.PlumeRise(gi, record)
 							for pol, emisval := range record.ANN_EMIS[p] {
 								for _, ix := range srg.Nonzero() {

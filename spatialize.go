@@ -239,11 +239,11 @@ func (r *ParsedRecord) EmisToGrid(gi int, p Period) (
 	emis map[string]*sparse.SparseArray, units map[string]string) {
 	emis = make(map[string]*sparse.SparseArray)
 	units = make(map[string]string)
-	if r.gridSrg[gi] == nil {
+	if r.GridSrgs[gi] == nil {
 		return
 	}
 	for pol, data := range r.ANN_EMIS[p] {
-		emis[pol] = r.gridSrg[gi].ScaleCopy(data.Val)
+		emis[pol] = r.GridSrgs[gi].ScaleCopy(data.Val)
 		units[pol] = data.Units
 	}
 	return
@@ -258,9 +258,9 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 		ct, err = proj.NewCoordinateTransform(sp.c.inputSr, sp.Grids[0].Sr)
 		emisInRecord = false
 
-		record.gridSrg = make([]*sparse.SparseArray, len(sp.Grids))
+		record.GridSrgs = make([]*sparse.SparseArray, len(sp.Grids))
 		for i, grid := range sp.Grids {
-			record.gridSrg[i] = sparse.ZerosSparse(grid.Ny,
+			record.GridSrgs[i] = sparse.ZerosSparse(grid.Ny,
 				grid.Nx)
 			var row, col int
 			var withinGrid bool
@@ -273,7 +273,7 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 			if withinGrid {
 				emisInRecord = true
 				// For points, all emissions are in the same cell.
-				record.gridSrg[i].Set(1., row, col)
+				record.GridSrgs[i].Set(1., row, col)
 			}
 		}
 	case "area", "mobile":
@@ -292,9 +292,9 @@ func (sp *SpatialProcessor) Spatialize(record *ParsedRecord) (emisInRecord bool)
 		}
 		srgNum := matchedVal.(string)
 
-		record.gridSrg = make([]*sparse.SparseArray, len(sp.Grids))
+		record.GridSrgs = make([]*sparse.SparseArray, len(sp.Grids))
 		for i, grid := range sp.Grids {
-			record.gridSrg[i] = sp.getSurrogate(srgNum, record.FIPS, grid,
+			record.GridSrgs[i] = sp.getSurrogate(srgNum, record.FIPS, grid,
 				make([]string, 0))
 		}
 		emisInRecord = true
