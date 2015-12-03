@@ -159,6 +159,15 @@ type ReportHolder struct {
 	TemporalResults *TemporalReport
 }
 
+type InventoryReport map[Period]map[string]*FileInfo
+
+func (ir InventoryReport) addData(p Period, file string, fInfo *FileInfo) {
+	if _, ok := ir[p]; !ok {
+		ir[p] = make(map[string]*FileInfo)
+	}
+	ir[p][file] = fInfo
+}
+
 type Results struct {
 	InventoryResults  map[string]*FileInfo
 	SpeciationResults *SpecTotals

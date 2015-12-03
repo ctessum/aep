@@ -34,6 +34,12 @@ import (
 	"bitbucket.org/ctessum/sparse"
 )
 
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
+
 // FileInfo holds information about an inventory file
 type FileInfo struct {
 	fname         string
@@ -46,7 +52,7 @@ type FileInfo struct {
 	Units         string  // Units for emissions values
 	InputConv     float64 // factor for converting emissions to grams
 	polid         []string
-	fid           *os.File
+	fid           ReadSeekCloser
 	buf           *bufio.Reader
 }
 
@@ -198,7 +204,7 @@ type SpecValUnits struct {
 	PolType *PolHolder
 }
 
-func (c Context) newParsedRecord(p Period) (rec *ParsedRecord) {
+func newParsedRecord(p Period) (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
 	rec.ANN_EMIS = make(map[Period]map[string]*SpecValUnits)
 	rec.ANN_EMIS[p] = make(map[string]*SpecValUnits)
@@ -221,12 +227,12 @@ func (r *ParsedRecord) parseEmisHelper(p Period, pol string, ann, avd float64) {
 	}
 }
 
-func (r *ParsedRecord) setupPointLoc(c *Context) error {
+func (r *ParsedRecord) setupPointLoc(e *EmissionsReader) error {
 	if r.CTYPE != "L" {
 		return fmt.Errorf("ctype needs to equal `L'. It is instead `%v'",
 			r.CTYPE)
 	}
-	if r.XLOC > 0 && c.ForceWesternHemisphere {
+	if r.XLOC > 0 && e.ForceWesternHemisphere {
 		r.XLOC *= -1
 	}
 	return nil
@@ -312,20 +318,20 @@ func (r *ParsedRecord) parseSCC() {
 	}
 }
 
-func (r *ParsedRecord) setup(c *Context) error {
+func (r *ParsedRecord) setup(e *EmissionsReader) error {
 	r.parseSIC()
 	r.parseNAICS()
 	r.parseFIPS()
 	r.parseSCC()
 	r.fixStack()
-	err := r.setupPointLoc(c)
+	err := r.setupPointLoc(e)
 	return err
 }
 
-func (c *Context) parseRecord(ftype string, line []string, fInfo *FileInfo,
+func (e *EmissionsReader) parseRecord(ftype string, line []string, fInfo *FileInfo,
 	p Period) *ParsedRecord {
 
-	r := c.newParsedRecord(p)
+	r := newParsedRecord(p)
 	v := reflect.Indirect(reflect.ValueOf(r))
 	t := v.Type()
 	var pol string
@@ -334,7 +340,7 @@ func (c *Context) parseRecord(ftype string, line []string, fInfo *FileInfo,
 		fieldVal := v.Field(i)
 		pol = r.setVal(ftype, fInfo, fieldType, fieldVal, line, pol, p)
 	}
-	err := r.setup(c)
+	err := r.setup(e)
 	handleInventoryError(err, fInfo, line)
 	return r
 }
@@ -499,14 +505,80 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 	return
 }
 
-// Inventory processes emissions inventory files into emissions records
-// and sends the records to OutputChan.
-func (c *Context) Inventory(OutputChan chan *ParsedRecord) {
-	defer c.ErrorRecover()
+// InventoryFrequency describes how many often new inventory files are required.
+type InventoryFrequency string
+
+const (
+	Annually InventoryFrequency = "annual"
+	Monthly  InventoryFrequency = "monthly"
+)
+
+// An EmissionsReader reads SMOKE formatted emissions files.
+type EmissionsReader struct {
+	polsToKeep map[string]*PolHolder
+	freq       InventoryFrequency
+
+	// If all data is in the western hemisphere, fix any errors
+	// where the minus sign was left out of the longitude.
+	ForceWesternHemisphere bool
+
+	// Units of input data. Acceptable values are `tons/year',
+	// `tonnes/year', `kg/year', `g/year', and `lbs/year'.
+	InputUnits string
+	inputConv  float64
+
+	sectorType string
+}
+
+const (
+	tons2g   = 907184.74
+	tonnes2g = 1.0e6
+	kg2g     = 1000.
+	g2g      = 1.0
+	lbs2g    = 453.59237
+)
+
+// NewEmissionsReader creates a new EmissionsReader.
+func NewEmissionsReader(polsToKeep map[string]*PolHolder, freq InventoryFrequency, InputUnits string, SectorType string) (*EmissionsReader, error) {
+	e := new(EmissionsReader)
+	e.polsToKeep = polsToKeep
+	e.freq = freq
+	e.sectorType = SectorType
+	e.InputUnits = InputUnits
+	switch e.InputUnits {
+	case "tons/year":
+		e.inputConv = tons2g
+	case "tonnes/year":
+		e.inputConv = tonnes2g
+	case "kg/year":
+		e.inputConv = kg2g
+	case "g/year":
+		e.inputConv = g2g
+	case "lbs/year":
+		e.inputConv = lbs2g
+	default:
+		return nil, fmt.Errorf("In NewEmissionsReader: unknown value %s"+
+			" for variable InputUnits. Acceptable values are `tons/year', "+
+			"`tonnes/year', `kg/year', `g/year', and `lbs/year'.", e.InputUnits)
+	}
+	return e, nil
+}
+
+func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader io.Reader, err error) {
+	file := filetemplate
+	if e.freq == Monthly {
+		file = strings.Replace(file, "[month]", p.String(), -1)
+	}
+	f, err := os.Open(file)
+	return file, f, err
+}
+
+func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period) (map[string]*ParsedRecord, InventoryReport, error) {
+	report := make(InventoryReport)
 
 	// make a list of species that can possibly be double counted.
 	var doubleCountablePols []string
-	for pol, polInfo := range c.PolsToKeep {
+	for pol, polInfo := range e.polsToKeep {
 		if polInfo.SpecNames != nil {
 			if !IsStringInArray(doubleCountablePols, pol) {
 				doubleCountablePols = append(
@@ -516,104 +588,76 @@ func (c *Context) Inventory(OutputChan chan *ParsedRecord) {
 	}
 	records := make(map[string]*ParsedRecord)
 
-	c.Log("Importing inventory for "+c.Sector+"...", 1)
-
-	for _, p := range c.runPeriods {
-		reportMx.Lock()
-		if _, ok := Report.SectorResults[c.Sector]; !ok {
-			Report.SectorResults[c.Sector] = make(map[string]*Results)
-		}
-		if _, ok := Report.SectorResults[c.Sector][p.String()]; !ok {
-			Report.SectorResults[c.Sector][p.String()] = new(Results)
-		}
-		Report.SectorResults[c.Sector][p.String()].
-			InventoryResults = make(map[string]*FileInfo)
-		reportMx.Unlock()
-		for _, file := range c.InvFileNames {
-			if c.InventoryFreq == "monthly" {
-				file = strings.Replace(file, "[month]", p.String(), -1)
-			}
-			c.Log("Processing file "+file, 1)
-			fInfo := c.openFile(file)
-			recordChan := make(chan *ParsedRecord)
-			go fInfo.parseLines(recordChan, c, p)
-			for record := range recordChan {
-				// add emissions to totals for report
-				for pol, emis := range record.ANN_EMIS[p] {
-					if _, ok := c.PolsToKeep[cleanPol(pol)]; ok {
-						fInfo.Totals[pol] += emis.Val
-					} else {
-						// delete value if we don't want to keep it
-						fInfo.DroppedTotals[pol] += emis.Val
-						delete(record.ANN_EMIS[p], pol)
-					}
-				}
-
-				key := record.FIPS + record.SCC + record.PLANTID +
-					record.POINTID + record.STACKID +
-					record.SEGMENT + record.ORIS_FACILITY_CODE +
-					record.ORIS_BOILER_ID
-				var currentRec *ParsedRecord
-				if _, ok := records[key]; !ok {
-					// We don't yet have a record for this key
-					records[key] = record
-					currentRec = record
+	for i, file := range files {
+		filename := filenames[i]
+		fInfo := e.NewDecoder(filename, file)
+		recordChan := make(chan *ParsedRecord)
+		go fInfo.parseLines(recordChan, e, p)
+		for record := range recordChan {
+			// add emissions to totals for report
+			for pol, emis := range record.ANN_EMIS[p] {
+				if _, ok := e.polsToKeep[cleanPol(pol)]; ok {
+					fInfo.Totals[pol] += emis.Val
 				} else {
-					// There is already a record for this key
-					currentRec = records[key]
-					for pol, e := range record.ANN_EMIS[p] {
-						if _, ok := currentRec.ANN_EMIS[p][pol]; !ok {
-							if _, ok := currentRec.ANN_EMIS[p]; !ok {
-								currentRec.ANN_EMIS[p] =
-									make(map[string]*SpecValUnits)
-							}
-							// We don't yet have a value for this pol
-							currentRec.ANN_EMIS[p][pol] = e
-						} else {
-							// There is already a value for this pol
-							currentRec.ANN_EMIS[p][pol].Val += e.Val
-							if currentRec.ANN_EMIS[p][pol].Units != e.Units {
-								panic(fmt.Sprintf("Units don't match: %v != %v",
-									currentRec.ANN_EMIS[p][pol].Units, e.Units))
-							}
-						}
-					}
+					// delete value if we don't want to keep it
+					fInfo.DroppedTotals[pol] += emis.Val
+					delete(record.ANN_EMIS[p], pol)
 				}
-				// Check for possible double counting in individual records.
-				// Records that double count are defined as those that
-				// contain a specific pollutant as well as a pollutant
-				// group that contains the specific pollutant as one
-				// of its component species.
-				for pol := range currentRec.ANN_EMIS[p] {
-					if IsStringInArray(doubleCountablePols, pol) {
-						if currentRec.DoubleCountPols == nil {
-							currentRec.DoubleCountPols = make([]string, 0)
+			}
+
+			key := record.FIPS + record.SCC + record.PLANTID +
+				record.POINTID + record.STACKID +
+				record.SEGMENT + record.ORIS_FACILITY_CODE +
+				record.ORIS_BOILER_ID
+			var currentRec *ParsedRecord
+			if _, ok := records[key]; !ok {
+				// We don't yet have a record for this key
+				records[key] = record
+				currentRec = record
+			} else {
+				// There is already a record for this key
+				currentRec = records[key]
+				for pol, e := range record.ANN_EMIS[p] {
+					if _, ok := currentRec.ANN_EMIS[p][pol]; !ok {
+						if _, ok := currentRec.ANN_EMIS[p]; !ok {
+							currentRec.ANN_EMIS[p] =
+								make(map[string]*SpecValUnits)
 						}
-						for _, specName := range c.PolsToKeep[cleanPol(pol)].SpecNames {
-							if !IsStringInArray(currentRec.DoubleCountPols, specName) {
-								currentRec.DoubleCountPols = append(
-									currentRec.DoubleCountPols, specName)
-							}
+						// We don't yet have a value for this pol
+						currentRec.ANN_EMIS[p][pol] = e
+					} else {
+						// There is already a value for this pol
+						currentRec.ANN_EMIS[p][pol].Val += e.Val
+						if currentRec.ANN_EMIS[p][pol].Units != e.Units {
+							panic(fmt.Sprintf("Units don't match: %v != %v",
+								currentRec.ANN_EMIS[p][pol].Units, e.Units))
 						}
 					}
 				}
 			}
-			fInfo.fid.Close()
-			reportMx.Lock()
-			Report.SectorResults[c.Sector][p.String()].
-				InventoryResults[file] = fInfo
-			reportMx.Unlock()
+			// Check for possible double counting in individual records.
+			// Records that double count are defined as those that
+			// contain a specific pollutant as well as a pollutant
+			// group that contains the specific pollutant as one
+			// of its component species.
+			for pol := range currentRec.ANN_EMIS[p] {
+				if IsStringInArray(doubleCountablePols, pol) {
+					if currentRec.DoubleCountPols == nil {
+						currentRec.DoubleCountPols = make([]string, 0)
+					}
+					for _, specName := range e.polsToKeep[cleanPol(pol)].SpecNames {
+						if !IsStringInArray(currentRec.DoubleCountPols, specName) {
+							currentRec.DoubleCountPols = append(
+								currentRec.DoubleCountPols, specName)
+						}
+					}
+				}
+			}
 		}
+		report.addData(p, filename, fInfo)
+		fInfo.fid.Close()
 	}
-
-	// Now send off the records for further processing
-	for key, record := range records {
-		OutputChan <- record
-		delete(records, key)
-	}
-	c.msgchan <- "Finished importing inventory for " + c.Sector
-	// Close output channel to indicate input is finished.
-	close(OutputChan)
+	return records, report, nil
 }
 
 // Also include EVP__xxx etc. pollutants
@@ -626,15 +670,15 @@ func cleanPol(pol string) (cleanedPol string) {
 	return
 }
 
-// openFile opens an emissions file and extracts header information.
-func (c *Context) openFile(file string) (fInfo *FileInfo) {
+// NewDecoder opens an emissions file and extracts header information.
+func (e *EmissionsReader) NewDecoder(filename string, file ReadSeekCloser) (fInfo *FileInfo) {
 	var record string
 	var err error
 	fInfo = newFileInfo()
-	fInfo.fname = file
-	fInfo.fid, err = os.Open(file)
-	fInfo.Units = c.InputUnits
-	fInfo.InputConv = c.InputConv
+	fInfo.fname = filename
+	fInfo.fid = file
+	fInfo.Units = e.InputUnits
+	fInfo.InputConv = e.inputConv
 	if err != nil {
 		err = fmt.Errorf("While opening file %v\n Error= %v",
 			file, err.Error())
@@ -655,7 +699,7 @@ func (c *Context) openFile(file string) (fInfo *FileInfo) {
 	} else if strings.Index(record, "FF10") >= 0 {
 		fInfo.Format = "FF10"
 	} else {
-		panic("Unknown file type for: " + file)
+		panic("Unknown file type for: " + filename)
 	}
 	for {
 		record, err = fInfo.buf.ReadString('\n')
@@ -702,7 +746,7 @@ func (c *Context) openFile(file string) (fInfo *FileInfo) {
 
 // parseLines parses the lines of a file
 func (fInfo *FileInfo) parseLines(recordChan chan *ParsedRecord,
-	c *Context, p Period) {
+	e *EmissionsReader, p Period) {
 	numProcs := runtime.GOMAXPROCS(-1)
 	lineChan := make(chan []string)
 	var wg sync.WaitGroup
@@ -712,25 +756,28 @@ func (fInfo *FileInfo) parseLines(recordChan chan *ParsedRecord,
 			var line []string
 			for line = range lineChan {
 				record := new(ParsedRecord)
-				switch fInfo.Format + c.SectorType {
+				switch fInfo.Format + e.sectorType {
 				case "FF10point":
-					record = c.parseRecord("pointff10", line, fInfo, p)
+					record = e.parseRecord("pointff10", line, fInfo, p)
 				case "ORLpoint":
-					record = c.parseRecord("pointorl", line, fInfo, p)
+					record = e.parseRecord("pointorl", line, fInfo, p)
 				case "ORLarea":
-					record = c.parseRecord("areaorl", line, fInfo, p)
+					record = e.parseRecord("areaorl", line, fInfo, p)
 				case "ORLNONROADarea":
-					record = c.parseRecord("nonroadorl", line, fInfo, p)
+					record = e.parseRecord("nonroadorl", line, fInfo, p)
 				case "ORLmobile":
-					record = c.parseRecord("mobileorl", line, fInfo, p)
+					record = e.parseRecord("mobileorl", line, fInfo, p)
 				case "IDApoint":
-					record = c.parseRecord("pointida", line, fInfo, p)
+					record = e.parseRecord("pointida", line, fInfo, p)
 				case "IDAarea":
-					record = c.parseRecord("areaida", line, fInfo, p)
+					record = e.parseRecord("areaida", line, fInfo, p)
 				case "IDAmobile":
-					record = c.parseRecord("mobileida", line, fInfo, p)
+					record = e.parseRecord("mobileida", line, fInfo, p)
 				default:
-					panic("Unknown format: " + fInfo.Format + c.SectorType)
+					// This should never happen because we should have checked the file
+					// format already.
+					panic(fmt.Errorf("in parseLines: unknown format: %s %s",
+						fInfo.Format, e.sectorType))
 				}
 
 				// set which country this record is for

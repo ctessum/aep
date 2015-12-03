@@ -1,273 +1,483 @@
 {
-    "Dirs": {
-        "Home": "${GOPATH}/src/bitbucket.org/ctessum/aep",
-        "Input": "[Home]/test/inputdata/emissions",
-        "Ancilliary": "[Home]/ancilliary",
-		"Shapefiles": "[Home]/test/inputdata/shapefiles",
-		"Output":"[Home]/test/Output",
-		"GriddedSrgs":"[Output]/srgs"
-    },
-    "DefaultSettings": {
-		"StartDate": "2005/01/01",
-		"EndDate": "2005/12/31",
-		"Tstep":"1h",
-		"TstepsPerFile":24,
-        "OutputType": "WRF",
-        "SpecType": "mol",
-        "InputUnits": "tons/year",
-        "MatchFullSCC": false,
-        "WPSnamelist": "[Ancilliary]/namelist_minneapolis.wps",
-        "WRFnamelist": "[Ancilliary]/namelist_minneapolis.input",
-        "OldWRFout": "[Home]/xxx[DATE]",
-		"ForceWesternHemisphere":true,
-		"InputProj4":"+proj=longlat",
-        "EarthRadius": 6370997,
-		"ChemicalMechanism":"RADM2",
-		"MechAssignmentFile":"[Ancilliary]/MechAsn.csv",
-		"MechanismMWFile":"[Ancilliary]/MechMW.csv",
-		"SpeciesInfoFile":"[Ancilliary]/SpeciesTable.csv",
-		"RegenerateSpatialData": false,
-		"SimulationName":"2005nei",
-        "DebugLevel": 0,
-        "Ncpus": 8,
-        "RunSpeciate": true,
-        "RunSpatialize": true,
-        "RunTemporal": true,
-        "PolsToKeep": {
-			"VOC":{"SpecType":"VOC"},
-			"PM2_5":{"SpecType":"PM2.5"},
-			"NOX":{"SpecType":"NOx"},
-			"PM10":{"SpecProf":{"PM_10":{"Factor":1.0,
-				"Units":"gram/gram"}}},
-			"POC_72":{"SpecProf":{
-				"ORGI_72":{"Factor":0.2,"Units":"gram/gram"},
-				"ORGJ_72":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PEC_72":{"SpecProf":{
-				"ECI_72":{"Factor":0.2,"Units":"gram/gram"},
-				"ECJ_72":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PMFINE_72":{"SpecProf":{
-				"PM25I_72":{"Factor":0.2,"Units":"gram/gram"},
-				"PM25J_72":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PMC_72":{"SpecProf":{
-				"PM_10_72":{"Factor":1.0,"Units":"gram/gram"}}},
-			"PMC":{"SpecProf":{
-				"PM_10":{"Factor":1.0,"Units":"gram/gram"}}},
-			"PSO4":{"SpecProf":{
-				"SO4I":{"Factor":0.2,"Units":"gram/gram"},
-				"SO4J":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PNO3":{"SpecProf":{
-				"NO3I":{"Factor":0.2,"Units":"gram/gram"},
-				"NO3J":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PEC":{"SpecProf":{
-				"ECI":{"Factor":0.2,"Units":"gram/gram"},
-				"ECJ":{"Factor":0.8,"Units":"gram/gram"}}},
-			"POC":{"SpecProf":{
-				"ORGI":{"Factor":0.2,"Units":"gram/gram"},
-				"ORGJ":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PMFINE":{"SpecProf":{
-				"PM25I":{"Factor":0.2,"Units":"gram/gram"},
-				"PM25J":{"Factor":0.8,"Units":"gram/gram"}}},
-			"PAR":{"SpecProf":{
-				"HC3":{"Factor":0.0076,"Units":"mol/gram"},
-				"HC5":{"Factor":0.0046,"Units":"mol/gram"},
-				"HC8":{"Factor":0.0029,"Units":"mol/gram"}}},
-			"ETH":{"SpecProf":{"OL2":{"Factor":0.036, "Units":"mol/gram"}}},
-			"OLE":{"SpecProf":{"OLT":{"Factor":0.024, "Units":"mol/gram"}}},
-			"FORM":{"SpecProf":{"HCHO":{"Factor":0.033, "Units":"mol/gram"}}},
-			"ETOH":{"SpecProf":{"HC5":{"Factor":0.014, "Units":"mol/gram"}}},
-			"TOL":{"SpecProf":{"TOL":{"Factor":0.011, "Units":"mol/gram"}}},
-			"XYL":{"SpecProf":{"XYL":{"Factor":0.0094, "Units":"mol/gram"}}},
-			"TERP":{"SpecProf":{"OLT":{"Factor":0.024, "Units":"mol/gram"}}},
-			"MEOH":{"SpecProf":{"HC3":{"Factor":0.023, "Units":"mol/gram"}}},
-			"ALDX":{"SpecProf":{"ALD":{"Factor":0.023, "Units":"mol/gram"}}},
-			"IOLE":{"SpecProf":{"OLI":{"Factor":0.019, "Units":"mol/gram"}}},
-			"ALD2":{"SpecProf":{"ALD":{"Factor":0.023, "Units":"mol/gram"}}},
-			"ISOP":{"SpecProf":{"ISO":{"Factor":0.015, "Units":"mol/gram"}}},
-			"NH3":{"SpecNames":["Ammonia"]},
-			"SO2":{"SpecNames":["Sulfur dioxide"]},
-			"CO":{"SpecNames":["Carbon monoxide"]},
-			"71432":{"SpecNames":["Benzene"]},
-			"100414":{"SpecNames":["Ethylbenzene"]},
-			"108883":{"SpecNames":["Toluene"]},
-			"95476":{"SpecNames":["O-xylene","Isomers of xylene"]},
-			"108383":{"SpecNames":["M-xylene","Isomers of xylene"]},
-			"106423":{"SpecNames":["P-xylene","Isomers of xylene"]}
-        },
-        "SpecRefFile": "[Ancilliary]/gsref_cmaq_cb05_soa_2005cr_05b_16jun2010.txt",
-        "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-        "SpecProFile": "[Ancilliary]/SPECIATE4.4Final.mdb.sqlite",
-		"SccDesc": "[Ancilliary]/sccdesc_pf31_06apr2010_v10.txt",
-		"SicDesc": "[Ancilliary]/sic_desc_04oct2006_v0.txt",
-		"NaicsDesc": "[Ancilliary]/naicsdesc_02jan2008_v0.txt",
-		"GridRefFile":"[Ancilliary]/amgref_us_can_allmex3_28sep2010_v13.txt",
-		"TemporalRefFile":"[Ancilliary]/amptref_v3_3_revised_10jan2011_v11.txt",
-		"TemporalProFile":"[Ancilliary]/amptpro_2005_us_can_revised_10jan2011_v2.txt",
-		"HolidayFile":"[Ancilliary]/holidays_04may2006_v0.txt",
-		"SrgSpecFile":"[Ancilliary]/surrogate_specification_2002.csv"
-    },
-    "sectors": {
-        "othpt": {
-            "SectorType": "point",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_othpt_cmaq_cb05_soa_2005cr_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/othpt/ptinv_canada_point_2006_orl_09mar2009_v2_orl.txt",
-                "[Input]/2005cr_05b/othpt/ptinv_canada_point_cb5_2006_orl_10mar2009_v0_orl.txt",
-                "[Input]/2005cr_05b/othpt/ptinv_canada_point_uog_2006_orl_02mar2009_v0_orl.txt",
-                "[Input]/2005cr_05b/othpt/ptinv_mexico_border99_03mar2008_v1_ida.txt",
-                "[Input]/2005cr_05b/othpt/ptinv_mexico_interior99_05feb2007_v0_ida.txt",
-                "[Input]/2005cr_05b/othpt/ptinv_ptnonipm_offshore_oil_cap2005v2_20nov2008_20nov2008_v0_orl.txt"
-            ]
-        },
-        "ptnonipm": {
-            "SectorType": "point",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
-                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt",
-                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_caphap_ethanol_plant_additions_2005_30jun2010_v3_orl.txt",
-                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_2005cap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt",
-                "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_2005hap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt"
-            ]
-        },
-        "seca_c3": {
-            "SectorType": "point",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_seca_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_wDE_andSCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_andSCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
-                "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt"
-            ]
-        },
-        "ag": {
-            "SectorType": "area",
-            "InventoryFreq": "annual",
-            "InvFileNames": [
-                "[Input]/2005ah_tox_05b/ag/arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
-            ]
-        },
-        "ptipm": {
-            "SectorType": "point",
-            "InventoryFreq": "cem",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
-                "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
-            ],
-			"CEMFileNames": [
-				"[Input]/cem/2005/HOUR_UNIT_2005_01_jan.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_02_feb.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_03_mar.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_04_apr.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_05_may.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_06_jun.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_07_jul.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_08_aug.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_09_sep.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_10_oct.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_11_nov.txt",
-				"[Input]/cem/2005/HOUR_UNIT_2005_12_dec.txt"
-			]
-        },
-        "afdust": {
-            "SectorType": "area",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/afdust/arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
-            ]
-        },
-        "nonroad": {
-            "SectorType": "area",
-            "InventoryFreq": "monthly",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/nonroad/arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
-                "[Input]/2005cr_05b/nonroad/arinv_nonroad_calif_caphap_2005v2_revised_[month]_23jun2010_v0_orl.txt",
-                "[Input]/2005cr_05b/nonroad/arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
-            ]
-        },
-        "on_moves_runpm": {
-            "SectorType": "mobile",
-            "InventoryFreq": "monthly",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/on_moves_runpm/mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
-            ]
-        },
-        "on_moves_startpm": {
-            "SectorType": "mobile",
-            "InventoryFreq": "monthly",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/on_moves_startpm/mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
-            ]
-        },
-        "on_noadj": {
-            "SectorType": "mobile",
-            "InventoryFreq": "monthly",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
-			"SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/on_noadj/mbinv_onroad_calif_caphap_2005v2_revised_[month]_29jun2010_v0_orl.txt",
-                "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
-                "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
-            ]
-        },
-        "othon": {
-            "SectorType": "mobile",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_othon_cmaq_cb05_soa_2005cr_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cr_05b/othon/mbinv_canada_onroad_cap_2006_04feb2009_v0_orl.txt",
-                "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_border1999_21dec2006_v0_ida.txt",
-                "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_interior1999_21dec2006_v0_ida.txt"
-            ]
-        },
-        "alm_no_c3": {
-            "SectorType": "area",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
-            ]
-        },
-        "nonpt": {
-            "SectorType": "area",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
-                "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",
-                "[Input]/2005cs_05b/nonpt/arinv_pfc_2002_caphap_27dec2007_v0_orl.txt",
-                "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_WRAP_OilGas_04feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_TCEQ_Oklahoma_OilGas_28may2010_v0_orl.txt"
-            ]
-        },
-        "othar": {
-            "SectorType": "area",
-            "InventoryFreq": "annual",
-            "SpecRefFile": "[Ancilliary]/speciation/gsref_othar_cmaq_cb05_soa_2005cs_05b_05b.txt",
-            "InvFileNames": [
-                "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_interior1999_21dec2006_v0_ida.txt",
-                "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_border1999_21dec2006_v0_ida.txt",
-                "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_interior1999_21dec2006_v0_ida.txt",
-                "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_border1999_21dec2006_v0_ida.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_offroad_cap_2006_04feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_marine_cap_2006_03feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_oarea_cap_2006_02mar2009_v3_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_aircraft_cap_2006_04feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_rail_cap_2006_03feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_ag_cap_2006_03feb2009_v0_orl.txt",
-                "[Input]/2005cs_05b/othar/arinv_canada_afdust_xportfrac_cap_2006_03feb2009_v0_orl.txt"
-            ]
+  "Dirs": {
+    "Home": "${GOPATH}/src/bitbucket.org/ctessum/aep",
+    "Input": "[Home]/test/inputdata/emissions",
+    "Ancilliary": "[Home]/ancilliary",
+    "Shapefiles": "[Home]/test/inputdata/shapefiles",
+    "Output": "[Home]/test/Output",
+    "GriddedSrgs": "[Output]/srgs"
+  },
+  "DefaultSettings": {
+    "StartDate": "2005/01/01",
+    "EndDate": "2005/12/31",
+    "Tstep": "1h",
+    "TstepsPerFile": 24,
+    "OutputType": "WRF",
+    "SpecType": "mol",
+    "InputUnits": "tons/year",
+    "MatchFullSCC": false,
+    "WPSnamelist": "[Ancilliary]/namelist_minneapolis.wps",
+    "WRFnamelist": "[Ancilliary]/namelist_minneapolis.input",
+    "OldWRFout": "[Home]/xxx[DATE]",
+    "ForceWesternHemisphere": true,
+    "InputProj4": "+proj=longlat",
+    "EarthRadius": 6370997,
+    "ChemicalMechanism": "RADM2",
+    "MechAssignmentFile": "[Ancilliary]/MechAsn.csv",
+    "MechanismMWFile": "[Ancilliary]/MechMW.csv",
+    "SpeciesInfoFile": "[Ancilliary]/SpeciesTable.csv",
+    "RegenerateSpatialData": false,
+    "SimulationName": "2005nei",
+    "DebugLevel": 0,
+    "Ncpus": 8,
+    "RunSpeciate": true,
+    "RunSpatialize": true,
+    "RunTemporal": true,
+    "PolsToKeep": {
+      "VOC": {
+        "SpecType": "VOC"
+      },
+      "PM2_5": {
+        "SpecType": "PM2.5"
+      },
+      "NOX": {
+        "SpecType": "NOx"
+      },
+      "PM10": {
+        "SpecProf": {
+          "PM_10": {
+            "Factor": 1.0,
+            "Units": "gram/gram"
+          }
         }
+      },
+      "POC_72": {
+        "SpecProf": {
+          "ORGI_72": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "ORGJ_72": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PEC_72": {
+        "SpecProf": {
+          "ECI_72": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "ECJ_72": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PMFINE_72": {
+        "SpecProf": {
+          "PM25I_72": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "PM25J_72": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PMC_72": {
+        "SpecProf": {
+          "PM_10_72": {
+            "Factor": 1.0,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PMC": {
+        "SpecProf": {
+          "PM_10": {
+            "Factor": 1.0,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PSO4": {
+        "SpecProf": {
+          "SO4I": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "SO4J": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PNO3": {
+        "SpecProf": {
+          "NO3I": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "NO3J": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PEC": {
+        "SpecProf": {
+          "ECI": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "ECJ": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "POC": {
+        "SpecProf": {
+          "ORGI": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "ORGJ": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PMFINE": {
+        "SpecProf": {
+          "PM25I": {
+            "Factor": 0.2,
+            "Units": "gram/gram"
+          },
+          "PM25J": {
+            "Factor": 0.8,
+            "Units": "gram/gram"
+          }
+        }
+      },
+      "PAR": {
+        "SpecProf": {
+          "HC3": {
+            "Factor": 0.0076,
+            "Units": "mol/gram"
+          },
+          "HC5": {
+            "Factor": 0.0046,
+            "Units": "mol/gram"
+          },
+          "HC8": {
+            "Factor": 0.0029,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "ETH": {
+        "SpecProf": {
+          "OL2": {
+            "Factor": 0.036,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "OLE": {
+        "SpecProf": {
+          "OLT": {
+            "Factor": 0.024,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "FORM": {
+        "SpecProf": {
+          "HCHO": {
+            "Factor": 0.033,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "ETOH": {
+        "SpecProf": {
+          "HC5": {
+            "Factor": 0.014,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "TOL": {
+        "SpecProf": {
+          "TOL": {
+            "Factor": 0.011,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "XYL": {
+        "SpecProf": {
+          "XYL": {
+            "Factor": 0.0094,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "TERP": {
+        "SpecProf": {
+          "OLT": {
+            "Factor": 0.024,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "MEOH": {
+        "SpecProf": {
+          "HC3": {
+            "Factor": 0.023,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "ALDX": {
+        "SpecProf": {
+          "ALD": {
+            "Factor": 0.023,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "IOLE": {
+        "SpecProf": {
+          "OLI": {
+            "Factor": 0.019,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "ALD2": {
+        "SpecProf": {
+          "ALD": {
+            "Factor": 0.023,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "ISOP": {
+        "SpecProf": {
+          "ISO": {
+            "Factor": 0.015,
+            "Units": "mol/gram"
+          }
+        }
+      },
+      "NH3": {
+        "SpecNames": ["Ammonia"]
+      },
+      "SO2": {
+        "SpecNames": ["Sulfur dioxide"]
+      },
+      "CO": {
+        "SpecNames": ["Carbon monoxide"]
+      },
+      "71432": {
+        "SpecNames": ["Benzene"]
+      },
+      "100414": {
+        "SpecNames": ["Ethylbenzene"]
+      },
+      "108883": {
+        "SpecNames": ["Toluene"]
+      },
+      "95476": {
+        "SpecNames": ["O-xylene", "Isomers of xylene"]
+      },
+      "108383": {
+        "SpecNames": ["M-xylene", "Isomers of xylene"]
+      },
+      "106423": {
+        "SpecNames": ["P-xylene", "Isomers of xylene"]
+      }
+    },
+    "SpecRefFile": "[Ancilliary]/gsref_cmaq_cb05_soa_2005cr_05b_16jun2010.txt",
+    "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+    "SpecProFile": "[Ancilliary]/SPECIATE4.4Final.mdb.sqlite",
+    "SccDesc": "[Ancilliary]/sccdesc_pf31_06apr2010_v10.txt",
+    "SicDesc": "[Ancilliary]/sic_desc_04oct2006_v0.txt",
+    "NaicsDesc": "[Ancilliary]/naicsdesc_02jan2008_v0.txt",
+    "GridRefFile": "[Ancilliary]/amgref_us_can_allmex3_28sep2010_v13.txt",
+    "TemporalRefFile": "[Ancilliary]/amptref_v3_3_revised_10jan2011_v11.txt",
+    "TemporalProFile": "[Ancilliary]/amptpro_2005_us_can_revised_10jan2011_v2.txt",
+    "HolidayFile": "[Ancilliary]/holidays_04may2006_v0.txt",
+    "SrgSpecFile": "[Ancilliary]/surrogate_specification_2002.csv"
+  },
+  "sectors": {
+    "othpt": {
+      "SectorType": "point",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_othpt_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/othpt/ptinv_canada_point_2006_orl_09mar2009_v2_orl.txt",
+        "[Input]/2005cr_05b/othpt/ptinv_canada_point_cb5_2006_orl_10mar2009_v0_orl.txt",
+        "[Input]/2005cr_05b/othpt/ptinv_canada_point_uog_2006_orl_02mar2009_v0_orl.txt",
+        "[Input]/2005cr_05b/othpt/ptinv_mexico_border99_03mar2008_v1_ida.txt",
+        "[Input]/2005cr_05b/othpt/ptinv_mexico_interior99_05feb2007_v0_ida.txt",
+        "[Input]/2005cr_05b/othpt/ptinv_ptnonipm_offshore_oil_cap2005v2_20nov2008_20nov2008_v0_orl.txt"
+      ]
+    },
+    "ptnonipm": {
+      "SectorType": "point",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_ptnonipm_cmaq_cb05_soa_2005cs_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_cap2005v2_2005cs_orl_06jan2011_v4_orl.txt",
+        "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_hap2005v2_2005cs_orl_04jan2011_v2_orl.txt",
+        "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_caphap_ethanol_plant_additions_2005_30jun2010_v3_orl.txt",
+        "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_xportfrac_2005cap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt",
+        "[Input]/2005cs_05b/ptnonipm/ptinv_ptnonipm_2005hap_v1_from_2005ai_ND_ADM_plant_30jun2010_v0_orl.txt"
+      ]
+    },
+    "seca_c3": {
+      "SectorType": "point",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_seca_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_wDE_andSCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
+        "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_fixFIPS_US_andSCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt",
+        "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_caps_2005_09DEC2010_09dec2010_v0_orl.txt",
+        "[Input]/2005cs_05b/seca_c3/ptinv_eca_imo_CANADA_SCC_fix_vochaps_2005_09DEC2010_09dec2010_v0_orl.txt"
+      ]
+    },
+    "ag": {
+      "SectorType": "area",
+      "InventoryFreq": "annual",
+      "InvFileNames": [
+        "[Input]/2005ah_tox_05b/ag/arinv_ag_cap2002nei_06nov2006_v0_orl.txt"
+      ]
+    },
+    "ptipm": {
+      "SectorType": "point",
+      "InventoryFreq": "cem",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_ptipm_cmaq_cb05_soa_2005as_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_hap_27dec2010_txt_27dec2010_v0_orl.txt",
+        "[Input]/2005as_05b/ptipm/ptinv_ptipm_2005cs_cap_27dec2010_txt_29dec2010_v1_orl.txt"
+      ],
+      "CEMFileNames": [
+        "[Input]/cem/2005/HOUR_UNIT_2005_01_jan.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_02_feb.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_03_mar.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_04_apr.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_05_may.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_06_jun.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_07_jul.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_08_aug.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_09_sep.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_10_oct.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_11_nov.txt",
+        "[Input]/cem/2005/HOUR_UNIT_2005_12_dec.txt"
+      ]
+    },
+    "afdust": {
+      "SectorType": "area",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_afdust_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/afdust/arinv_afdust_2002ad_xportfrac_26sep2007_v0_orl.txt"
+      ]
+    },
+    "nonroad": {
+      "SectorType": "area",
+      "InventoryFreq": "monthly",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_nonroad_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/nonroad/arinv_nonroad_caps_2005v2_[month]_revised_08sep2008_v0_orl.txt",
+        "[Input]/2005cr_05b/nonroad/arinv_nonroad_calif_caphap_2005v2_revised_[month]_23jun2010_v0_orl.txt",
+        "[Input]/2005cr_05b/nonroad/arinv_nonroad_haps_2005v2_[month]_revised_05sep2008_v0_orl.txt"
+      ]
+    },
+    "on_moves_runpm": {
+      "SectorType": "mobile",
+      "InventoryFreq": "monthly",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_runpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/on_moves_runpm/mbinv_on_moves_runpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+      ]
+    },
+    "on_moves_startpm": {
+      "SectorType": "mobile",
+      "InventoryFreq": "monthly",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_on_moves_startpm_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/on_moves_startpm/mbinv_on_moves_startpm_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+      ]
+    },
+    "on_noadj": {
+      "SectorType": "mobile",
+      "InventoryFreq": "monthly",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_on_noadj_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "SpecRefComboFile": "[Ancilliary]/gspro_combo_2005_09sep2008_v2.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/on_noadj/mbinv_onroad_calif_caphap_2005v2_revised_[month]_29jun2010_v0_orl.txt",
+        "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_nmim_not2moves_2005cr_[month]_04MAY2010_04may2010_v0_orl.txt",
+        "[Input]/2005cr_05b/on_noadj/mbinv_on_noadj_MOVES_2005cr_[month]_06MAY2010_06may2010_v0_orl.txt"
+      ]
+    },
+    "othon": {
+      "SectorType": "mobile",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_othon_cmaq_cb05_soa_2005cr_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cr_05b/othon/mbinv_canada_onroad_cap_2006_04feb2009_v0_orl.txt",
+        "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_border1999_21dec2006_v0_ida.txt",
+        "[Input]/2005cr_05b/othon/mbinv_onroad_mexico_interior1999_21dec2006_v0_ida.txt"
+      ]
+    },
+    "alm_no_c3": {
+      "SectorType": "area",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_alm_no_c3_cmaq_cb05_soa_2005cs_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_hap2002v4_20feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/alm_no_c3/arinv_lm_no_c3_cap2002v3_22dec2010_v1_orl.txt"
+      ]
+    },
+    "nonpt": {
+      "SectorType": "area",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_nonpt_cmaq_cb05_soa_2005cs_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_cap_nopfc_04jan2011_v5_orl.txt",
+        "[Input]/2005cs_05b/nonpt/arinv_nonpt_pf4_hap_nopfc_nobafmpesticidesplus_04jan2011_v3_orl.txt",
+        "[Input]/2005cs_05b/nonpt/arinv_pfc_2002_caphap_27dec2007_v0_orl.txt",
+        "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_WRAP_OilGas_04feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/nonpt/arinv_nonpt_cap_2005_TCEQ_Oklahoma_OilGas_28may2010_v0_orl.txt"
+      ]
+    },
+    "othar": {
+      "SectorType": "area",
+      "InventoryFreq": "annual",
+      "SpecRefFile": "[Ancilliary]/speciation/gsref_othar_cmaq_cb05_soa_2005cs_05b_05b.txt",
+      "InvFileNames": [
+        "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_interior1999_21dec2006_v0_ida.txt",
+        "[Input]/2005cs_05b/othar/arinv_nonroad_mexico_border1999_21dec2006_v0_ida.txt",
+        "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_interior1999_21dec2006_v0_ida.txt",
+        "[Input]/2005cs_05b/othar/arinv_nonpt_mexico_border1999_21dec2006_v0_ida.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_offroad_cap_2006_04feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_marine_cap_2006_03feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_oarea_cap_2006_02mar2009_v3_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_aircraft_cap_2006_04feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_rail_cap_2006_03feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_ag_cap_2006_03feb2009_v0_orl.txt",
+        "[Input]/2005cs_05b/othar/arinv_canada_afdust_xportfrac_cap_2006_03feb2009_v0_orl.txt"
+      ]
     }
+  }
 }

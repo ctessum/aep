@@ -32,15 +32,10 @@ import (
 )
 
 const (
-	tons2g   = 907184.74
-	tonnes2g = 1.0e6
-	kg2g     = 1000.
-	g2g      = 1.0
-	lbs2g    = 453.59237
-	months   = "jan feb mar apr may jun jul aug sep oct nov dec"
+	months = "jan feb mar apr may jun jul aug sep oct nov dec"
 )
 
-const Website = "http://bitbucket.org/ctessum/aep/"
+const Website = "http://github.com/ctessum/aep/"
 const Version = "0.1.0" // versioning scheme at: http://semver.org/
 
 // Reads and parse a json configuration file.
@@ -100,7 +95,7 @@ type DirInfo struct {
 	Output      string // Directory for output data and reports
 }
 
-// type Context is a container for the configuration and report info
+// Context is a container for the configuration and report info
 type Context struct {
 	outputDir              string // Output directory
 	ShapefileDir           string // Directory where input shapefiles are stored
@@ -174,8 +169,11 @@ type PolHolder struct {
 	SpecProf  map[string]*SpecHolder // Use this field to directly specify the speciation factors and units.
 }
 
+// Period specifies the time period of the emissions data.
 type Period int
 
+// The Periods are the months of the year, annual, or Cem which is hourly
+// continuous emissions monitoring data.
 const (
 	Jan Period = iota + 1
 	Feb
@@ -225,7 +223,6 @@ func (p Period) String() string {
 		return "Cem"
 	default:
 		panic(fmt.Sprintf("Unknown period: %v", p))
-		return ""
 	}
 }
 
@@ -374,22 +371,6 @@ func (p *Context) setup(e *ErrCat) {
 			// period 1 is january
 			c.runPeriods = append(c.runPeriods, Period(m))
 		}
-	}
-	switch c.InputUnits {
-	case "tons/year":
-		c.InputConv = tons2g
-	case "tonnes/year":
-		c.InputConv = tonnes2g
-	case "kg/year":
-		c.InputConv = kg2g
-	case "g/year":
-		c.InputConv = g2g
-	case "lbs/year":
-		c.InputConv = lbs2g
-	default:
-		e.Add(fmt.Errorf("In configuration file: unknown value " + c.InputUnits +
-			" for variable InputUnits. Acceptable values are `tons/year', " +
-			"`tonnes/year', `kg/year', `g/year', and `lbs/year'."))
 	}
 	// Fill in information about ending time (varies by output file format)
 	if c.OutputType == "camx" || c.OutputType == "wrf" {
