@@ -564,7 +564,7 @@ func NewEmissionsReader(polsToKeep map[string]*PolHolder, freq InventoryFrequenc
 	return e, nil
 }
 
-func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader io.Reader, err error) {
+func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader ReadSeekCloser, err error) {
 	file := filetemplate
 	if e.freq == Monthly {
 		file = strings.Replace(file, "[month]", p.String(), -1)
@@ -573,6 +573,13 @@ func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (f
 	return file, f, err
 }
 
+// ReadFiles reads emissions associated with period p from the specified files,
+// and returns emissions records and a summary report.
+// The specified filenames are only used for reporting. If multiple files have
+// data for the same specific facility (for instance, if one file has CAPs
+// emissions and the other has HAPs emissions) they need to be processed in this
+// function together to avoid double counting in speciation. (If you will
+// not be speciating the emissions, then it doesn't matter.)
 func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period) (map[string]*ParsedRecord, InventoryReport, error) {
 	report := make(InventoryReport)
 
