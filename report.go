@@ -288,25 +288,18 @@ func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
 	}
 }
 
-// SCCdesc reads the smoke sccdesc file, which gives descriptions for each SCC code.
-func (c *Context) SCCdesc() (map[string]string, error) {
+// SCCDescription reads a SMOKE sccdesc file, which gives descriptions
+// for each SCC code. The returned data is in the form map[SCC]description.
+func SCCDescription(r io.Reader) (map[string]string, error) {
 	sccDesc := make(map[string]string)
-	var record string
-	fid, err := os.Open(c.SccDesc)
-	if err != nil {
-		return sccDesc, err
-	} else {
-		defer fid.Close()
-	}
-	buf := bufio.NewReader(fid)
+	buf := bufio.NewReader(r)
 	for {
-		record, err = buf.ReadString('\n')
+		record, err := buf.ReadString('\n')
 		if err != nil {
 			if err.Error() == "EOF" {
-				err = nil
 				break
 			} else {
-				return sccDesc, errors.New(record + "\n" + err.Error() + "\nFile= " + c.SccDesc + "\nRecord= " + record)
+				return sccDesc, fmt.Errorf("In SCCdescription: %s; record: %s", err, record)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -337,7 +330,7 @@ func (c *Context) SCCdesc() (map[string]string, error) {
 			sccDesc[SCC] = cleanDescription(splitLine[1])
 		}
 	}
-	return sccDesc, err
+	return sccDesc, nil
 }
 
 // Read SIC description file, which gives descriptions for each SIC code.

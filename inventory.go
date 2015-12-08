@@ -26,14 +26,13 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	"bitbucket.org/ctessum/sparse"
 )
 
+// ReadSeekCloser is an interface for Readers that can also seek and close.
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
@@ -70,7 +69,7 @@ func newFileInfo() (f *FileInfo) {
 // input file type.
 type ParsedRecord struct {
 	// Five digit FIPS code for state and county (required)
-	FIPS string `pointorl:"0" areaorl:"0" nonroadorl:"0" mobileorl:"0" pointida:"0:5" areaida:"0:5" mobileida:"0:5" pointff10:"1"`
+	FIPS string `pointorl:"0" areaorl:"0" nonroadorl:"0" mobileorl:"0" pointida:"0:5" areaida:"0:5" mobileida:"0:5" pointff10:"1" areaff10:"1"`
 
 	// Plant Identification Code (15 characters maximum) (required,
 	// this is the same as the State Facility Identifier in the NIF)
@@ -92,7 +91,7 @@ type ParsedRecord struct {
 	PLANT string `pointorl:"5" pointida:"61:101" pointff10:"15"`
 
 	// Ten character Source Classification Code (required)
-	SCC string `pointorl:"6" areaorl:"1" nonroadorl:"1" mobileorl:"1" pointida:"101:111" areaida:"5:15" mobileida:"15:25" pointff10:"11"`
+	SCC string `pointorl:"6" areaorl:"1" nonroadorl:"1" mobileorl:"1" pointida:"101:111" areaida:"5:15" mobileida:"15:25" pointff10:"11" areaff10:"5"`
 
 	// Source type (2 characters maximum), used by SMOKE in determining
 	// applicable MACT-based controls (required)
@@ -146,8 +145,8 @@ type ParsedRecord struct {
 	//	UTM zone (required if CTYPE = U)
 	UTMZ int `pointorl:"20"`
 
-	// Annual Emissions (tons/year) (required)
-	// Emissions values must be positive because numbers are used
+	// ANN_EMIS is Annual Emissions (tons/year) (required)
+	// Emissions values must be positive because negative numbers are used
 	// to represent missing data.
 	// In the struct tags, there are three numbers. for ORL records,
 	// the first number is
@@ -156,10 +155,10 @@ type ParsedRecord struct {
 	// For IDA records, the first number is the start of the first pollutant,
 	// and the second two numbers are offsets for the ends of the annual and
 	// average day emissions fields.
-	// For FF10 record, the first number is the location of the pollutant, the
+	// For FF10 records, the first number is the location of the pollutant, the
 	// second number is the location of the annual emissions, and
 	// the third number (followed by "...") is the location of January emissions.
-	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23" areaorl:"6,7,8" nonroadorl:"2,3,4" mobileorl:"2,3,4" pointida:"249:13:26" areaida:"15:10:20" mobileida:"25:10:20" pointff10:"12,13,52..."`
+	ANN_EMIS map[Period]map[string]*SpecValUnits `pointorl:"21,22,23" areaorl:"6,7,8" nonroadorl:"2,3,4" mobileorl:"2,3,4" pointida:"249:13:26" areaida:"15:10:20" mobileida:"25:10:20" pointff10:"12,13,52..." areaff10:"7,8,20..."`
 
 	// Control efficiency percentage (give value of 0-100) (recommended,
 	// if left blank, SMOKE default is 0).
@@ -191,10 +190,13 @@ type ParsedRecord struct {
 	DoubleCountPols []string
 
 	// The country that this record applies to.
+	// TODO: Acount for the fact that FF10 files can have record-specific countries.
 	Country Country
 
 	// Surrogate to apply emissions to grid cells
 	GridSrgs []*sparse.SparseArray
+
+	err error
 }
 
 // SpecValUnits holds emissions species type, value, and units information.
@@ -329,7 +331,7 @@ func (r *ParsedRecord) setup(e *EmissionsReader) error {
 }
 
 func (e *EmissionsReader) parseRecord(ftype string, line []string, fInfo *FileInfo,
-	p Period) *ParsedRecord {
+	p Period) (*ParsedRecord, error) {
 
 	r := newParsedRecord(p)
 	v := reflect.Indirect(reflect.ValueOf(r))
@@ -341,16 +343,12 @@ func (e *EmissionsReader) parseRecord(ftype string, line []string, fInfo *FileIn
 		pol = r.setVal(ftype, fInfo, fieldType, fieldVal, line, pol, p)
 	}
 	err := r.setup(e)
-	handleInventoryError(err, fInfo, line)
-	return r
-}
-
-func handleInventoryError(err error, fInfo *FileInfo, line []string) {
 	if err != nil {
-		panic(fmt.Sprintf("In file:\n%s\nthere was an error with the "+
+		return r, fmt.Errorf("in file:\n%s\nthere was an error with the "+
 			"following record:\n%v\nThe error message was:\n%v",
-			fInfo.fname, line, err.Error()))
+			fInfo.fname, line, err.Error())
 	}
+	return r, nil
 }
 
 func (r *ParsedRecord) setVal(fileType string, fInfo *FileInfo,
@@ -582,6 +580,10 @@ func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (f
 // not be speciating the emissions, then it doesn't matter.)
 func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period) (map[string]*ParsedRecord, InventoryReport, error) {
 	report := make(InventoryReport)
+	if len(files) != len(filenames) {
+		return nil, nil, fmt.Errorf("in Readfiles, different number of files (%d) "+
+			"and filenames (%d)", len(files), len(filenames))
+	}
 
 	// make a list of species that can possibly be double counted.
 	var doubleCountablePols []string
@@ -598,20 +600,11 @@ func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, 
 	for i, file := range files {
 		filename := filenames[i]
 		fInfo := e.NewDecoder(filename, file)
-		recordChan := make(chan *ParsedRecord)
-		go fInfo.parseLines(recordChan, e, p)
+		recordChan := fInfo.parseLines(e, p)
 		for record := range recordChan {
-			// add emissions to totals for report
-			for pol, emis := range record.ANN_EMIS[p] {
-				if _, ok := e.polsToKeep[cleanPol(pol)]; ok {
-					fInfo.Totals[pol] += emis.Val
-				} else {
-					// delete value if we don't want to keep it
-					fInfo.DroppedTotals[pol] += emis.Val
-					delete(record.ANN_EMIS[p], pol)
-				}
+			if record.err != nil {
+				return nil, nil, record.err
 			}
-
 			key := record.FIPS + record.SCC + record.PLANTID +
 				record.POINTID + record.STACKID +
 				record.SEGMENT + record.ORIS_FACILITY_CODE +
@@ -703,8 +696,14 @@ func (e *EmissionsReader) NewDecoder(filename string, file ReadSeekCloser) (fInf
 		}
 	} else if strings.Index(record, "IDA") >= 0 {
 		fInfo.Format = "IDA"
-	} else if strings.Index(record, "FF10") >= 0 {
-		fInfo.Format = "FF10"
+	} else if strings.Index(record, "FF10_POINT") >= 0 {
+		fInfo.Format = "FF10_POINT"
+	} else if strings.Index(record, "FF10_NONPOINT") >= 0 {
+		fInfo.Format = "FF10_NONPOINT"
+	} else if strings.Index(record, "FF10_NONROAD") >= 0 {
+		fInfo.Format = "FF10_NONROAD"
+	} else if strings.Index(record, "FF10_ONROAD") >= 0 {
+		fInfo.Format = "FF10_ONROAD"
 	} else {
 		panic("Unknown file type for: " + filename)
 	}
@@ -752,67 +751,75 @@ func (e *EmissionsReader) NewDecoder(filename string, file ReadSeekCloser) (fInf
 }
 
 // parseLines parses the lines of a file
-func (fInfo *FileInfo) parseLines(recordChan chan *ParsedRecord,
-	e *EmissionsReader, p Period) {
-	numProcs := runtime.GOMAXPROCS(-1)
-	lineChan := make(chan []string)
-	var wg sync.WaitGroup
-	wg.Add(numProcs)
-	for i := 0; i < numProcs; i++ {
-		go func() {
-			var line []string
-			for line = range lineChan {
-				record := new(ParsedRecord)
-				switch fInfo.Format + e.sectorType {
-				case "FF10point":
-					record = e.parseRecord("pointff10", line, fInfo, p)
-				case "ORLpoint":
-					record = e.parseRecord("pointorl", line, fInfo, p)
-				case "ORLarea":
-					record = e.parseRecord("areaorl", line, fInfo, p)
-				case "ORLNONROADarea":
-					record = e.parseRecord("nonroadorl", line, fInfo, p)
-				case "ORLmobile":
-					record = e.parseRecord("mobileorl", line, fInfo, p)
-				case "IDApoint":
-					record = e.parseRecord("pointida", line, fInfo, p)
-				case "IDAarea":
-					record = e.parseRecord("areaida", line, fInfo, p)
-				case "IDAmobile":
-					record = e.parseRecord("mobileida", line, fInfo, p)
-				default:
-					// This should never happen because we should have checked the file
-					// format already.
-					panic(fmt.Errorf("in parseLines: unknown format: %s %s",
-						fInfo.Format, e.sectorType))
-				}
+func (fInfo *FileInfo) parseLines(e *EmissionsReader, p Period) chan *ParsedRecord {
+	outChan := make(chan *ParsedRecord)
 
-				// set which country this record is for
-				record.Country = getCountryFromName(fInfo.Country)
-				recordChan <- record
+	go func() {
+		defer close(outChan)
+		r := csv.NewReader(fInfo.fid)
+		r.Comment = '#'
+		firstLine := true
+		for {
+			var record *ParsedRecord
+			line, err := r.Read()
+			if err != nil {
+				if err == io.EOF {
+					return
+				}
+				record.err = err
+				outChan <- record
+				continue
 			}
-			wg.Done()
-		}()
-	}
-	r := csv.NewReader(fInfo.fid)
-	r.Comment = '#'
-	firstLine := true
-	for {
-		line, err := r.Read()
-		if err != nil {
-			if err == io.EOF {
-				close(lineChan)
-				wg.Wait()
-				close(recordChan)
-				return
+			if firstLine && strings.Contains(fInfo.Format, "FF10") {
+				firstLine = false // skip header row in FF10 files
+				continue
 			}
-			panic(fInfo.fname + "\n" + strings.Join(line, ",") + "\n" +
-				err.Error())
+
+			switch fInfo.Format + e.sectorType {
+			case "FF10_POINTpoint":
+				record, err = e.parseRecord("pointff10", line, fInfo, p)
+			case "FF10_NONPOINTarea", "FF10_NONROADarea", "FF10_ONROADarea":
+				record, err = e.parseRecord("areaff10", line, fInfo, p)
+			case "ORLpoint":
+				record, err = e.parseRecord("pointorl", line, fInfo, p)
+			case "ORLarea":
+				record, err = e.parseRecord("areaorl", line, fInfo, p)
+			case "ORLNONROADarea":
+				record, err = e.parseRecord("nonroadorl", line, fInfo, p)
+			case "ORLmobile":
+				record, err = e.parseRecord("mobileorl", line, fInfo, p)
+			case "IDApoint":
+				record, err = e.parseRecord("pointida", line, fInfo, p)
+			case "IDAarea":
+				record, err = e.parseRecord("areaida", line, fInfo, p)
+			case "IDAmobile":
+				record, err = e.parseRecord("mobileida", line, fInfo, p)
+			default:
+				err = fmt.Errorf("in parseLines: unknown format: %s %s",
+					fInfo.Format, e.sectorType)
+			}
+			if err != nil {
+				record.err = err
+				outChan <- record
+				continue
+			}
+			// set which country this record is for
+			record.Country = getCountryFromName(fInfo.Country)
+
+			// add emissions to totals for report
+			for pol, emis := range record.ANN_EMIS[p] {
+				if _, ok := e.polsToKeep[cleanPol(pol)]; ok {
+					fInfo.Totals[pol] += emis.Val
+				} else {
+					// delete value if we don't want to keep it
+					fInfo.DroppedTotals[pol] += emis.Val
+					delete(record.ANN_EMIS[p], pol)
+					delete(record.REFF, pol)
+					delete(record.RPEN, pol)
+				}
+			}
+			outChan <- record
 		}
-		if firstLine && fInfo.Format == "FF10" {
-			firstLine = false // skip header row in FF10 files
-			continue
-		}
-		lineChan <- line
-	}
+	}()
+	return outChan
 }
