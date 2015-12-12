@@ -58,6 +58,7 @@ func (c *Context) NewTemporalProcessor(grids []*GridDef) *TemporalProcessor {
 
 type temporalSector struct {
 	c             *Context
+	sp            *SpatialProcessor
 	tp            *TemporalProcessor
 	monthlyTpro   map[string][]float64 // map[code]vals
 	weeklyTpro    map[string][]float64 // map[code]vals
@@ -78,7 +79,7 @@ type temporalSector struct {
 }
 
 func (tp *TemporalProcessor) NewSector(c *Context,
-	InputChan, OutputChan chan *ParsedRecord) {
+	InputChan, OutputChan chan *ParsedRecord, sp *SpatialProcessor) {
 	t := new(temporalSector)
 	t.mu.Lock()
 	tp.mu.Lock()
@@ -88,6 +89,7 @@ func (tp *TemporalProcessor) NewSector(c *Context,
 	t.InputChan = InputChan
 	t.OutputChan = OutputChan
 	t.c = c
+	t.sp = sp
 	t.PointData = make(map[[3]string][]*ParsedRecord)
 	t.AreaData = make(map[[3]string]map[Period]map[string][]*sparse.SparseArray)
 	// Choose which temporal aggregation function to use.
@@ -457,7 +459,10 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	// Add data from record into matricies.
 	for p, _ := range record.ANN_EMIS {
 		for i, _ := range t.tp.grids {
-			gridEmis, gridUnits := record.EmisToGrid(i, p)
+			gridEmis, gridUnits, err := record.GriddedEmissions(t.sp, t.c.SectorType, i, p)
+			if err != nil {
+				panic(err)
+			}
 			for pol, emis := range gridEmis {
 				if _, ok := t.AreaData[temporalCodes][p]; !ok {
 					t.AreaData[temporalCodes][p] =

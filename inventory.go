@@ -196,6 +196,13 @@ type ParsedRecord struct {
 	// Surrogate to apply emissions to grid cells
 	GridSrgs []*sparse.SparseArray
 
+	// inGrid specifies whether the record is at least partially within
+	// each grid.
+	inGrid []bool
+	// coveredByGrid specifies whether the record is completely covered by each
+	// grid.
+	coveredByGrid []bool
+
 	err error
 }
 

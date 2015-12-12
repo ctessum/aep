@@ -40,6 +40,7 @@ func init() {
 	gob.Register(geom.Polygon{})
 }
 
+// GridDef specifies the grid that we are allocating the emissions to.
 type GridDef struct {
 	Name            string
 	Nx, Ny          int
@@ -52,9 +53,9 @@ type GridDef struct {
 	IrregularGrid   bool     // whether the grid is a regular grid
 	OtherFieldNames []string // names of other columns we want to keep
 	rtree           *rtree.Rtree
-	srgMapCache     cacheDB
 }
 
+// GridCell defines an individual cell in a grid.
 type GridCell struct {
 	geom.T
 	Row, Col       int
@@ -62,6 +63,7 @@ type GridCell struct {
 	Weight         float64
 }
 
+// Copy copies a grid cell.
 func (c *GridCell) Copy() *GridCell {
 	o := new(GridCell)
 	o.T = c.T
@@ -87,6 +89,8 @@ func (c *GridCell) AddOtherFieldData(data ...interface{}) {
 	}
 }
 
+// NewGridRegular creates a new regular grid, where all grid cells are the
+// same size.
 func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	sr proj.SR) (grid *GridDef) {
 	grid = new(GridDef)
@@ -311,8 +315,7 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
 	return timezones, tzShp.Error()
 }
 
-func (grid *GridDef) GetIndex(x, y float64, inputSr proj.SR,
-	ct *proj.CoordinateTransform) (
+func (grid *GridDef) GetIndex(x, y float64, ct *proj.CoordinateTransform) (
 	X, Y float64, row, col int, withinGrid bool, err error) {
 	g := geom.T(geom.Point{x, y})
 	g, err = ct.Reproject(g)
@@ -356,7 +359,7 @@ func (g *GridDef) WriteToShp(outdir string) error {
 		}
 	}
 	var shpf *shp.Encoder
-	shpf, err = shp.NewEncoderFromFields(filepath.Join(outdir, g.Name),
+	shpf, err = shp.NewEncoderFromFields(filepath.Join(outdir, g.Name+".shp"),
 		goshp.POLYGON, fields...)
 	if err != nil {
 		return err
