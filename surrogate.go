@@ -20,6 +20,7 @@ package aep
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"runtime"
 	"strconv"
@@ -50,8 +51,9 @@ type srgGenWorkerInitData struct {
 type griddingSurrogate struct {
 	// Srg holds surrogate data associated with individual input locations.
 	Srg map[string]*GriddedSrgData
-	// Grid defines the grid that the emissions are being allocated to.
-	Grid *GridDef
+
+	// Nx and Ny are the number of columns and rows in the grid
+	Nx, Ny int
 }
 
 // ToGrid allocates the 1 unit of emissions associated with shapeID to a grid
@@ -64,7 +66,7 @@ func (gs *griddingSurrogate) ToGrid(shapeID string) (*sparse.SparseArray, bool) 
 	if !ok {
 		return nil, false
 	}
-	srgOut := sparse.ZerosSparse(gs.Grid.Ny, gs.Grid.Nx)
+	srgOut := sparse.ZerosSparse(gs.Ny, gs.Nx)
 	for _, cell := range srg.Cells {
 		srgOut.AddVal(cell.Weight, cell.Row, cell.Col)
 	}
@@ -84,7 +86,7 @@ func (gs *griddingSurrogate) ToGrid(shapeID string) (*sparse.SparseArray, bool) 
 // corresponding factor.
 func mergeSrgs(srgs []*griddingSurrogate, factors []float64) *griddingSurrogate {
 	o := new(griddingSurrogate)
-	o.Grid = srgs[0].Grid
+	o.Nx, o.Ny = srgs[0].Nx, srgs[0].Ny
 	o.Srg = make(map[string]*GriddedSrgData)
 	for i, g := range srgs {
 		fac := factors[i]
@@ -189,16 +191,16 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*grid
 // createGriddingSurrogate creates a new gridding surrogate based on a
 // surrogate specification and grid definition.
 func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*griddingSurrogate, error) {
-
+	log.Println("Creating", srg.Code, srg.Name)
 	if len(srg.MergeNames) != 0 {
 		return sp.createMerged(srg, gridData)
 	}
 
-	inputData, err := srg.getInputData(gridData)
+	inputData, err := srg.getInputData(gridData, sp.SimplifyTolerance)
 	if err != nil {
 		return nil, err
 	}
-	srgData, err := srg.getSrgData(gridData)
+	srgData, err := srg.getSrgData(gridData, sp.SimplifyTolerance)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +263,12 @@ func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*gr
 			return nil, err
 		}
 	}
-	return &griddingSurrogate{Srg: GriddedSrgs, Grid: gridData}, nil
+	o := &griddingSurrogate{
+		Srg: GriddedSrgs,
+		Nx:  gridData.Nx,
+		Ny:  gridData.Ny,
+	}
+	return o, nil
 }
 
 // WriteToShp write an individual gridding surrogate to a shapefile.
@@ -282,8 +289,8 @@ func (g *GriddedSrgData) WriteToShp(s *shp.Encoder) error {
 	return nil
 }
 
-// Get input shapes
-func (srg *SrgSpec) getInputData(gridData *GridDef) (map[string]geom.T, error) {
+// Get input shapes. tol is simplifcation tolerance.
+func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geom.T, error) {
 	srg.progressLock.Lock()
 	srg.status = "getting surrogate input shape data"
 	srg.progress = 0.
@@ -327,6 +334,16 @@ func (srg *SrgSpec) getInputData(gridData *GridDef) (map[string]geom.T, error) {
 		if err != nil {
 			return inputData, err
 		}
+		if tol > 0 {
+			ggeom, err = op.Simplify(ggeom, tol)
+			if err != nil {
+				// TODO: Fix this upstream
+				log.Println(err)
+				continue
+				//return inputData, err
+			}
+		}
+
 		intersects = ggeom.Bounds(nil).Overlaps(gridBounds)
 		if intersects {
 			inputID := fields[srg.DATAATTRIBUTE]
@@ -348,8 +365,8 @@ func (srg *SrgSpec) getInputData(gridData *GridDef) (map[string]geom.T, error) {
 	return inputData, nil
 }
 
-// get surrogate shapes and weights
-func (srg *SrgSpec) getSrgData(gridData *GridDef) (*rtree.Rtree, error) {
+// get surrogate shapes and weights. tol is a geometry simplification tolerance.
+func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, error) {
 	srg.progressLock.Lock()
 	srg.progress = 0.
 	srg.status = "getting surrogate weight data"
@@ -423,18 +440,29 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef) (*rtree.Rtree, error) {
 			if err != nil {
 				return srgData, err
 			}
+			if tol > 0 {
+				srgH.T, err = op.Simplify(srgH.T, tol)
+				if err != nil {
+					// TODO: Fix this upstream
+					log.Println(err)
+					continue
+					//return srgData, err
+				}
+			}
 			intersects = srgH.T.Bounds(nil).Overlaps(gridBounds)
 			if intersects {
 				if srg.WeightColumns != nil {
 					weightval := 0.
 					for _, name := range srg.WeightColumns {
 						var v float64
-						if data[name] == "************************" {
+						vstring := data[name]
+						if vstring == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" {
 							// null value
 							v = 0.
 						} else {
 							v, err = strconv.ParseFloat(data[name], 64)
 							if err != nil {
+								fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxxx")
 								return srgData, err
 							}
 						}
@@ -444,9 +472,14 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef) (*rtree.Rtree, error) {
 					case geom.Polygon, geom.MultiPolygon:
 						size = op.Area(srgH.T)
 						if size == 0. {
-							err = fmt.Errorf("Area should not equal "+
-								"zero in %v", srg.WEIGHTSHAPEFILE)
-							return srgData, err
+							if tol > 0 {
+								// We probably simplified the shape down to zero area.
+								continue
+							} else {
+								err = fmt.Errorf("Area should not equal "+
+									"zero in %v", srg.WEIGHTSHAPEFILE)
+								return srgData, err
+							}
 						}
 						srgH.Weight = weightval / size
 					case geom.LineString, geom.MultiLineString:
@@ -610,8 +643,8 @@ func (s *srgGenWorker) intersections1(
 					intersection, err2 = op.Construct(srg.T,
 						data.InputGeom, op.INTERSECTION)
 					if err2 != nil {
-						errChan <- err2
-						return
+						log.Println("error intersecting shapes; continuing without this shape. error:", err2)
+						continue
 					}
 					if intersection == nil {
 						continue
@@ -683,8 +716,8 @@ func (s *srgGenWorker) intersections2(data *GriddedSrgData,
 						intersection, err2 = op.Construct(srg.T,
 							cell.T, op.INTERSECTION)
 						if err2 != nil {
-							errChan <- err2
-							return
+							log.Println("error intersecting shapes; continuing without this shape. error:", err2)
+							continue
 						}
 						if intersection == nil {
 							continue

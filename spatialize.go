@@ -72,6 +72,13 @@ type SpatialProcessor struct {
 	// when attempting to create a merged surrogate.
 	// The default value is 10.
 	MaxMergeDepth int
+
+	// SimplifyTolerance specifies the length of features up to which to remove
+	// when simplifying shapefiles for spatial surrogate creation. The default is
+	// 0 (i.e., no simplification). Simplifying decreases processing time and
+	// memory use. The value should be in the units of the output grid
+	// (e.g., meters or degrees).
+	SimplifyTolerance float64
 }
 
 // NewSpatialProcessor creates a new spatial processor.
@@ -335,6 +342,9 @@ func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *sr
 				newRequest := r.repeat()
 				outChan <- newRequest
 				newRequest = <-newRequest.returnChan
+				if newRequest.err != nil {
+					r.returnChan <- newRequest
+				}
 				newRequest.err = sp.writeSrgToDisk(newRequest)
 				r.returnChan <- newRequest
 			}
@@ -349,13 +359,15 @@ func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*griddingSurrogate, b
 	if sp.DiskCachePath == "" {
 		return nil, false
 	}
+
 	f, err := os.Open(filepath.Join(sp.DiskCachePath, r.key()+".gob"))
 	if err != nil {
 		return nil, false
 	}
-	var data *griddingSurrogate
+
+	var data griddingSurrogate
 	e := gob.NewDecoder(f)
-	err = e.Decode(data)
+	err = e.Decode(&data)
 	if err != nil {
 		// Ignore the error and just regenerate the file.
 		return nil, false
@@ -365,13 +377,13 @@ func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*griddingSurrogate, b
 		// Ignore the error and just regenerate the file.
 		return nil, false
 	}
-	return data, true
+	return &data, true
 }
 
 // writeSrgToDisk writes a gridding surrogate to a disk cache.
 func (sp *SpatialProcessor) writeSrgToDisk(r *srgRequest) error {
-	if sp.DiskCachePath == "" {
-		return nil
+	if sp.DiskCachePath == "" || r.data == nil || r.err != nil {
+		return r.err
 	}
 	f, err := os.Create(filepath.Join(sp.DiskCachePath, r.key()+".gob"))
 	if err != nil {
@@ -398,6 +410,9 @@ func (sp *SpatialProcessor) surrogate(srgSpec *SrgSpec, grid *GridDef, fips stri
 	r := newSrgRequest(srgSpec, grid)
 	sp.surrogateGeneratorChan <- r
 	r = <-r.returnChan
+	if r.err != nil {
+		return nil, false, r.err
+	}
 	srg, coveredByGrid := r.data.ToGrid(fips)
 	if srg != nil {
 		return srg, coveredByGrid, r.err
@@ -416,8 +431,7 @@ func (sp *SpatialProcessor) surrogate(srgSpec *SrgSpec, grid *GridDef, fips stri
 			return srg, coveredByGrid, r.err
 		}
 	}
-	return nil, false, fmt.Errorf("unable to create a non-nil surrogate for %s, %s, %s, %s",
-		srgSpec.Region, srgSpec.Name, grid.Name, fips)
+	return nil, false, nil
 }
 
 type srgRequest struct {
