@@ -419,6 +419,8 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 		if srg.FilterFunction == nil {
 			keepFeature = true
 		} else {
+			// Determine whether this feature should be kept according to
+			// the filter function.
 			keepFeature = false
 			featureVal = fmt.Sprintf("%v", data[srg.FilterFunction.Column])
 			for _, filterVal := range srg.FilterFunction.Values {
@@ -451,9 +453,9 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 			}
 			intersects = srgH.T.Bounds(nil).Overlaps(gridBounds)
 			if intersects {
-				if srg.WeightColumns != nil {
+				if len(srg.WeightColumns) != 0 {
 					weightval := 0.
-					for _, name := range srg.WeightColumns {
+					for i, name := range srg.WeightColumns {
 						var v float64
 						vstring := data[name]
 						if vstring == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" {
@@ -466,7 +468,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 								return srgData, err
 							}
 						}
-						weightval += v
+						weightval += v * srg.WeightFactors[i]
 					}
 					switch srgH.T.(type) {
 					case geom.Polygon, geom.MultiPolygon:
@@ -476,9 +478,11 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 								// We probably simplified the shape down to zero area.
 								continue
 							} else {
-								err = fmt.Errorf("Area should not equal "+
-									"zero in %v", srg.WEIGHTSHAPEFILE)
-								return srgData, err
+								// TODO: Is it okay for input shapes to have zero area? Probably....
+								continue
+								//err = fmt.Errorf("Area should not equal "+
+								//	"zero in %v", srg.WEIGHTSHAPEFILE)
+								//return srgData, err
 							}
 						}
 						srgH.Weight = weightval / size
@@ -643,7 +647,7 @@ func (s *srgGenWorker) intersections1(
 					intersection, err2 = op.Construct(srg.T,
 						data.InputGeom, op.INTERSECTION)
 					if err2 != nil {
-						log.Println("error intersecting shapes; continuing without this shape. error:", err2)
+						log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
 						continue
 					}
 					if intersection == nil {
@@ -716,7 +720,7 @@ func (s *srgGenWorker) intersections2(data *GriddedSrgData,
 						intersection, err2 = op.Construct(srg.T,
 							cell.T, op.INTERSECTION)
 						if err2 != nil {
-							log.Println("error intersecting shapes; continuing without this shape. error:", err2)
+							log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
 							continue
 						}
 						if intersection == nil {

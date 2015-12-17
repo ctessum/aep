@@ -142,9 +142,9 @@ func getCountryFromName(name string) Country {
 	switch name {
 	case "USA", "US":
 		return USA
-	case "CANADA", "CA":
+	case "CANADA", "CA", "CAN":
 		return Canada
-	case "MEXICO":
+	case "MEXICO", "MEX":
 		return Mexico
 	case "CUBA":
 		return Cuba

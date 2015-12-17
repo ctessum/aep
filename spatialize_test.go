@@ -50,7 +50,7 @@ func TestReadSrgSpec(t *testing.T) {
 	}
 	testResult := ""
 	for _, code := range []string{"100", "137", "140", "500", "200"} {
-		srgSpec, err := srgSpecs.GetByCode("USA", code)
+		srgSpec, err := srgSpecs.GetByCode(USA, code)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func TestCreateSurrogates(t *testing.T) {
 	}
 
 	for _, code := range []string{"100", "137", "140", "500", "200"} {
-		srgSpec, err := srgSpecs.GetByCode("USA", code)
+		srgSpec, err := srgSpecs.GetByCode(USA, code)
 		if err != nil {
 			t.Fatal(err)
 		}

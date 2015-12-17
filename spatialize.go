@@ -226,7 +226,7 @@ func (r *ParsedRecord) spatialize(sp *SpatialProcessor, sectorType string) error
 		if err != nil {
 			return err
 		}
-		srgSpec, err := sp.srgSpecs.GetByCode(r.Country.String(), srgNum)
+		srgSpec, err := sp.srgSpecs.GetByCode(r.Country, srgNum)
 		if err != nil {
 			return err
 		}
@@ -480,15 +480,15 @@ func (sp *SpatialProcessor) surrogateGenerator(inChan chan *srgRequest) {
 
 // SrgSpecs holds a group of surrogate specifications
 type SrgSpecs struct {
-	byName map[string]map[string]*SrgSpec
-	byCode map[string]map[string]*SrgSpec
+	byName map[Country]map[string]*SrgSpec
+	byCode map[Country]map[string]*SrgSpec
 }
 
 // NewSrgSpecs initializes a new SrgSpecs object.
 func NewSrgSpecs() *SrgSpecs {
 	s := new(SrgSpecs)
-	s.byName = make(map[string]map[string]*SrgSpec)
-	s.byCode = make(map[string]map[string]*SrgSpec)
+	s.byName = make(map[Country]map[string]*SrgSpec)
+	s.byCode = make(map[Country]map[string]*SrgSpec)
 	return s
 }
 
@@ -503,7 +503,7 @@ func (s *SrgSpecs) Add(ss *SrgSpec) {
 }
 
 // GetByName gets the surrogate matching the given region and name.
-func (s *SrgSpecs) GetByName(region, name string) (*SrgSpec, error) {
+func (s *SrgSpecs) GetByName(region Country, name string) (*SrgSpec, error) {
 	ss, ok := s.byName[region][name]
 	if ok {
 		return ss, nil
@@ -512,7 +512,7 @@ func (s *SrgSpecs) GetByName(region, name string) (*SrgSpec, error) {
 }
 
 // GetByCode gets the surrogate matching the given region and code.
-func (s *SrgSpecs) GetByCode(region, code string) (*SrgSpec, error) {
+func (s *SrgSpecs) GetByCode(region Country, code string) (*SrgSpec, error) {
 	ss, ok := s.byCode[region][code]
 	if ok {
 		return ss, nil
@@ -522,7 +522,7 @@ func (s *SrgSpecs) GetByCode(region, code string) (*SrgSpec, error) {
 
 // SrgSpec holds spatial surrogate specification information.
 type SrgSpec struct {
-	Region          string
+	Region          Country
 	Name            string
 	Code            string
 	DATASHAPEFILE   string
@@ -537,6 +537,10 @@ type SrgSpec struct {
 	// WeightColumns specify the fields of the surogate shapefile that
 	// should be used to weight the output locations.
 	WeightColumns []string
+
+	// WeightFactors are factors by which each of the WeightColumns should
+	// be multiplied.
+	WeightFactors []float64
 
 	// FilterFunction specifies which rows in the surrogate shapefile should
 	// be used to create this surrogate.
@@ -576,7 +580,7 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 	for i := 1; i < len(records); i++ {
 		record := records[i]
 		srg := new(SrgSpec)
-		srg.Region = record[0]
+		srg.Region = getCountryFromName(record[0])
 		srg.Name = strings.TrimSpace(record[1])
 		srg.Code = record[2]
 		srg.DATASHAPEFILE = record[3]
@@ -597,19 +601,33 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 		if WEIGHTATTRIBUTE != "NONE" && WEIGHTATTRIBUTE != "" {
 			srg.WeightColumns = append(srg.WeightColumns,
 				strings.TrimSpace(WEIGHTATTRIBUTE))
+			srg.WeightFactors = append(srg.WeightFactors, 1.)
 		}
 		if WEIGHTFUNCTION != "" {
 			weightfunction := strings.Split(WEIGHTFUNCTION, "+")
 			for _, wf := range weightfunction {
-				srg.WeightColumns = append(srg.WeightColumns, strings.TrimSpace(wf))
+				mulFunc := strings.Split(wf, "*")
+				if len(mulFunc) == 1 {
+					srg.WeightColumns = append(srg.WeightColumns,
+						strings.TrimSpace(mulFunc[0]))
+					srg.WeightFactors = append(srg.WeightFactors, 1.)
+				} else if len(mulFunc) == 2 {
+					v, err := strconv.ParseFloat(mulFunc[0], 64)
+					if err != nil {
+						return nil, fmt.Errorf("srgspec weight function: %v", err)
+					}
+					srg.WeightColumns = append(srg.WeightColumns,
+						strings.TrimSpace(mulFunc[1]))
+					srg.WeightFactors = append(srg.WeightFactors, v)
+				} else {
+					return nil, fmt.Errorf("invalid value %s in srgspec "+
+						"weighting function", wf)
+				}
 			}
 		}
 
 		// Parse filter function
 		srg.FilterFunction = ParseSurrogateFilter(FILTERFUNCTION)
-		if srg.FilterFunction != nil {
-			srg.WeightColumns = append(srg.WeightColumns, srg.FilterFunction.Column)
-		}
 
 		// Parse merge function
 		if MERGEFUNCTION != "NONE" && MERGEFUNCTION != "" {
@@ -751,4 +769,29 @@ func (gr GridRef) GetSrgCode(SCC string, c Country, FIPS string, matchFullSCC bo
 			err.Error(), SCC, c, FIPS)
 	}
 	return matchedVal.(string), nil
+}
+
+// Merge combines values in gr2 into gr. If gr2 combines any values that
+// conflict with values already in gr, an error is returned.
+func (gr *GridRef) Merge(gr2 GridRef) error {
+	grx := *gr
+	for country, d1 := range gr2 {
+		if _, ok := grx[country]; !ok {
+			grx[country] = make(map[string]map[string]interface{})
+		}
+		for SCC, d2 := range d1 {
+			if _, ok := grx[country][SCC]; !ok {
+				grx[country][SCC] = make(map[string]interface{})
+			}
+			for FIPS, code := range d2 {
+				if existingCode, ok := grx[country][SCC][FIPS]; ok && existingCode != code {
+					return fmt.Errorf("GridRef already has code of %s for country=%s, "+
+						"SCC=%s, FIPS=%s. Cannot replace with code %s.", country, SCC, FIPS)
+				}
+				grx[country][SCC][FIPS] = code
+			}
+		}
+	}
+	gr = &grx
+	return nil
 }
