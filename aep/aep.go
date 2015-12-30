@@ -19,9 +19,9 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
-	"bitbucket.org/ctessum/aep/lib.aep"
 	"flag"
 	"fmt"
+	"github.com/ctessum/aep"
 	"log"
 	"runtime"
 	"strings"
