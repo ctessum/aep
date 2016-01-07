@@ -213,7 +213,6 @@ func Run(c *aep.Context, runChan chan string,
 		go c.Speciate(recChan, discardChan)
 		for _, precs := range recs {
 			for _, rec := range precs {
-				fmt.Printf("qqqq %#v\n", rec.ANN_EMIS[aep.Annual]["PEC"])
 				recChan <- rec
 			}
 		}
@@ -228,7 +227,6 @@ func Run(c *aep.Context, runChan chan string,
 		temporal.NewSector(c, recChan, discardChan, sp)
 		for _, precs := range recs {
 			for _, rec := range precs {
-				fmt.Printf("seeeeeeeeeeessssssss %#v\n", rec.ANN_EMIS[aep.Annual]["PEC"])
 				recChan <- rec
 			}
 		}
