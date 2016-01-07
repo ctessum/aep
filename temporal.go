@@ -642,11 +642,11 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 		out[pol] = make([]*sparse.SparseArray, len(tFactors))
 	}
 	for gi, tFac := range tFactors {
-		kPlume[gi] = o.PlumeRise(gi, record)
 		gridEmis, _, err := record.GriddedEmissions(sp, "point", gi, p)
 		if err != nil {
 			panic(err)
 		}
+		kPlume[gi] = o.PlumeRise(gi, record)
 		for pol, vals := range gridEmis {
 			out[pol][gi] = sparse.ArrayMultiply(vals, tFac)
 		}
