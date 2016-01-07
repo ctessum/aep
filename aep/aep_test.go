@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"bitbucket.org/ctessum/aep/lib.aep"
+
 	"github.com/ctessum/shapefile"
 	"github.com/gonum/floats"
 )
@@ -43,7 +44,7 @@ func init() {
 }
 
 func TestModelRun(t *testing.T) {
-	config := filepath.Join(gopath, "src", "bitbucket.org", "ctessum", "aep",
+	config := filepath.Join(gopath, "src", "github.com", "ctessum", "aep", "aep",
 		"scripts", "config2005nei.json")
 	os.Args = append(os.Args, "-config="+config, "-testmode=true", "-seq") //, "-sectors=othon")
 	main()

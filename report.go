@@ -236,12 +236,12 @@ func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
 			h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
 			h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
 				"by AEP version "+Version+" ("+Website+")")
-			h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
-			h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
-			h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
-			h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
-			h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
-			h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
+			//h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
+			//h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
+			//h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
+			//h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
+			//h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
+			//h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
 			h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
 				float64(grid.Ny)*grid.Dy})
 			h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})

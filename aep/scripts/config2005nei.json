@@ -1,6 +1,6 @@
 {
   "Dirs": {
-    "Home": "${GOPATH}/src/bitbucket.org/ctessum/aep",
+    "Home": "${GOPATH}/src/github.com/ctessum/aep/aep",
     "Input": "[Home]/test/inputdata/emissions",
     "Ancilliary": "[Home]/ancilliary",
     "Shapefiles": "[Home]/test/inputdata/shapefiles",

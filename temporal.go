@@ -40,12 +40,14 @@ type TemporalProcessor struct {
 	Units          map[string]string // map[pol]units
 	mu             sync.RWMutex
 	grids          []*GridDef
+	sp             *SpatialProcessor
 }
 
-// Read in data and start up subroutines for temporal processing.
-func (c *Context) NewTemporalProcessor(grids []*GridDef) *TemporalProcessor {
+// NewTemporalProcessor reads in data and starts up subroutines for temporal processing.
+func (c *Context) NewTemporalProcessor(sp *SpatialProcessor, grids []*GridDef) *TemporalProcessor {
 	tp := new(TemporalProcessor)
 	tp.c = c
+	tp.sp = sp
 	tp.grids = grids
 	tp.sectors = make(map[string]*temporalSector)
 	tp.Units = make(map[string]string)
@@ -134,7 +136,7 @@ func (tp *TemporalProcessor) NewSector(c *Context,
 			t.aggregate(t, record)
 			t.OutputChan <- record
 		}
-		close(t.OutputChan)
+		//close(t.OutputChan)
 		t.c.msgchan <- "Finished temporalizing " + t.c.Sector
 		t.mu.Unlock()
 	}()
@@ -590,7 +592,7 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 			for d := range dataChan {
 				tFactors := t.griddedTemporalFactors(d.temporalCodes, time)
 				for _, record := range d.data {
-					e, kPlume := emisAtTimeTproPoint(tFactors, record, p, o)
+					e, kPlume := emisAtTimeTproPoint(tFactors, record, p, t.tp.sp, o)
 					for pol, polEmis := range e {
 						addLock.Lock()
 						if _, ok := emis[pol]; !ok { // initialize array
@@ -602,6 +604,9 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 						}
 						addLock.Unlock()
 						for gi, gridEmis := range polEmis {
+							if gridEmis == nil {
+								continue
+							}
 							for _, ix := range gridEmis.Nonzero() {
 								val := gridEmis.Get1d(ix)
 								index := gridEmis.IndexNd(ix)
@@ -629,7 +634,7 @@ var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter
 }
 
 func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
-	record *ParsedRecord, p Period, o Outputter) (
+	record *ParsedRecord, p Period, sp *SpatialProcessor, o Outputter) (
 	map[string][]*sparse.SparseArray, []int) {
 	kPlume := make([]int, len(tFactors))
 	out := make(map[string][]*sparse.SparseArray)
@@ -638,9 +643,12 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 	}
 	for gi, tFac := range tFactors {
 		kPlume[gi] = o.PlumeRise(gi, record)
-		for pol, val := range record.ANN_EMIS[p] {
-			out[pol][gi] = sparse.ArrayMultiply(record.GridSrgs[gi], tFac)
-			out[pol][gi].Scale(val.Val)
+		gridEmis, _, err := record.GriddedEmissions(sp, "point", gi, p)
+		if err != nil {
+			panic(err)
+		}
+		for pol, vals := range gridEmis {
+			out[pol][gi] = sparse.ArrayMultiply(vals, tFac)
 		}
 	}
 	return out, kPlume
@@ -689,7 +697,7 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 							}
 						}
 					} else {
-						e, kPlume = emisAtTimeTproPoint(tproTFactors, record, p, o)
+						e, kPlume = emisAtTimeTproPoint(tproTFactors, record, p, t.tp.sp, o)
 					}
 					for pol, polEmis := range e {
 						addLock.Lock()
@@ -702,6 +710,9 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 						}
 						addLock.Unlock()
 						for gi, gridEmis := range polEmis {
+							if gridEmis == nil {
+								continue
+							}
 							for _, ix := range gridEmis.Nonzero() {
 								val := gridEmis.Get1d(ix)
 								index := gridEmis.IndexNd(ix)

@@ -18,29 +18,30 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 
 package aep
 
-import (
-	"fmt"
-)
+import "time"
 
 type Outputter interface {
-	Output()
+	Output(tp *TemporalProcessor, startTime, endTime time.Time, timeStep time.Duration)
 	PlumeRise(gridIndex int, r *ParsedRecord) (kPlume int)
 	Kemit() int
 }
 
-func (c *Context) NewOutputter(tp *TemporalProcessor) Outputter {
-	var o Outputter
-	switch c.OutputType {
-	case "wrf":
-		o = c.NewWRFOutputter(tp)
-	default:
-		panic(fmt.Errorf("Output type `%v' not yet supported.", c.OutputType))
-	}
-	return o
+type outputTimer struct {
+	startTime, endTime, currentTime time.Time
+	timeStep                        time.Duration
 }
 
-func (c *Context) NextTime() (keepGoing bool) {
-	c.currentTime = c.currentTime.Add(c.tStep)
-	keepGoing = c.currentTime.Before(c.endDate)
+func newOutputTimer(startTime, endTime time.Time, timeStep time.Duration) *outputTimer {
+	return &outputTimer{
+		startTime:   startTime,
+		currentTime: startTime,
+		endTime:     endTime,
+		timeStep:    timeStep,
+	}
+}
+
+func (o *outputTimer) NextTime() (keepGoing bool) {
+	o.currentTime = o.currentTime.Add(o.timeStep)
+	keepGoing = o.currentTime.Before(o.endTime)
 	return
 }

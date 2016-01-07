@@ -21,10 +21,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ctessum/aep"
 	"log"
-	"runtime"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/ctessum/aep"
+	"github.com/ctessum/geom/proj"
 	//"time"
 )
 
@@ -37,13 +40,13 @@ func main() {
 		"----------------------------------------------------------\n")
 
 	// Read from configuration file and prepare sectors for processing
-	var sectorFlag *string = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")
-	var configFile *string = flag.String("config", "none", "Path to configuration file")
-	var reportOnly *bool = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
-	var testmode *bool = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
-	var seq *bool = flag.Bool("seq", false, "Run sectors in sequence instead of parallel to conserve memory")
-	var slavesFlag *string = flag.String("slaves", "", "List of addresses of available slaves, in quotes, separated by spaces.")
-	var masterAddress *string = flag.String("masteraddress", "", "What is the address of the master? Leave empty if this is not a slave.")
+	var sectorFlag = flag.String("sectors", "all", "List of sectors to process, in quotes, separated by spaces")
+	var configFile = flag.String("config", "none", "Path to configuration file")
+	var reportOnly = flag.Bool("reportonly", false, "Run html report server for results of previous run (do not calculate new results)")
+	var testmode = flag.Bool("testmode", false, "Run model with mass speciation and no VOC to TOG conversion so that results can be validated by go test")
+	var seq = flag.Bool("seq", false, "Run sectors in sequence instead of parallel to conserve memory")
+	var slavesFlag = flag.String("slaves", "", "List of addresses of available slaves, in quotes, separated by spaces.")
+	var masterAddress = flag.String("masteraddress", "", "What is the address of the master? Leave empty if this is not a slave.")
 	flag.Parse()
 
 	if *configFile == "none" {
@@ -67,39 +70,61 @@ func main() {
 	// parse configuration file
 	ConfigAll := aep.ReadConfigFile(configFile, testmode, slaves, e)
 
-	runtime.GOMAXPROCS(ConfigAll.DefaultSettings.Ncpus)
-
 	if *masterAddress != "" {
 		// Set up a server to accept RPC requests;
 		// this will block and run forever.
 		aep.DistributedServer(ConfigAll.DefaultSettings)
 	}
+	c := ConfigAll.DefaultSettings
 
 	// go to localhost:6060 in web browser to view report
 	if *reportOnly {
 		// The reportServer function will run forever.
-		ConfigAll.DefaultSettings.ReportServer(*reportOnly)
+		c.ReportServer(*reportOnly)
 	} else {
 		// The reportServer function will run until the program is finished.
-		go ConfigAll.DefaultSettings.ReportServer(*reportOnly)
+		go c.ReportServer(*reportOnly)
 	}
-	defer ConfigAll.DefaultSettings.WriteReport()
+	defer c.WriteReport()
 
 	// Start server for retrieving profiles from the
 	// SPECIATE database
-	if ConfigAll.DefaultSettings.RunSpeciate {
-		go ConfigAll.DefaultSettings.SpecProfiles(e)
+	if c.RunSpeciate {
+		go c.SpecProfiles(e)
+	}
+
+	var err error
+	var wrfConfig *aep.WRFconfigData
+	if c.RunSpatialize || c.RunTemporal {
+		wrfConfig, err = aep.ParseWRFConfig(c.WPSnamelist, c.WRFnamelist)
+		e.Add(err)
 	}
 
 	// Set up spatial environment
-	if ConfigAll.DefaultSettings.RunSpatialize {
-		ConfigAll.DefaultSettings.SpatialSetupRegularGrid(e)
+	var grids []*aep.GridDef
+	var sp *aep.SpatialProcessor
+	if c.RunSpatialize {
+		grids, err = wrfConfig.Grids(
+			filepath.Join(c.ShapefileDir, "world_timezones.shp"), "TZID") // TODO: shapefile shouldn't be hard coded.
+		e.Add(err)
+
+		srgf, err := os.Open(c.SrgSpecFile)
+		e.Add(err)
+		srgSpecs, err := aep.ReadSrgSpec(srgf, c.ShapefileDir, c.CheckSrgs)
+		e.Add(err)
+		gref, err := os.Open(c.GridRefFile)
+		e.Add(err)
+		gridRef, err := aep.ReadGridRef(gref)
+		inputSR, err := proj.FromProj4(c.InputProj4)
+		e.Add(err)
+		sp = aep.NewSpatialProcessor(srgSpecs, grids, gridRef, inputSR, c.MatchFullSCC)
+		sp.DiskCachePath = ConfigAll.Dirs.GriddedSrgs
 	}
 
 	// Set up temporal and output processors
 	var temporal *aep.TemporalProcessor
 	if ConfigAll.DefaultSettings.RunTemporal {
-		temporal = ConfigAll.DefaultSettings.NewTemporalProcessor()
+		temporal = c.NewTemporalProcessor(sp, grids)
 	}
 
 	e.Report() // Print errors, if any
@@ -108,7 +133,7 @@ func main() {
 	if *seq { // run sectors in sequence to conserve memory
 		for sector, c := range ConfigAll.Sectors {
 			if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
-				go Run(c, runChan, temporal)
+				go Run(c, runChan, sp, temporal)
 				message := <-runChan
 				log.Println(message)
 			}
@@ -118,7 +143,7 @@ func main() {
 		n := 0
 		for sector, c := range ConfigAll.Sectors {
 			if sectors[0] == "all" || aep.IsStringInArray(sectors, sector) {
-				go Run(c, runChan, temporal)
+				go Run(c, runChan, sp, temporal)
 				n++
 			}
 		}
@@ -131,8 +156,15 @@ func main() {
 
 	// run output subroutines
 	if ConfigAll.DefaultSettings.RunTemporal {
-		outputter := ConfigAll.DefaultSettings.NewOutputter(temporal)
-		outputter.Output()
+		outputter := wrfConfig.NewOutputter(temporal,
+			filepath.Join(ConfigAll.Dirs.Output, c.OutputType), c.OldWRFout)
+		st, err := c.StartTime()
+		e.Add(err)
+		et, err := c.EndTime()
+		e.Add(err)
+		ts, err := c.TimeStep()
+		e.Add(err)
+		outputter.Output(temporal, st, et, ts)
 	}
 
 	log.Println("\n",
@@ -143,72 +175,72 @@ func main() {
 }
 
 func Run(c *aep.Context, runChan chan string,
-	temporal *aep.TemporalProcessor) {
+	sp *aep.SpatialProcessor, temporal *aep.TemporalProcessor) {
 
 	log.Println("Running " + c.Sector + "...")
 	aep.Status.Sectors[c.Sector] = "Running"
 	msgchan := c.MessageChan()
-	n := 0 // number of subroutines that we need to wait to finish
 
 	discardChan := make(chan *aep.ParsedRecord)
 	go DiscardRecords(discardChan)
 
-	// only run inventory
-	if c.RunSpeciate == false && c.RunSpatialize == false {
-		go c.Inventory(discardChan)
-		n++
-	}
+	// Read in emissions records.
+	er, err := aep.NewEmissionsReader(c.PolsToKeep, c.InventoryFreq,
+		c.InputUnits, c.SectorType)
 
-	// speciate but don't spatialize
-	if c.RunSpeciate == true && c.RunSpatialize == false {
-		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory)
-		go c.Speciate(ChanFromInventory, discardChan)
-		n += 2
-	}
-
-	// speciate and spatialize
-	if c.RunSpeciate == true && c.RunSpatialize == true {
-		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory)
-		SpecSpatialChan := make(chan *aep.ParsedRecord, 1)
-		go c.Speciate(ChanFromInventory, SpecSpatialChan)
-		if c.RunTemporal { // only run temporal if spatializing
-			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
-			go c.Spatialize(SpecSpatialChan, SpatialTemporalChan)
-			temporal.NewSector(c, SpatialTemporalChan, discardChan)
-			n++
-		} else {
-			go c.Spatialize(SpecSpatialChan, discardChan)
+	filenames := make(map[aep.Period][]string)
+	files := make(map[aep.Period][]aep.ReadSeekCloser)
+	for _, p := range c.RunPeriods {
+		filenames[p] = make([]string, len(c.InvFileNames))
+		files[p] = make([]aep.ReadSeekCloser, len(c.InvFileNames))
+		for i, filetemplate := range c.InvFileNames {
+			filenames[p][i], files[p][i], err = er.OpenFileFromTemplate(filetemplate, p)
+			if err != nil {
+				panic(err)
+			}
 		}
-		n += 3
 	}
-	// spatialize but don't speciate
-	if c.RunSpeciate == false && c.RunSpatialize == true {
-		ChanFromInventory := make(chan *aep.ParsedRecord, 1)
-		go c.Inventory(ChanFromInventory)
-		if c.RunTemporal { // only run temporal if spatializing
-			SpatialTemporalChan := make(chan *aep.ParsedRecord, 1)
-			go c.Spatialize(ChanFromInventory, SpatialTemporalChan)
-			temporal.NewSector(c, SpatialTemporalChan, discardChan)
-			n++
-		} else {
-			go c.Spatialize(ChanFromInventory, discardChan)
+	recs := make(map[aep.Period]map[string]*aep.ParsedRecord)
+	for _, p := range c.RunPeriods {
+		recs[p], _, err = er.ReadFiles(files[p], filenames[p], p)
+		if err != nil {
+			panic(err)
 		}
-		n += 2
 	}
 
-	// wait for calculations to complete
-	for i := 0; i < n; i++ {
+	if c.RunSpeciate == true {
+		recChan := make(chan *aep.ParsedRecord, 1)
+		go c.Speciate(recChan, discardChan)
+		for _, precs := range recs {
+			for _, rec := range precs {
+				fmt.Printf("qqqq %#v\n", rec.ANN_EMIS[aep.Annual]["PEC"])
+				recChan <- rec
+			}
+		}
+		close(recChan)
+		// wait for calculations to complete
 		message := <-msgchan
 		c.Log(message, 1)
 	}
 
-	//aep.Status.Lock.Lock()
+	if c.RunTemporal {
+		recChan := make(chan *aep.ParsedRecord, 1)
+		temporal.NewSector(c, recChan, discardChan, sp)
+		for _, precs := range recs {
+			for _, rec := range precs {
+				fmt.Printf("seeeeeeeeeeessssssss %#v\n", rec.ANN_EMIS[aep.Annual]["PEC"])
+				recChan <- rec
+			}
+		}
+		close(recChan)
+		// wait for calculations to complete
+		message := <-msgchan
+		c.Log(message, 1)
+	}
+
 	if aep.Status.Sectors[c.Sector] != "Failed!" {
 		aep.Status.Sectors[c.Sector] = "Finished"
 	}
-	//aep.Status.Lock.Unlock()
 	runChan <- "Finished processing " + c.Sector
 }
 

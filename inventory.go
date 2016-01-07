@@ -204,6 +204,8 @@ type ParsedRecord struct {
 	coveredByGrid []bool
 
 	err error
+
+	inputConv float64 // Conversion from input units to grams.
 }
 
 // SpecValUnits holds emissions species type, value, and units information.
@@ -572,7 +574,7 @@ func NewEmissionsReader(polsToKeep map[string]*PolHolder, freq InventoryFrequenc
 func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader ReadSeekCloser, err error) {
 	file := filetemplate
 	if e.freq == Monthly {
-		file = strings.Replace(file, "[month]", p.String(), -1)
+		file = strings.Replace(file, "[month]", strings.ToLower(p.String()), -1)
 	}
 	f, err := os.Open(file)
 	return file, f, err
@@ -812,6 +814,7 @@ func (fInfo *FileInfo) parseLines(e *EmissionsReader, p Period) chan *ParsedReco
 			}
 			// set which country this record is for
 			record.Country = getCountryFromName(fInfo.Country)
+			record.inputConv = fInfo.InputConv
 
 			// add emissions to totals for report
 			for pol, emis := range record.ANN_EMIS[p] {

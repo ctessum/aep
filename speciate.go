@@ -24,13 +24,14 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
 	"io"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
@@ -1007,7 +1008,7 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 	}
 
 	totals := make(map[string]*SpecTotals)
-	for _, p := range c.runPeriods {
+	for _, p := range c.RunPeriods {
 		totals[p.String()] = newSpeciationTotalHolder()
 	}
 	polFracs := make(map[string]*SpecHolder)
@@ -1024,7 +1025,7 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 						// There is already a value for this pol
 						s := newAnnEmis[newpol]
 						s.Val += AnnEmis.Val *
-							c.InputConv * factor.Factor
+							record.inputConv * factor.Factor
 						u := strings.Replace(
 							factor.Units, "/gram", "/year", -1)
 						if s.Units != u {
@@ -1036,7 +1037,7 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 						// There is not already a value for this pol
 						s := new(SpecValUnits)
 						s.Val = AnnEmis.Val *
-							c.InputConv * factor.Factor
+							record.inputConv * factor.Factor
 						s.Units = strings.Replace(
 							factor.Units, "/gram", "/year", -1)
 						s.PolType = c.PolsToKeep[pol]
@@ -1046,12 +1047,12 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 				}
 				for droppedpol, factor := range doubleCountPolFracs {
 					totals[p.String()].AddDoubleCounted(droppedpol, AnnEmis.Val*
-						c.InputConv*factor.Factor, strings.Replace(
+						record.inputConv*factor.Factor, strings.Replace(
 						factor.Units, "/gram", "/year", -1))
 				}
 				for droppedpol, factor := range ungroupedPolFracs {
 					totals[p.String()].AddUngrouped(droppedpol, AnnEmis.Val*
-						c.InputConv*factor.Factor, strings.Replace(
+						record.inputConv*factor.Factor, strings.Replace(
 						factor.Units, "/gram", "/year", -1))
 				}
 			}
@@ -1060,11 +1061,11 @@ func (c *Context) Speciate(InputChan chan *ParsedRecord,
 		OutputChan <- record
 	}
 	reportMx.Lock()
-	for p, t := range totals {
-		Report.SectorResults[c.Sector][p].SpeciationResults = t
-	}
+	//for p, t := range totals {
+	//Report.SectorResults[c.Sector][p].SpeciationResults = t
+	//}
 	reportMx.Unlock()
 
 	c.msgchan <- "Finished speciating " + c.Sector
-	close(OutputChan)
+	//close(OutputChan)
 }

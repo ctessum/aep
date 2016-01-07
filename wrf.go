@@ -23,12 +23,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ctessum/geom/proj"
 
 	"bitbucket.org/ctessum/cdf"
 	"bitbucket.org/ctessum/sparse"
@@ -42,26 +45,29 @@ const (
 )
 
 type WRFOutputter struct {
-	tp         *TemporalProcessor
-	c          *Context
-	filebase   string
-	dateFormat string
-	files      *wrfFiles
-	met        *MetData
+	tp            *TemporalProcessor
+	filebase      string
+	dateFormat    string
+	files         *wrfFiles
+	met           *MetData
+	tstepsPerFile int
+	config        *WRFconfigData
+	oldWRFOut     string
 }
 
 func (w *WRFOutputter) Kemit() int {
 	return w.files.config.Kemit
 }
 
-// Create new output WRF files
-func (c *Context) NewWRFOutputter(tp *TemporalProcessor) *WRFOutputter {
+// NewOutputter creates a new WRF-formatted file outputter.
+func (d *WRFconfigData) NewOutputter(tp *TemporalProcessor, outputDir, oldWRFOut string) *WRFOutputter {
 	w := new(WRFOutputter)
 	w.tp = tp
-	w.c = c
-	w.filebase = filepath.Join(c.outputDir, c.OutputType,
-		"wrfchemi_[DOMAIN]_[DATE]")
-	if c.wrfData.Nocolons == true {
+	w.config = d
+	w.oldWRFOut = oldWRFOut
+	w.tstepsPerFile = d.Frames_per_auxinput5[0] // TODO: Allow different nest to have different numbers of records.
+	w.filebase = filepath.Join(outputDir, "wrfchemi_[DOMAIN]_[DATE]")
+	if d.Nocolons == true {
 		w.dateFormat = "2006-01-02_15_04_05"
 	} else {
 		w.dateFormat = "2006-01-02_15:04:05"
@@ -69,19 +75,20 @@ func (c *Context) NewWRFOutputter(tp *TemporalProcessor) *WRFOutputter {
 	return w
 }
 
-func (w *WRFOutputter) Output() {
+func (w *WRFOutputter) Output(tp *TemporalProcessor, startTime, endTime time.Time, timeStep time.Duration) {
 	tstepsInFile := 0
-	w.newFiles(w.tp.Units, w.c.startDate)
+	w.newFiles(w.tp.Units, startTime)
 	if w.files.config.Kemit > 1 {
-		w.met = w.files.NewMetData(w.c.startDate, tstepsInFile)
+		w.met = w.files.NewMetData(startTime, tstepsInFile)
 	}
+	ot := newOutputTimer(startTime, endTime, timeStep)
 	for {
-		ts := w.tp.EmisAtTime(w.c.currentTime, w)
-		w.c.Log(fmt.Sprintf("Writing WRF output for %v...", ts.Time), 0)
-		if tstepsInFile == w.c.TstepsPerFile {
+		ts := tp.EmisAtTime(ot.currentTime, w)
+		log.Printf("Writing WRF output for %v...", ts.Time)
+		if tstepsInFile == w.tstepsPerFile {
 			// open new set of files
 			w.closeFiles()
-			w.newFiles(w.tp.Units, ts.Time)
+			w.newFiles(tp.Units, ts.Time)
 			tstepsInFile = 0
 		}
 		w.files.writeTimestep(ts, tstepsInFile)
@@ -90,14 +97,14 @@ func (w *WRFOutputter) Output() {
 			w.met = w.files.NewMetData(ts.Time, tstepsInFile)
 		}
 		// either advance to next date or end loop
-		keepGoing := w.c.NextTime()
+		keepGoing := ot.NextTime()
 		if !keepGoing {
 			break
 		}
 		tstepsInFile++
 	}
 	w.closeFiles()
-	w.c.Log(fmt.Sprintf("Finished writing WRF output."), 0)
+	log.Printf("Finished writing WRF output.")
 }
 
 type wrfFiles struct {
@@ -113,28 +120,28 @@ func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
 	var err error
 	w.files = new(wrfFiles)
 	w.files.grids = w.tp.grids
-	w.files.fids = make([]*cdf.File, w.c.wrfData.Max_dom)
-	w.files.fidsToClose = make([]*os.File, w.c.wrfData.Max_dom)
-	w.files.config = w.c.wrfData
+	w.files.fids = make([]*cdf.File, w.config.Max_dom)
+	w.files.fidsToClose = make([]*os.File, w.config.Max_dom)
+	w.files.config = w.config
 	w.files.polsAndUnits = units
-	w.files.oldWRFout = w.c.OldWRFout
+	w.files.oldWRFout = w.oldWRFOut
 	filename := strings.Replace(w.filebase, "[DATE]", date.Format(w.dateFormat), -1)
-	for i, domain := range w.c.wrfData.DomainNames {
+	for i, domain := range w.config.DomainNames {
 		outfile := strings.Replace(filename, "[DOMAIN]", domain, -1)
 		wrfoutH := cdf.NewHeader([]string{"Time", "DateStrLen", "west_east",
 			"south_north", "emissions_zdim"},
-			[]int{0, 19, w.c.wrfData.Nx[i], w.c.wrfData.Ny[i], w.c.wrfData.Kemit})
+			[]int{0, 19, w.config.Nx[i], w.config.Ny[i], w.config.Kemit})
 
 		wrfoutH.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
 			"by AEP version "+Version+" ("+Website+")")
-		wrfoutH.AddAttribute("", "CEN_LAT", []float64{w.c.wrfData.Ref_lat})
-		wrfoutH.AddAttribute("", "CEN_LOC", []float64{w.c.wrfData.Ref_lon})
-		wrfoutH.AddAttribute("", "TRUELAT1", []float64{w.c.wrfData.Truelat1})
-		wrfoutH.AddAttribute("", "TRUELAT2", []float64{w.c.wrfData.Truelat2})
-		wrfoutH.AddAttribute("", "STAND_LON", []float64{w.c.wrfData.Stand_lon})
-		wrfoutH.AddAttribute("", "MAP_PROJ", w.c.wrfData.Map_proj)
-		wrfoutH.AddAttribute("", "REF_X", []float64{w.c.wrfData.Ref_x})
-		wrfoutH.AddAttribute("", "REF_Y", []float64{w.c.wrfData.Ref_y})
+		wrfoutH.AddAttribute("", "CEN_LAT", []float64{w.config.Ref_lat})
+		wrfoutH.AddAttribute("", "CEN_LOC", []float64{w.config.Ref_lon})
+		wrfoutH.AddAttribute("", "TRUELAT1", []float64{w.config.Truelat1})
+		wrfoutH.AddAttribute("", "TRUELAT2", []float64{w.config.Truelat2})
+		wrfoutH.AddAttribute("", "STAND_LON", []float64{w.config.Stand_lon})
+		wrfoutH.AddAttribute("", "MAP_PROJ", w.config.Map_proj)
+		wrfoutH.AddAttribute("", "REF_X", []float64{w.config.Ref_x})
+		wrfoutH.AddAttribute("", "REF_Y", []float64{w.config.Ref_y})
 
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
@@ -202,7 +209,7 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 			panic(err)
 		}
 	}
-	for pol, _ := range ts.Emis {
+	for pol := range ts.Emis {
 		if _, ok := w.polsAndUnits[pol]; !ok {
 			panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
 		}
@@ -239,6 +246,7 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 	}
 }
 
+// WRFconfigData hold information about a WRF simulation configuration.
 type WRFconfigData struct {
 	Max_dom              int
 	Parent_id            []int
@@ -267,21 +275,74 @@ type WRFconfigData struct {
 	Frames_per_auxinput5 []int
 	Kemit                int
 	Nocolons             bool
+	sr                   proj.SR
 }
 
+// ParseWRFConfig extracts configuration information from a set of WRF namelists.
 func ParseWRFConfig(wpsnamelist, wrfnamelist string) (d *WRFconfigData, err error) {
 	e := new(wrfErrCat)
 	d = new(WRFconfigData)
-	parseWPSnamelist(wpsnamelist, d, e)
-	parseWRFnamelist(wrfnamelist, d, e)
+	d.parseWPSnamelist(wpsnamelist, e)
+	d.parseWRFnamelist(wrfnamelist, e)
+	d.projection(e)
 	err = e.convertToError()
 	return
 }
 
+// projection calculates the spatial projection of a WRF configuration.
+func (d *WRFconfigData) projection(e *wrfErrCat) {
+	const EarthRadius = 6370997.
+
+	var mapProj string
+	switch d.Map_proj {
+	case "lambert":
+		mapProj = "lcc"
+	case "lat-lon":
+		mapProj = "longlat"
+	case "merc":
+		mapProj = "merc"
+	default:
+		e.Add(fmt.Errorf("ERROR: `lambert', `lat-lon', and `merc' "+
+			"are the only map projections"+
+			" that are currently supported (your projection is `%v').",
+			d.Map_proj))
+	}
+	projInfo := new(proj.ParsedProj4)
+	projInfo.Proj = mapProj
+	projInfo.Lat_1 = d.Truelat1
+	projInfo.Lat_2 = d.Truelat2
+	projInfo.Lat_0 = d.Ref_lat
+	projInfo.Lon_0 = d.Ref_lon
+	projInfo.EarthRadius_a = EarthRadius
+	projInfo.EarthRadius_b = EarthRadius
+	projInfo.To_meter = 1.
+	var err error
+	d.sr, err = proj.FromProj4(projInfo.ToString())
+	e.Add(err)
+}
+
+// Grids creates grid definitions for the grids in WRF configuration d,
+// where tzFile is a shapefile containing timezone information, and tzColumn
+// is the data attribute column within that shapefile that contains the
+// timezone offsets in hours.
+func (d *WRFconfigData) Grids(tzFile, tzColumn string) ([]*GridDef, error) {
+	grids := make([]*GridDef, d.Max_dom)
+	for i := 0; i < d.Max_dom; i++ {
+		grids[i] = NewGridRegular(d.DomainNames[i], d.Nx[i], d.Ny[i],
+			d.Dx[i], d.Dy[i], d.W[i], d.S[i], d.sr)
+		err := grids[i].GetTimeZones(tzFile, tzColumn)
+		if err != nil {
+			return grids, err
+		}
+	}
+	return grids, nil
+}
+
 // Parse a WPS namelist
-func parseWPSnamelist(filename string, d *WRFconfigData, e *wrfErrCat) {
+func (d *WRFconfigData) parseWPSnamelist(filename string, e *wrfErrCat) {
 	file, err := os.Open(filename)
 	if err != nil {
+		e.Add(err)
 		return
 	}
 	includesRefx := false
@@ -383,7 +444,7 @@ func parseWPSnamelist(filename string, d *WRFconfigData, e *wrfErrCat) {
 }
 
 // Parse a WRF namelist
-func parseWRFnamelist(filename string, d *WRFconfigData, e *wrfErrCat) {
+func (d *WRFconfigData) parseWRFnamelist(filename string, e *wrfErrCat) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return

@@ -99,39 +99,6 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 	return sp
 }
 
-// WRFProjection calculates the spatial projection of a WRF configuration.
-func WRFProjection(WPSnamelist, WRFnamelist string, EarthRadius float64) (proj.SR, error) {
-	d, err := ParseWRFConfig(WPSnamelist, WRFnamelist)
-	if err != nil {
-		return proj.SR{}, err
-	}
-
-	var mapProj string
-	switch d.Map_proj {
-	case "lambert":
-		mapProj = "lcc"
-	case "lat-lon":
-		mapProj = "longlat"
-	case "merc":
-		mapProj = "merc"
-	default:
-		return proj.SR{}, fmt.Errorf("ERROR: `lambert', `lat-lon', and `merc' "+
-			"are the only map projections"+
-			" that are currently supported (your projection is `%v').",
-			d.Map_proj)
-	}
-	projInfo := new(proj.ParsedProj4)
-	projInfo.Proj = mapProj
-	projInfo.Lat_1 = d.Truelat1
-	projInfo.Lat_2 = d.Truelat2
-	projInfo.Lat_0 = d.Ref_lat
-	projInfo.Lon_0 = d.Ref_lon
-	projInfo.EarthRadius_a = EarthRadius
-	projInfo.EarthRadius_b = EarthRadius
-	projInfo.To_meter = 1.
-	return proj.FromProj4(projInfo.ToString())
-}
-
 // SpatialTotals hold summary results of spatialized emissions records.
 type SpatialTotals struct {
 	InsideDomainTotals  map[string]map[string]*SpecValUnits
