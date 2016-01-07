@@ -670,6 +670,9 @@ func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int
 	if w.files.config.Kemit == 1 {
 		return
 	}
+	if !point.inGrid[gridIndex] {
+		return
+	}
 
 	gi := gridIndex
 	index := point.GridSrgs[gi].IndexNd(point.GridSrgs[gi].Nonzero()[0])
