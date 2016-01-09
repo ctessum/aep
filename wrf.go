@@ -553,7 +553,10 @@ func (e *wrfErrCat) Add(err error) {
 	return
 }
 func (e *wrfErrCat) convertToError() error {
-	return errors.New(e.str)
+	if e.str != "" {
+		return errors.New(e.str)
+	}
+	return nil
 }
 
 func (e *wrfErrCat) compare(val1, val2 interface{}, name string) {
