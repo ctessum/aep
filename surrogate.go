@@ -45,10 +45,10 @@ type srgGenWorkerInitData struct {
 	GridCells  *GridDef
 }
 
-// griddingSurrogate holds generated gridding surrogate data, and can be
+// GriddingSurrogate holds generated gridding surrogate data, and can be
 // used to allocate emissions attributed to a relatively large area, such as
 // a county, to the grid cells within that area.
-type griddingSurrogate struct {
+type GriddingSurrogate struct {
 	// Srg holds surrogate data associated with individual input locations.
 	Srg map[string]*GriddedSrgData
 
@@ -61,7 +61,7 @@ type griddingSurrogate struct {
 // shapeID or if the sum of the surrogate is zero. The second returned value
 // indicates whether the shape corresponding to shapeID is completely covered
 // by the grid.
-func (gs *griddingSurrogate) ToGrid(shapeID string) (*sparse.SparseArray, bool) {
+func (gs *GriddingSurrogate) ToGrid(shapeID string) (*sparse.SparseArray, bool) {
 	srg, ok := gs.Srg[shapeID]
 	if !ok {
 		return nil, false
@@ -84,8 +84,8 @@ func (gs *griddingSurrogate) ToGrid(shapeID string) (*sparse.SparseArray, bool) 
 
 // mergeSrgs merges a number of surrogates, multiplying each of them by the
 // corresponding factor.
-func mergeSrgs(srgs []*griddingSurrogate, factors []float64) *griddingSurrogate {
-	o := new(griddingSurrogate)
+func mergeSrgs(srgs []*GriddingSurrogate, factors []float64) *GriddingSurrogate {
+	o := new(GriddingSurrogate)
 	o.Nx, o.Ny = srgs[0].Nx, srgs[0].Ny
 	o.Srg = make(map[string]*GriddedSrgData)
 	for i, g := range srgs {
@@ -159,8 +159,8 @@ func ParseSurrogateFilter(filterFunction string) *SurrogateFilter {
 }
 
 // createMerged creates a surrogate by creating and merging other surrogates.
-func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*griddingSurrogate, error) {
-	mrgSrgs := make([]*griddingSurrogate, len(srg.MergeNames))
+func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
+	mrgSrgs := make([]*GriddingSurrogate, len(srg.MergeNames))
 	for i, mrgName := range srg.MergeNames {
 		newSrg, err := sp.srgSpecs.GetByName(srg.Region, mrgName)
 		if err != nil {
@@ -178,7 +178,7 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*grid
 		}
 		if r.data == nil {
 			// If it's not in the cache, directly create it.
-			r.data, r.err = sp.createSurrogate(newSrg, gridData)
+			r.data, r.err = sp.CreateSurrogate(newSrg, gridData)
 			if r.err != nil {
 				return nil, err
 			}
@@ -188,9 +188,9 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*grid
 	return mergeSrgs(mrgSrgs, srg.MergeMultipliers), nil
 }
 
-// createGriddingSurrogate creates a new gridding surrogate based on a
+// CreateSurrogate creates a new gridding surrogate based on a
 // surrogate specification and grid definition.
-func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*griddingSurrogate, error) {
+func (sp SpatialProcessor) CreateSurrogate(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
 	log.Println("Creating", srg.Code, srg.Name)
 	if len(srg.MergeNames) != 0 {
 		return sp.createMerged(srg, gridData)
@@ -263,7 +263,7 @@ func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*gr
 			return nil, err
 		}
 	}
-	o := &griddingSurrogate{
+	o := &GriddingSurrogate{
 		Srg: GriddedSrgs,
 		Nx:  gridData.Nx,
 		Ny:  gridData.Ny,
@@ -497,7 +497,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 					case geom.Point:
 						srgH.Weight = weightval
 					default:
-						err = op.UnsupportedGeometryError{srgH.T}
+						err = op.UnsupportedGeometryError{G: srgH.T}
 						return srgData, err
 					}
 				} else {
@@ -669,7 +669,7 @@ func (s *srgGenWorker) intersections1(
 				case geom.Point:
 					singleShapeSrgWeight += srg.Weight
 				default:
-					panic(op.UnsupportedGeometryError{intersection})
+					panic(op.UnsupportedGeometryError{G: intersection})
 				}
 				mu.Unlock()
 			}
@@ -737,7 +737,7 @@ func (s *srgGenWorker) intersections2(data *GriddedSrgData,
 					case geom.Point:
 						cell.Weight += srg.Weight / data.SingleShapeSrgWeight
 					default:
-						panic(op.UnsupportedGeometryError{intersection})
+						panic(op.UnsupportedGeometryError{G: intersection})
 					}
 				}
 				mu.Lock()

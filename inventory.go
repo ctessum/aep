@@ -515,6 +515,7 @@ func checkRecordLengthIDA(record string, fInfo *FileInfo, start, length int) {
 // InventoryFrequency describes how many often new inventory files are required.
 type InventoryFrequency string
 
+// Inventory frequencies can either be annual or monthly
 const (
 	Annually InventoryFrequency = "annual"
 	Monthly  InventoryFrequency = "monthly"
@@ -571,6 +572,9 @@ func NewEmissionsReader(polsToKeep map[string]*PolHolder, freq InventoryFrequenc
 	return e, nil
 }
 
+// OpenFileFromTemplate opens the files that match the template. For file types
+// that have different files for different time periods, p specifies which file
+// should be opened.
 func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader ReadSeekCloser, err error) {
 	file := filetemplate
 	if e.freq == Monthly {
@@ -580,14 +584,20 @@ func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (f
 	return file, f, err
 }
 
+// RecFilter is a class of functions that return true if a record should be kept
+// and processed.
+type RecFilter func(*ParsedRecord) bool
+
 // ReadFiles reads emissions associated with period p from the specified files,
 // and returns emissions records and a summary report.
 // The specified filenames are only used for reporting. If multiple files have
 // data for the same specific facility (for instance, if one file has CAPs
 // emissions and the other has HAPs emissions) they need to be processed in this
 // function together to avoid double counting in speciation. (If you will
-// not be speciating the emissions, then it doesn't matter.)
-func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period) (map[string]*ParsedRecord, InventoryReport, error) {
+// not be speciating the emissions, then it doesn't matter.) f is an optional
+// filter function to determine which records should be kept. If f is nil, all
+// records will be kept.
+func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period, f RecFilter) (map[string]*ParsedRecord, InventoryReport, error) {
 	report := make(InventoryReport)
 	if len(files) != len(filenames) {
 		return nil, nil, fmt.Errorf("in Readfiles, different number of files (%d) "+
@@ -613,6 +623,9 @@ func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, 
 		for record := range recordChan {
 			if record.err != nil {
 				return nil, nil, record.err
+			}
+			if f != nil && !f(record) {
+				continue // Skip this record if it doesn't match our filter.
 			}
 			key := record.FIPS + record.SCC + record.PLANTID +
 				record.POINTID + record.STACKID +

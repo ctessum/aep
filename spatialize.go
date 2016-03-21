@@ -265,7 +265,7 @@ func (sp *SpatialProcessor) memCache(inChan chan *srgRequest) (outChan chan *srg
 				key := request.key()
 				v, ok := cache.Get(key)
 				if ok { // the data we want is in the cache.
-					request.data = v.(*griddingSurrogate)
+					request.data = v.(*GriddingSurrogate)
 					request.returnChan <- request
 				} else { // the data we want is not in the cache.
 					newRequest := request.repeat()
@@ -297,7 +297,7 @@ func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *sr
 				if !r.waitInQueue {
 					// Skip the queue for surrogates that are being created to merge into
 					// other surrogates to avoid a channel lock.
-					r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
+					r.data, r.err = sp.CreateSurrogate(r.srgSpec, r.grid)
 					if r.err != nil {
 						r.returnChan <- r
 					}
@@ -322,7 +322,7 @@ func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *sr
 
 // getSrgFromDisk attempts to get a gridding surrogate from a disk cache, returnin
 // the surrogate and a boolean indicating whether the retrieval was successful.
-func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*griddingSurrogate, bool) {
+func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*GriddingSurrogate, bool) {
 	if sp.DiskCachePath == "" {
 		return nil, false
 	}
@@ -332,7 +332,7 @@ func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*griddingSurrogate, b
 		return nil, false
 	}
 
-	var data griddingSurrogate
+	var data GriddingSurrogate
 	e := gob.NewDecoder(f)
 	err = e.Decode(&data)
 	if err != nil {
@@ -404,7 +404,7 @@ func (sp *SpatialProcessor) surrogate(srgSpec *SrgSpec, grid *GridDef, fips stri
 type srgRequest struct {
 	srgSpec    *SrgSpec
 	grid       *GridDef
-	data       *griddingSurrogate
+	data       *GriddingSurrogate
 	err        error
 	returnChan chan *srgRequest
 
@@ -440,7 +440,7 @@ func newSrgRequest(srgSpec *SrgSpec, grid *GridDef) *srgRequest {
 // Generate spatial surrogates
 func (sp *SpatialProcessor) surrogateGenerator(inChan chan *srgRequest) {
 	for r := range inChan {
-		r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
+		r.data, r.err = sp.CreateSurrogate(r.srgSpec, r.grid)
 		r.returnChan <- r
 	}
 }
@@ -753,7 +753,8 @@ func (gr *GridRef) Merge(gr2 GridRef) error {
 			for FIPS, code := range d2 {
 				if existingCode, ok := grx[country][SCC][FIPS]; ok && existingCode != code {
 					return fmt.Errorf("GridRef already has code of %s for country=%s, "+
-						"SCC=%s, FIPS=%s. Cannot replace with code %s.", country, SCC, FIPS)
+						"SCC=%s, FIPS=%s. Cannot replace with code %s.",
+						existingCode, country, SCC, FIPS, code)
 				}
 				grx[country][SCC][FIPS] = code
 			}
