@@ -20,7 +20,6 @@ package aep
 
 import (
 	"encoding/gob"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,25 +41,24 @@ func init() {
 
 // GridDef specifies the grid that we are allocating the emissions to.
 type GridDef struct {
-	Name            string
-	Nx, Ny          int
-	Dx, Dy          float64
-	X0, Y0          float64
-	TimeZones       map[string]*sparse.SparseArray
-	Cells           []*GridCell
-	Sr              proj.SR
-	Extent          geom.T
-	IrregularGrid   bool     // whether the grid is a regular grid
-	OtherFieldNames []string // names of other columns we want to keep
-	rtree           *rtree.Rtree
+	Name          string
+	Nx, Ny        int
+	Dx, Dy        float64
+	X0, Y0        float64
+	TimeZones     map[string]*sparse.SparseArray
+	Cells         []*GridCell
+	Sr            proj.SR
+	Extent        geom.T
+	IrregularGrid bool // whether the grid is a regular grid
+	rtree         *rtree.Rtree
 }
 
 // GridCell defines an individual cell in a grid.
 type GridCell struct {
 	geom.T
-	Row, Col       int
-	OtherFieldData []interface{} // data for the other columns we want to keep
-	Weight         float64
+	Row, Col int
+	Weight   float64
+	TimeZone string
 }
 
 // Copy copies a grid cell.
@@ -69,24 +67,6 @@ func (c *GridCell) Copy() *GridCell {
 	o.T = c.T
 	o.Row, o.Col = c.Row, c.Col
 	return o
-}
-
-func (g *GridDef) AddOtherFieldNames(names ...string) {
-	if g.OtherFieldNames == nil {
-		g.OtherFieldNames = make([]string, 0)
-	}
-	for _, name := range names {
-		g.OtherFieldNames = append(g.OtherFieldNames, name)
-	}
-}
-
-func (c *GridCell) AddOtherFieldData(data ...interface{}) {
-	if c.OtherFieldData == nil {
-		c.OtherFieldData = make([]interface{}, 0)
-	}
-	for _, val := range data {
-		c.OtherFieldData = append(c.OtherFieldData, val)
-	}
 }
 
 // NewGridRegular creates a new regular grid, where all grid cells are the
@@ -124,50 +104,27 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	return
 }
 
+// NewGridIrregular creates a new irregular grid. g is the grid geometry.
 // Irregular grids have 1 column and n rows, where n is the number of
-// shapes in the shapefile.
-func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
-	outputSr proj.SR) (grid *GridDef, err error) {
+// shapes in g. inputSR is the spatial reference of g, and outputSR is the
+// desired spatial reference of the grid.
+func NewGridIrregular(Name string, g []geom.T, inputSR, outputSR proj.SR) (grid *GridDef, err error) {
 	grid = new(GridDef)
 	grid.Name = Name
-	grid.Sr = outputSr
+	grid.Sr = outputSR
 	grid.IrregularGrid = true
-	var shpf *shp.Decoder
-	shpf, err = shp.NewDecoder(shapefilePath)
-	if err != nil {
-		return
-	}
-	var srf *os.File
-	srf, err = os.Open(strings.TrimSuffix(shapefilePath, ".shp") + ".prj")
-	if err != nil {
-		return
-	}
-	var shpSR proj.SR
-	shpSR, err = proj.ReadPrj(srf)
-	if err != nil {
-		return
-	}
-	grid.Cells = make([]*GridCell, shpf.AttributeCount())
-	grid.Ny = shpf.AttributeCount()
+	grid.Cells = make([]*GridCell, len(g))
+	grid.Ny = len(g)
 	grid.Nx = 1
-	grid.OtherFieldNames = columnsToKeep
 	var ct *proj.CoordinateTransform
-	ct, err = proj.NewCoordinateTransform(shpSR, grid.Sr)
+	ct, err = proj.NewCoordinateTransform(inputSR, outputSR)
 	if err != nil {
 		return
 	}
 	grid.rtree = rtree.NewTree(25, 50)
-	i := 0
-	for {
+	for i, gg := range g {
 		cell := new(GridCell)
-		g, fields, more := shpf.DecodeRowFields(columnsToKeep...)
-		if !more {
-			break
-		}
-		for _, col := range columnsToKeep {
-			cell.OtherFieldData = append(cell.OtherFieldData, fields[col])
-		}
-		cell.T, err = ct.Reproject(g)
+		cell.T, err = ct.Reproject(gg)
 		if err != nil {
 			return
 		}
@@ -192,7 +149,7 @@ func NewGridIrregular(Name, shapefilePath string, columnsToKeep []string,
 	return
 }
 
-// Get time zones.
+// GetTimeZones gets the time zone of each grid cell.
 func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 
 	var err error
@@ -201,7 +158,6 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 	if err != nil {
 		return err
 	}
-	grid.AddOtherFieldNames("timezone")
 	grid.TimeZones = make(map[string]*sparse.SparseArray)
 
 	f, err := os.Open(strings.Replace(tzFile, ".shp", ".prj", -1))
@@ -255,7 +211,6 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 							panic("In spatialsrg.GetTimeZones, there is a " +
 								"grid cell that overlaps with more than one timezone." +
 								" This probably shouldn't be happening.")
-							break
 						}
 						tz = tzData.tz
 						foundtz = true
@@ -269,7 +224,7 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 					// over the ocean, so we assume all timezones that don't have
 					// tz info are UTC.
 				}
-				cell.AddOtherFieldData(tz)
+				cell.TimeZone = tz
 				lock.Lock()
 				if _, ok := grid.TimeZones[tz]; !ok {
 					grid.TimeZones[tz] = sparse.ZerosSparse(grid.Ny, grid.Nx)
@@ -315,9 +270,12 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
 	return timezones, tzShp.Error()
 }
 
+// GetIndex gets the returns the x and y coordinates as projected by ct
+// and the row and column index of point (X,Y) in the grid. withinGrid is false
+// if point (X,Y) is not within the grid.
 func (grid *GridDef) GetIndex(x, y float64, ct *proj.CoordinateTransform) (
 	X, Y float64, row, col int, withinGrid bool, err error) {
-	g := geom.T(geom.Point{x, y})
+	g := geom.T(geom.Point{X: x, Y: y})
 	g, err = ct.Reproject(g)
 	if err != nil {
 		return
@@ -335,40 +293,23 @@ func (grid *GridDef) GetIndex(x, y float64, ct *proj.CoordinateTransform) (
 	return
 }
 
-func (g *GridDef) WriteToShp(outdir string) error {
+// WriteToShp writes the grid definition to a shapefile in directory outdir.
+func (grid *GridDef) WriteToShp(outdir string) error {
 	var err error
 	for _, ext := range []string{".shp", ".prj", ".dbf", ".shx"} {
-		os.Remove(filepath.Join(outdir, g.Name+ext))
+		os.Remove(filepath.Join(outdir, grid.Name+ext))
 	}
-	if len(g.OtherFieldNames) != len(g.Cells[0].OtherFieldData) {
-		return fmt.Errorf("OtherFieldNames (%v) is not the same length "+
-			"as OtherFieldData (%v)", g.OtherFieldNames,
-			g.Cells[0].OtherFieldData)
-	}
-	fields := make([]goshp.Field, 2+len(g.OtherFieldNames))
+	fields := make([]goshp.Field, 2)
 	fields[0] = goshp.NumberField("row", 10)
 	fields[1] = goshp.NumberField("col", 10)
-	for i, name := range g.OtherFieldNames {
-		switch g.Cells[0].OtherFieldData[i].(type) {
-		case float64:
-			fields[i+2] = goshp.FloatField(name, 20, 10)
-		case int:
-			fields[i+2] = goshp.NumberField(name, 10)
-		case string:
-			fields[i+2] = goshp.StringField(name, 20)
-		}
-	}
 	var shpf *shp.Encoder
-	shpf, err = shp.NewEncoderFromFields(filepath.Join(outdir, g.Name+".shp"),
+	shpf, err = shp.NewEncoderFromFields(filepath.Join(outdir, grid.Name+".shp"),
 		goshp.POLYGON, fields...)
 	if err != nil {
 		return err
 	}
-	for _, cell := range g.Cells {
+	for _, cell := range grid.Cells {
 		data := []interface{}{cell.Row, cell.Col}
-		for _, d := range cell.OtherFieldData {
-			data = append(data, d)
-		}
 		err = shpf.EncodeFields(cell.T, data...)
 		if err != nil {
 			return err
