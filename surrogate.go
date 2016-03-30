@@ -338,7 +338,7 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 			ggeom, err = op.Simplify(ggeom, tol)
 			if err != nil {
 				// TODO: Fix this upstream
-				log.Println(err)
+				log.Println(err, "Problem simplifying")
 				continue
 				//return inputData, err
 			}
@@ -446,7 +446,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 				srgH.T, err = op.Simplify(srgH.T, tol)
 				if err != nil {
 					// TODO: Fix this upstream
-					log.Println(err)
+					log.Println(err, "Problem simplifying")
 					continue
 					//return srgData, err
 				}

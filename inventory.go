@@ -206,6 +206,8 @@ type ParsedRecord struct {
 	err error
 
 	inputConv float64 // Conversion from input units to grams.
+
+	sectorType sectorType
 }
 
 // SpecValUnits holds emissions species type, value, and units information.
@@ -215,13 +217,14 @@ type SpecValUnits struct {
 	PolType *PolHolder
 }
 
-func newParsedRecord(p Period) (rec *ParsedRecord) {
+func newParsedRecord(p Period, st sectorType) (rec *ParsedRecord) {
 	rec = new(ParsedRecord)
 	rec.ANN_EMIS = make(map[Period]map[string]*SpecValUnits)
 	rec.ANN_EMIS[p] = make(map[string]*SpecValUnits)
 	rec.CEFF = make(map[string]float64)
 	rec.REFF = make(map[string]float64)
 	rec.RPEN = make(map[string]float64)
+	rec.sectorType = st
 	return
 }
 
@@ -340,9 +343,9 @@ func (r *ParsedRecord) setup(e *EmissionsReader) error {
 }
 
 func (e *EmissionsReader) parseRecord(ftype string, line []string, fInfo *FileInfo,
-	p Period) (*ParsedRecord, error) {
+	p Period, st sectorType) (*ParsedRecord, error) {
 
-	r := newParsedRecord(p)
+	r := newParsedRecord(p, st)
 	v := reflect.Indirect(reflect.ValueOf(r))
 	t := v.Type()
 	var pol string
@@ -580,6 +583,7 @@ func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (f
 	if e.freq == Monthly {
 		file = strings.Replace(file, "[month]", strings.ToLower(p.String()), -1)
 	}
+	file = os.ExpandEnv(file)
 	f, err := os.Open(file)
 	return file, f, err
 }
@@ -772,6 +776,14 @@ func (e *EmissionsReader) NewDecoder(filename string, file ReadSeekCloser) (fInf
 	return
 }
 
+type sectorType int
+
+const (
+	point sectorType = iota
+	area
+	mobile
+)
+
 // parseLines parses the lines of a file
 func (fInfo *FileInfo) parseLines(e *EmissionsReader, p Period) chan *ParsedRecord {
 	outChan := make(chan *ParsedRecord)
@@ -799,23 +811,23 @@ func (fInfo *FileInfo) parseLines(e *EmissionsReader, p Period) chan *ParsedReco
 
 			switch fInfo.Format + e.sectorType {
 			case "FF10_POINTpoint":
-				record, err = e.parseRecord("pointff10", line, fInfo, p)
+				record, err = e.parseRecord("pointff10", line, fInfo, p, point)
 			case "FF10_NONPOINTarea", "FF10_NONROADarea", "FF10_ONROADarea":
-				record, err = e.parseRecord("areaff10", line, fInfo, p)
+				record, err = e.parseRecord("areaff10", line, fInfo, p, area)
 			case "ORLpoint":
-				record, err = e.parseRecord("pointorl", line, fInfo, p)
+				record, err = e.parseRecord("pointorl", line, fInfo, p, point)
 			case "ORLarea":
-				record, err = e.parseRecord("areaorl", line, fInfo, p)
+				record, err = e.parseRecord("areaorl", line, fInfo, p, area)
 			case "ORLNONROADarea":
-				record, err = e.parseRecord("nonroadorl", line, fInfo, p)
+				record, err = e.parseRecord("nonroadorl", line, fInfo, p, area)
 			case "ORLmobile":
-				record, err = e.parseRecord("mobileorl", line, fInfo, p)
+				record, err = e.parseRecord("mobileorl", line, fInfo, p, mobile)
 			case "IDApoint":
-				record, err = e.parseRecord("pointida", line, fInfo, p)
+				record, err = e.parseRecord("pointida", line, fInfo, p, point)
 			case "IDAarea":
-				record, err = e.parseRecord("areaida", line, fInfo, p)
+				record, err = e.parseRecord("areaida", line, fInfo, p, area)
 			case "IDAmobile":
-				record, err = e.parseRecord("mobileida", line, fInfo, p)
+				record, err = e.parseRecord("mobileida", line, fInfo, p, mobile)
 			default:
 				err = fmt.Errorf("in parseLines: unknown format: %s %s",
 					fInfo.Format, e.sectorType)

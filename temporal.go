@@ -461,7 +461,7 @@ var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
 	// Add data from record into matricies.
 	for p, _ := range record.ANN_EMIS {
 		for i, _ := range t.tp.grids {
-			gridEmis, gridUnits, err := record.GriddedEmissions(t.sp, t.c.SectorType, i, p)
+			gridEmis, gridUnits, err := record.GriddedEmissions(t.sp, i, p)
 			if err != nil {
 				panic(err)
 			}
@@ -642,7 +642,7 @@ func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
 		out[pol] = make([]*sparse.SparseArray, len(tFactors))
 	}
 	for gi, tFac := range tFactors {
-		gridEmis, _, err := record.GriddedEmissions(sp, "point", gi, p)
+		gridEmis, _, err := record.GriddedEmissions(sp, gi, p)
 		if err != nil {
 			panic(err)
 		}

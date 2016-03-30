@@ -138,8 +138,7 @@ func (h *SpatialTotals) add(pol, grid string, emis float64,
 }
 
 // GriddedEmissions returns gridded emissions for a given grid index and period.
-// sectorType can be "point", "area", or "mobile".
-func (r *ParsedRecord) GriddedEmissions(sp *SpatialProcessor, sectorType string,
+func (r *ParsedRecord) GriddedEmissions(sp *SpatialProcessor,
 	gi int, p Period) (emis map[string]*sparse.SparseArray, units map[string]string, err error) {
 
 	emis = make(map[string]*sparse.SparseArray)
@@ -147,7 +146,7 @@ func (r *ParsedRecord) GriddedEmissions(sp *SpatialProcessor, sectorType string,
 	if r.GridSrgs == nil {
 		r.inGrid = make([]bool, len(sp.grids))
 		r.inGrid = make([]bool, len(sp.grids))
-		err := r.spatialize(sp, sectorType)
+		err := r.spatialize(sp)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -162,12 +161,12 @@ func (r *ParsedRecord) GriddedEmissions(sp *SpatialProcessor, sectorType string,
 	return
 }
 
-// spatialize spatializes a record. sectorType can be "point", "area", or "mobile".
-func (r *ParsedRecord) spatialize(sp *SpatialProcessor, sectorType string) error {
+// spatialize spatializes a record.
+func (r *ParsedRecord) spatialize(sp *SpatialProcessor) error {
 	r.inGrid = make([]bool, len(sp.grids))
 	r.coveredByGrid = make([]bool, len(sp.grids))
-	switch sectorType {
-	case "point":
+	switch r.sectorType {
+	case point:
 		// assume all grids have the same spatial reference.
 		ct, err := proj.NewCoordinateTransform(sp.inputSR, sp.grids[0].Sr)
 
@@ -188,7 +187,7 @@ func (r *ParsedRecord) spatialize(sp *SpatialProcessor, sectorType string) error
 				r.GridSrgs[i].Set(1., row, col)
 			}
 		}
-	case "area", "mobile":
+	case area, mobile:
 		srgNum, err := sp.gridRef.GetSrgCode(r.SCC, r.Country, r.FIPS, sp.matchFullSCC)
 		if err != nil {
 			return err
@@ -209,19 +208,19 @@ func (r *ParsedRecord) spatialize(sp *SpatialProcessor, sectorType string) error
 			}
 		}
 	default:
-		return fmt.Errorf("unknown sectorType %v", sectorType)
+		return fmt.Errorf("unknown sectorType %v", r.sectorType)
 	}
-	return sp.addEmisToReport(r, sectorType)
+	return sp.addEmisToReport(r)
 }
 
-func (sp *SpatialProcessor) addEmisToReport(r *ParsedRecord, sectorType string) error {
+func (sp *SpatialProcessor) addEmisToReport(r *ParsedRecord) error {
 	// Add emissions to reports
 	for p, periodEmis := range r.ANN_EMIS {
 		if _, ok := sp.totals[p]; !ok {
 			sp.totals[p] = newSpatialTotals()
 		}
 		for i, grid := range sp.grids {
-			gridEmis, units, err := r.GriddedEmissions(sp, sectorType, i, p)
+			gridEmis, units, err := r.GriddedEmissions(sp, i, p)
 			if err != nil {
 				return err
 			}
