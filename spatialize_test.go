@@ -69,7 +69,7 @@ func TestReadSrgSpec(t *testing.T) {
 &{Region:USA Name:Housing Change Code:137 DATASHAPEFILE:testdata/cty_pophu2k_revised.shp DATAATTRIBUTE:FIPSSTCO WEIGHTSHAPEFILE:testdata/pophu_bg2010.shp Details:Housing change from 2000 to 2010 census blocks BackupSurrogateNames:[Housing Population Land] WeightColumns:[HUCH1000] MergeNames:[] MergeMultipliers:[]}
 &{Region:USA Name:Housing Change and Population Code:140 DATASHAPEFILE:cty_pophu2k_revised DATAATTRIBUTE:FIPSSTCO WEIGHTSHAPEFILE: Details:Combination of the change in housing between 2000 and 2010 and year 2010 population BackupSurrogateNames:[Population] WeightColumns:[] MergeNames:[Housing Change Population] MergeMultipliers:[0.5 0.5]}
 &{Region:USA Name:Commercial Land Code:500 DATASHAPEFILE:testdata/county_lu2k.shp DATAATTRIBUTE:FIPSSTCO WEIGHTSHAPEFILE:testdata/fema_bsf_2002bnd.shp Details:Sum of building square footage from the following FEMA categories:  COM1 + COM2 + COM3 + COM4 + COM5 + COM6 + COM7 + COM8 + COM9 BackupSurrogateNames:[Population Land] WeightColumns:[COM1 COM2 COM3 COM4 COM5 COM6 COM7 COM8 COM9] MergeNames:[] MergeMultipliers:[]}
-&{Region:USA Name:Urban Primary Road Miles Code:200 DATASHAPEFILE:testdata/cty_pophu2k_revised.shp DATAATTRIBUTE:FIPSSTCO WEIGHTSHAPEFILE:testdata/rd_ps_tiger2010.shp Details:Road Miles of Urban Primary Roads BackupSurrogateNames:[Total Road Miles Population] WeightColumns:[RDTYPE] MergeNames:[] MergeMultipliers:[]}
+&{Region:USA Name:Urban Primary Road Miles Code:200 DATASHAPEFILE:testdata/cty_pophu2k_revised.shp DATAATTRIBUTE:FIPSSTCO WEIGHTSHAPEFILE:testdata/rd_ps_tiger2010.shp Details:Road Miles of Urban Primary Roads BackupSurrogateNames:[Total Road Miles Population] WeightColumns:[] MergeNames:[] MergeMultipliers:[]}
 &{Column:RDTYPE EqualNotEqual:Equal Values:[1]}
 `
 	if testResult != result {
@@ -119,22 +119,22 @@ func TestNewGridRegular(t *testing.T) {
 		t.Errorf("grid extent = %g, want %g", op.Area(grid.Extent), gridArea)
 	}
 	cellResult := []*GridCell{
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 280000}}}, Row: 0, Col: 0, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 300000}}}, Row: 1, Col: 0, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 320000}}}, Row: 2, Col: 0, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 340000}}}, Row: 3, Col: 0, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 280000}}}, Row: 0, Col: 1, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 300000}}}, Row: 1, Col: 1, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 320000}}}, Row: 2, Col: 1, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 340000}}}, Row: 3, Col: 1, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 280000}}}, Row: 0, Col: 2, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 300000}}}, Row: 1, Col: 2, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 320000}}}, Row: 2, Col: 2, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 340000}}}, Row: 3, Col: 2, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 280000}}}, Row: 0, Col: 3, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 300000}}}, Row: 1, Col: 3, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 320000}}}, Row: 2, Col: 3, OtherFieldData: []interface{}(nil), Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 340000}}}, Row: 3, Col: 3, OtherFieldData: []interface{}(nil), Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 280000}}}, Row: 0, Col: 0, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 300000}}}, Row: 1, Col: 0, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 320000}}}, Row: 2, Col: 0, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 340000}}}, Row: 3, Col: 0, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 280000}}}, Row: 0, Col: 1, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 300000}}}, Row: 1, Col: 1, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 320000}}}, Row: 2, Col: 1, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 340000}}}, Row: 3, Col: 1, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 280000}}}, Row: 0, Col: 2, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 300000}}}, Row: 1, Col: 2, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 320000}}}, Row: 2, Col: 2, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 340000}}}, Row: 3, Col: 2, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 280000}}}, Row: 0, Col: 3, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 300000}}}, Row: 1, Col: 3, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 320000}}}, Row: 2, Col: 3, Weight: 0},
+		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 340000}}}, Row: 3, Col: 3, Weight: 0},
 	}
 	diff := pretty.Diff(cellResult, grid.Cells)
 	if len(diff) != 0 {
@@ -170,7 +170,7 @@ func TestCreateSurrogates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		srgs, err := sp.createSurrogate(srgSpec, grid)
+		srgs, err := sp.CreateSurrogate(srgSpec, grid)
 		if err != nil {
 			t.Errorf("creating surrogate %s: %v", code, err)
 		}
@@ -275,13 +275,14 @@ func TestSpatializeRecord(t *testing.T) {
 		for _, scc := range []string{"0010200501", "2101006002", "2102001000", "2102001001"} {
 			rec.FIPS = fips
 			rec.SCC = scc
-			for _, recType := range []string{"point", "area"} {
-				emis, _, err := rec.GriddedEmissions(sp, recType, 0, Annual)
+			for _, recType := range []sectorType{point, area} {
+				rec.sectorType = recType
+				emis, _, err := rec.GriddedEmissions(sp, 0, Annual)
 				rec.GridSrgs = nil // clean up for next iteration.
 				if err != nil {
 					t.Error(err)
 				}
-				if recType == "area" {
+				if recType == area {
 					sum := emis["testpol"].Sum()
 					if rec.coveredByGrid[0] {
 						if math.Abs(sum-1) > 0.000001 {
@@ -292,7 +293,7 @@ func TestSpatializeRecord(t *testing.T) {
 						t.Errorf("%s gridded emissions should sum to between 0 and 1 for scc %s "+
 							"and fips %s but instead sums to %f", recType, scc, fips, sum)
 					}
-				} else if recType == "point" {
+				} else if recType == point {
 					if e, ok := emis["testpol"]; ok {
 						// The point is outside of the grid so emissions should equal zero.
 						t.Errorf("%s gridded emissions should be nil for scc %s "+
