@@ -330,6 +330,11 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 		srg.progress += 100. / float64(inputShp.AttributeCount())
 		srg.progressLock.Unlock()
 
+		if err := op.FixOrientation(ggeom); err != nil {
+			// op.Within requires correct orientation.
+			return inputData, err
+		}
+
 		ggeom, err = ct.Reproject(ggeom)
 		if err != nil {
 			return inputData, err
