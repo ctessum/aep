@@ -32,11 +32,10 @@ import (
 	"bitbucket.org/ctessum/sparse"
 )
 
-// ReadSeekCloser is an interface for Readers that can also seek and close.
-type ReadSeekCloser interface {
+// ReadSeeker is an interface for Readers that can also seek.
+type ReadSeeker interface {
 	io.Reader
 	io.Seeker
-	io.Closer
 }
 
 // FileInfo holds information about an inventory file
@@ -51,7 +50,7 @@ type FileInfo struct {
 	Units         string  // Units for emissions values
 	InputConv     float64 // factor for converting emissions to grams
 	polid         []string
-	fid           ReadSeekCloser
+	fid           ReadSeeker
 	buf           *bufio.Reader
 }
 
@@ -589,7 +588,7 @@ func NewEmissionsReader(polsToKeep map[string]*PolHolder, freq InventoryFrequenc
 // OpenFileFromTemplate opens the files that match the template. For file types
 // that have different files for different time periods, p specifies which file
 // should be opened.
-func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader ReadSeekCloser, err error) {
+func (e *EmissionsReader) OpenFileFromTemplate(filetemplate string, p Period) (filename string, reader ReadSeeker, err error) {
 	file := filetemplate
 	if e.freq == Monthly {
 		file = strings.Replace(file, "[month]", strings.ToLower(p.String()), -1)
@@ -611,8 +610,8 @@ type RecFilter func(*ParsedRecord) bool
 // function together to avoid double counting in speciation. (If you will
 // not be speciating the emissions, then it doesn't matter.) f is an optional
 // filter function to determine which records should be kept. If f is nil, all
-// records will be kept.
-func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, p Period, f RecFilter) (map[string]*ParsedRecord, InventoryReport, error) {
+// records will be kept. The caller is responsible for closing the files.
+func (e *EmissionsReader) ReadFiles(files []ReadSeeker, filenames []string, p Period, f RecFilter) (map[string]*ParsedRecord, InventoryReport, error) {
 	report := make(InventoryReport)
 	if len(files) != len(filenames) {
 		return nil, nil, fmt.Errorf("in Readfiles, different number of files (%d) "+
@@ -692,7 +691,6 @@ func (e *EmissionsReader) ReadFiles(files []ReadSeekCloser, filenames []string, 
 			}
 		}
 		report.addData(p, filename, fInfo)
-		fInfo.fid.Close()
 	}
 	return records, report, nil
 }
@@ -708,7 +706,7 @@ func cleanPol(pol string) (cleanedPol string) {
 }
 
 // NewDecoder opens an emissions file and extracts header information.
-func (e *EmissionsReader) NewDecoder(filename string, file ReadSeekCloser) (fInfo *FileInfo) {
+func (e *EmissionsReader) NewDecoder(filename string, file ReadSeeker) (fInfo *FileInfo) {
 	var record string
 	var err error
 	fInfo = newFileInfo()
