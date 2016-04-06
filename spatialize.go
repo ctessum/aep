@@ -647,12 +647,18 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 
 // findFile finds a file in dir or any of its subdirectories.
 func findFile(dir, file string) (string, error) {
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+
 	var fullPath string
 	var found bool
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+
 		if info.IsDir() || found {
 			return nil
 		}
