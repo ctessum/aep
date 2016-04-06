@@ -88,6 +88,7 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 	sp.grids = grids
 	sp.gridRef = gridRef
 	sp.inputSR = inputSR
+	sp.matchFullSCC = matchFullSCC
 
 	sp.totals = make(map[Period]*SpatialTotals)
 	sp.totalGrid = make(map[*GridDef]map[Period]map[string]*sparse.SparseArray)
@@ -737,7 +738,7 @@ func (gr GridRef) GetSrgCode(SCC string, c Country, FIPS string, matchFullSCC bo
 			gr[c][SCC])
 	}
 	if err != nil {
-		return "", fmt.Errorf("in GetSrg: %v. (SCC=%v, Country=%v, FIPS=%v)",
+		return "", fmt.Errorf("in aep.GridRef.GetSrgCode: %v. (SCC=%v, Country=%v, FIPS=%v)",
 			err.Error(), SCC, c, FIPS)
 	}
 	return matchedVal.(string), nil

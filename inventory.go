@@ -268,6 +268,17 @@ func (r *ParsedRecord) fixStack() {
 // zeros.
 func (r *ParsedRecord) parseFIPS() {
 	r.FIPS = strings.Replace(strings.Trim(r.FIPS, "\""), " ", "0", -1)
+	if len(r.FIPS) < 5 {
+		if len(r.FIPS) == 4 {
+			r.FIPS = "0" + r.FIPS
+		} else if len(r.FIPS) == 3 {
+			r.FIPS = "00" + r.FIPS
+		} else if len(r.FIPS) == 2 {
+			r.FIPS = "000" + r.FIPS
+		} else if len(r.FIPS) == 1 {
+			r.FIPS = "0000" + r.FIPS
+		}
+	}
 }
 
 func stringToFloat(s string) float64 {
