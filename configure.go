@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -218,19 +219,63 @@ func (p Period) String() string {
 		return "Dec"
 	case Annual:
 		return "Annual"
-	case Cem:
-		return "Cem"
 	default:
-		panic(fmt.Sprintf("Unknown period: %v", p))
+		panic(fmt.Sprintf("unknown period: %d", int(p)))
 	}
+}
+
+// periodToTimeInterval calculates the start and the end of the given period
+// in the given year.
+func periodToTimeInterval(p Period, year string) (start, end time.Time, err error) {
+	switch p {
+	case Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec:
+		start, err = time.Parse("Jan 2006", fmt.Sprintf("%s %s", p, year))
+		if err != nil {
+			return
+		}
+		if p == Dec {
+			var intYear int64
+			intYear, err = strconv.ParseInt(year, 0, 32)
+			if err != nil {
+				return
+			}
+			nextYear := fmt.Sprintf("%04d", intYear+1)
+			end, err = time.Parse("Jan 2006", fmt.Sprintf("Jan %s", nextYear))
+			if err != nil {
+				return
+			}
+		} else {
+			end, err = time.Parse("Jan 2006", fmt.Sprintf("%s %s", p+1, year))
+			if err != nil {
+				return
+			}
+		}
+	case Annual:
+		start, err = time.Parse("Jan 2006",
+			fmt.Sprintf("Jan %s", year))
+		if err != nil {
+			return
+		}
+		var intYear int64
+		intYear, err = strconv.ParseInt(year, 0, 32)
+		if err != nil {
+			return
+		}
+		nextYear := fmt.Sprintf("%04d", intYear+1)
+		end, err = time.Parse("Jan 2006", fmt.Sprintf("Jan %s", nextYear))
+		if err != nil {
+			return
+		}
+	default:
+		panic(fmt.Sprintf("unknown period: %d", int(p)))
+	}
+	return
 }
 
 func (c *Context) getPeriod(t time.Time) Period {
 	switch c.InventoryFreq {
 	case "annual":
 		return Annual
-	case "cem":
-		return Cem
 	case "monthly":
 		return Period(t.Month())
 	default:

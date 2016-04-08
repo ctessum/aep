@@ -90,6 +90,7 @@ const (
 	Bahamas                   = 4
 	Haiti                     = 5
 	DominicanRepublic         = 6
+	Unknown                   = -1
 )
 
 func (c Country) String() string {
@@ -138,24 +139,24 @@ func getCountryFromID(code string) Country {
 	}
 }
 
-func getCountryFromName(name string) Country {
+func countryFromName(name string) (Country, error) {
 	switch name {
 	case "USA", "US":
-		return USA
+		return USA, nil
 	case "CANADA", "CA", "CAN":
-		return Canada
+		return Canada, nil
 	case "MEXICO", "MEX":
-		return Mexico
+		return Mexico, nil
 	case "CUBA":
-		return Cuba
+		return Cuba, nil
 	case "BAHAMAS":
-		return Bahamas
+		return Bahamas, nil
 	case "HAITI":
-		return Haiti
+		return Haiti, nil
 	case "DOMINICANREPUBLIC":
-		return DominicanRepublic
+		return DominicanRepublic, nil
 	default:
-		panic(fmt.Errorf("Unkown country %s", name))
+		return Unknown, fmt.Errorf("Unkown country '%s'", name)
 	}
 
 }

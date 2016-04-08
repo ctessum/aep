@@ -311,7 +311,7 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 	if err != nil {
 		return nil, err
 	}
-	ct, err := proj.NewCoordinateTransform(inputSR, gridData.Sr)
+	ct, err := proj.NewCoordinateTransform(inputSR, gridData.SR)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +392,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 	if err != nil {
 		return nil, err
 	}
-	ct, err := proj.NewCoordinateTransform(srgSR, gridData.Sr)
+	ct, err := proj.NewCoordinateTransform(srgSR, gridData.SR)
 	if err != nil {
 		return nil, err
 	}

@@ -36,9 +36,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"text/tabwriter"
 
 	"bitbucket.org/ctessum/cdf"
 	"bitbucket.org/ctessum/sparse"
+	"github.com/ctessum/unit"
 	"github.com/gonum/floats"
 )
 
@@ -159,17 +161,100 @@ type ReportHolder struct {
 	TemporalResults *TemporalReport
 }
 
-type InventoryReport map[Period]map[string]*FileInfo
+// An InventoryReport report holds information about raw inventory data.
+type InventoryReport struct {
+	Files []*InventoryFile
+}
 
-func (ir InventoryReport) addData(p Period, file string, fInfo *FileInfo) {
-	if _, ok := ir[p]; !ok {
-		ir[p] = make(map[string]*FileInfo)
+// AddData adds file(s) to the report.
+func (ir *InventoryReport) AddData(files ...*InventoryFile) {
+	ir.Files = append(ir.Files, files...)
+}
+
+// TotalsTable returns a table of the total emissions in this report, where
+// the rows are the files and the columns are the pollutants, arranged
+// alphabetically.
+func (ir *InventoryReport) TotalsTable() Table {
+	return ir.table(getTotals)
+}
+
+// DroppedTotalsTable returns a table of the total emissions in this report, where
+// the rows are the files and the columns are the pollutants, arranged
+// alphabetically.
+func (ir *InventoryReport) DroppedTotalsTable() Table {
+	return ir.table(getDroppedTotals)
+}
+
+// table returns a table presenting the emissions in this
+// report. It takes a function which returns the requested data for each file.
+func (ir *InventoryReport) table(df func(*InventoryFile) map[Pollutant]*unit.Unit) Table {
+	t := make([][]string, len(ir.Files)+1)
+
+	// get pollutants
+	pols := make(map[string]int)
+	dims := make(map[string]unit.Dimensions)
+	for _, f := range ir.Files {
+		for pol, val := range df(f) {
+			pols[pol.Name] = 0
+			if d, ok := dims[pol.Name]; !ok {
+				dims[pol.Name] = val.Dimensions()
+			} else {
+				if !val.Dimensions().Matches(d) {
+					panic(fmt.Errorf("dimensions mismatch: '%v' != '%v'", val.Dimensions(), d))
+				}
+			}
+		}
 	}
-	ir[p][file] = fInfo
+	for pol := range pols {
+		t[0] = append(t[0], pol)
+	}
+	sort.Strings(t[0])
+	t[0] = append([]string{"Group", "File"}, t[0]...)
+	for i, pol := range t[0] {
+		pols[pol] = i
+	}
+	for i, pol := range t[0] {
+		if dims[pol] != nil {
+			t[0][i] += fmt.Sprintf(" (%s)", dims[pol].String())
+		}
+	}
+	for i, f := range ir.Files {
+		t[i+1] = make([]string, len(pols))
+		t[i+1][0], t[i+1][1] = f.Group, f.Name
+		for pol, val := range df(f) {
+			t[i+1][pols[pol.Name]] = fmt.Sprintf("%g", val.Value())
+		}
+	}
+
+	return t
+}
+
+// A Table holds a text representation of report data.
+type Table [][]string
+
+// Tabbed creates a tab-separated table.
+func (t Table) Tabbed(w io.Writer) (n int, err error) {
+	ww := new(tabwriter.Writer)
+	ww.Init(w, 0, 2, 0, '\t', 0)
+	var nn int
+	for _, l := range t {
+		for _, r := range l {
+			nn, err = fmt.Fprint(ww, r+"\t")
+			if err != nil {
+				return
+			}
+			n += nn
+		}
+		nn, err = fmt.Fprint(ww, "\n")
+		if err != nil {
+			return
+		}
+		n += nn
+	}
+	return
 }
 
 type Results struct {
-	InventoryResults  map[string]*FileInfo
 	SpeciationResults *SpecTotals
 	SpatialResults    *SpatialTotals
 }
@@ -220,8 +305,8 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 
 // Prepare maps of emissions for each species and domain in NetCDF format.
 // (http://www.unidata.ucar.edu/software/netcdf/).
-func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
-	TotalGrid map[*GridDef]map[Period]map[string]*sparse.SparseArray,
+func (c *Context) ResultMaps(totals *SpatialTotals,
+	TotalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray,
 ) {
 
 	dir := filepath.Join(c.outputDir, "maps")
@@ -229,61 +314,59 @@ func (c *Context) ResultMaps(totals map[string]*SpatialTotals,
 	if err != nil {
 		panic(err)
 	}
-	for grid, dx := range TotalGrid {
-		for p, d1 := range dx {
-			filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v_%v.nc",
-				c.SimulationName, c.Sector, p, grid.Name))
-			h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
-			h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
-				"by AEP version "+Version+" ("+Website+")")
-			//h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
-			//h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
-			//h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
-			//h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
-			//h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
-			//h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-			h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
-				float64(grid.Ny)*grid.Dy})
-			h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
-			h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
-				float64(grid.Nx)*grid.Dx})
-			h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
-			for pol, _ := range d1 {
-				if d, ok := totals[p.String()].InsideDomainTotals[grid.Name][pol]; ok {
-					h.AddVariable(pol, []string{"y", "x"}, []float32{0.})
-					h.AddAttribute(pol, "units", d.Units)
+	for grid, d1 := range TotalGrid {
+		filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v.nc",
+			c.SimulationName, c.Sector, grid.Name))
+		h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
+		h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
+			"by AEP version "+Version+" ("+Website+")")
+		//h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
+		//h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
+		//h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
+		//h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
+		//h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
+		//h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
+		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
+			float64(grid.Ny)*grid.Dy})
+		h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
+		h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
+			float64(grid.Nx)*grid.Dx})
+		h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
+		for pol, _ := range d1 {
+			if d, ok := totals.InsideDomainTotals[grid.Name][pol]; ok {
+				h.AddVariable(pol.String(), []string{"y", "x"}, []float32{0.})
+				h.AddAttribute(pol.String(), "units", d.Units)
+			}
+		}
+		if len(h.Variables()) > 0 {
+			h.Define()
+			errs := h.Check()
+			for _, err := range errs {
+				if err != nil {
+					panic(err)
 				}
 			}
-			if len(h.Variables()) > 0 {
-				h.Define()
-				errs := h.Check()
-				for _, err := range errs {
-					if err != nil {
+			f, err := os.Create(filename)
+			if err != nil {
+				panic(err)
+			}
+			ff, err := cdf.Create(f, h)
+			if err != nil {
+				panic(err)
+			}
+			for pol, data := range d1 {
+				if data.Sum() != 0. {
+					r := ff.Writer(pol.String(), []int{0, 0}, []int{grid.Ny, grid.Nx})
+					if _, err = r.Write(data.ToDense32()); err != nil {
 						panic(err)
 					}
 				}
-				f, err := os.Create(filename)
-				if err != nil {
-					panic(err)
-				}
-				ff, err := cdf.Create(f, h)
-				if err != nil {
-					panic(err)
-				}
-				for pol, data := range d1 {
-					if data.Sum() != 0. {
-						r := ff.Writer(pol, []int{0, 0}, []int{grid.Ny, grid.Nx})
-						if _, err = r.Write(data.ToDense32()); err != nil {
-							panic(err)
-						}
-					}
-				}
-				err = cdf.UpdateNumRecs(f)
-				if err != nil {
-					panic(err)
-				}
-				f.Close()
 			}
+			err = cdf.UpdateNumRecs(f)
+			if err != nil {
+				panic(err)
+			}
+			f.Close()
 		}
 	}
 }
@@ -697,12 +780,12 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 				for _, sectorData := range sectorDataPeriod {
 					for pol, inData := range sectorData.SpatialResults.
 						InsideDomainTotals[countType] {
-						if !IsStringInArray(dr.pols, pol) {
-							dr.pols = append(dr.pols, pol)
-							dr.units[pol] = inData.Units
+						if !IsStringInArray(dr.pols, pol.Name) {
+							dr.pols = append(dr.pols, pol.Name)
+							dr.units[pol.Name] = inData.Units
 						}
 						// Total emissions inside the domain
-						spatialData[pol] += inData.Val / numPeriods
+						spatialData[pol.Name] += inData.Val / numPeriods
 					}
 				}
 			}
@@ -723,29 +806,6 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 			numPeriods := float64(len(sectorDataPeriod))
 			for _, sectorData := range sectorDataPeriod {
 				switch procType {
-				case "Inventory":
-					if sectorData.InventoryResults != nil {
-						for _, fileData := range sectorData.InventoryResults {
-							switch countType {
-							case "Totals":
-								for pol, val := range fileData.Totals {
-									if !IsStringInArray(dr.pols, pol) {
-										dr.pols = append(dr.pols, pol)
-										dr.units[pol] = fileData.Units
-									}
-									dr.data[sector][pol] += val / numPeriods
-								}
-							case "DroppedTotals":
-								for pol, val := range fileData.DroppedTotals {
-									if !IsStringInArray(dr.pols, pol) {
-										dr.pols = append(dr.pols, pol)
-										dr.units[pol] = fileData.Units
-									}
-									dr.data[sector][pol] += val / numPeriods
-								}
-							}
-						}
-					}
 				case "Speciation":
 					if sectorData.SpeciationResults != nil {
 						switch countType {
@@ -784,12 +844,12 @@ func (r *ReportHolder) PrepDataReport(procType, countType string) *dataReport {
 							InsideDomainTotals[countType] {
 							outData := sectorData.SpatialResults.
 								OutsideDomainTotals[countType][pol]
-							if !IsStringInArray(dr.pols, pol) {
-								dr.pols = append(dr.pols, pol)
-								dr.units[pol] = inData.Units
+							if !IsStringInArray(dr.pols, pol.Name) {
+								dr.pols = append(dr.pols, pol.Name)
+								dr.units[pol.Name] = inData.Units
 							}
 							// Fraction inside the domain
-							dr.data[sector][pol] += inData.Val /
+							dr.data[sector][pol.Name] += inData.Val /
 								(inData.Val + outData.Val) *
 								100. / numPeriods
 						}

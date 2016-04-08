@@ -5,10 +5,12 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/op"
 	"github.com/ctessum/geom/proj"
+	"github.com/ctessum/unit"
 	"github.com/kr/pretty"
 )
 
@@ -27,6 +29,7 @@ const (
 000000;0010200501;100
 000000;2101006002;137! profile added for new SCC in 2002 inventory
 000000;2102001000;140
+000000;2102001001;100
 034023;2102001001;500
 036047;2102001001;200
 `
@@ -85,7 +88,7 @@ func TestReadGridRef(t *testing.T) {
 	}
 	result := &GridRef{
 		0: map[string]map[string]interface{}{
-			"2102001001": map[string]interface{}{"34023": "500", "36047": "200"},
+			"2102001001": map[string]interface{}{"34023": "500", "36047": "200", "00000": "100"},
 			"0010200501": map[string]interface{}{"00000": "100"},
 			"2101006002": map[string]interface{}{"00000": "137"},
 			"2102001000": map[string]interface{}{"00000": "140"}}}
@@ -158,7 +161,8 @@ func TestCreateSurrogates(t *testing.T) {
 		t.Fatal(err)
 	}
 	grid, err := createGrid()
-	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, true)
+	matchFullSCC := false
+	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, matchFullSCC)
 
 	// surrogates that should be nil based on manual inspection.
 	nilSrgs := map[string]map[string]bool{
@@ -255,57 +259,81 @@ func TestSpatializeRecord(t *testing.T) {
 	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, true)
 	//sp.DiskCachePath = "testcache"
 
-	rec := &ParsedRecord{
-		FIPS: "",
-		SCC:  "",
-		XLOC: -97,
-		YLOC: 40,
-		ANN_EMIS: map[Period]map[string]*SpecValUnits{
-			Annual: map[string]*SpecValUnits{"testpol": &SpecValUnits{
-				Val:     1,
-				Units:   "tons/year",
-				PolType: &PolHolder{SpecType: "VOC"},
-			},
-			},
-		},
+	sourceData := SourceData{
+		FIPS:    "",
+		SCC:     "",
 		Country: USA,
 	}
+	pointData := PointSourceData{
+		Point: geom.Point{X: -73.9712, Y: 40.7831}, // Downtown Manhattan.
+		SR:    longlat,
+	}
 
-	for fips := range coveredByGrid {
+	// Test spatial projection.
+	ct, err := proj.NewCoordinateTransform(pointData.SR, sp.Grids[0].SR)
+	if err != nil {
+		t.Error(err)
+	}
+	pointI, err := ct.Reproject(pointData.Point)
+	if err != nil {
+		t.Error(err)
+	}
+	point := pointI.(geom.Point)
+	const xval, yval = 1.9085620728963248e+06, 329746.43597362953
+	if math.Abs(point.X-xval) > 1.e-8 {
+		t.Errorf("projected X coordinate should equal %g but instead is %g", xval, point.X)
+	}
+	if math.Abs(point.Y-yval) > 1.e-8 {
+		t.Errorf("projected Y coordinate should equal %g but instead is %g", yval, point.Y)
+	}
+
+	emis := new(Emissions)
+	begin, _ := time.Parse("Jan 2006", "Jan 2005")
+	end, _ := time.Parse("Jan 2006", "Jan 2006")
+	rate, err := parseEmisRateAnnual("1", "-9", func(v float64) *unit.Unit { return unit.New(v, unit.Kilogram) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	emis.Add(begin, end, "testpol", "", rate)
+
+	for fips, covered := range coveredByGrid {
 		for _, scc := range []string{"0010200501", "2101006002", "2102001000", "2102001001"} {
-			rec.FIPS = fips
-			rec.SCC = scc
-			for _, recType := range []sectorType{point, area} {
-				rec.sectorType = recType
-				emis, _, err := rec.GriddedEmissions(sp, 0, Annual)
-				rec.GridSrgs = nil // clean up for next iteration.
+			sourceData.FIPS = fips
+			sourceData.SCC = scc
+			for i, rec := range []Record{
+				&PolygonRecord{
+					SourceData: sourceData,
+					Emissions:  *emis,
+				},
+				&PointRecord{
+					SourceData:      sourceData,
+					PointSourceData: pointData,
+					Emissions:       *emis,
+				},
+			} {
+
+				emis, _, err := GriddedEmissions(rec, begin, end, sp, 0)
 				if err != nil {
-					t.Error(err)
+					t.Errorf("scc: %s, fips: %s, i: %d, err: %v", scc, fips, i, err)
+					continue
 				}
-				if recType == area {
-					sum := emis["testpol"].Sum()
-					if rec.coveredByGrid[0] {
+
+				if i == 0 { // area record
+					sum := emis[Pollutant{Name: "testpol"}].Sum()
+					if covered {
 						if math.Abs(sum-1) > 0.000001 {
-							t.Errorf("%s gridded emissions should sum to 1 for scc %s and fips %s but "+
-								"instead sums to %f", recType, scc, fips, sum)
+							t.Errorf("%d area gridded emissions should sum to 1 for scc %s and fips %s but "+
+								"instead sums to %f", i, scc, fips, sum)
 						}
-					} else if sum > 1 || sum < 0 {
-						t.Errorf("%s gridded emissions should sum to between 0 and 1 for scc %s "+
-							"and fips %s but instead sums to %f", recType, scc, fips, sum)
+					} else if sum > 1 || sum <= 0 {
+						t.Errorf("%d area gridded emissions should sum to between 0 and 1 for scc %s "+
+							"and fips %s but instead sums to %f", i, scc, fips, sum)
 					}
-				} else if recType == point {
-					if e, ok := emis["testpol"]; ok {
-						// The point is outside of the grid so emissions should equal zero.
-						t.Errorf("%s gridded emissions should be nil for scc %s "+
-							"and fips %s but instead sums to %f", recType, scc, fips, e.Sum())
-					}
-					if math.Abs(rec.PointXcoord) > 1.e-8 {
-						t.Errorf("%s projected X coordinate should equal 0 for scc %s "+
-							"and fips %s but instead is %g", recType, scc, fips, rec.PointXcoord)
-					}
-					if math.Abs(rec.PointYcoord) > 1.e-8 {
-						t.Errorf("%s projected Y coordinate should equal 0 for scc %s "+
-							"and fips %s but instead is %g", recType, scc, fips, rec.PointYcoord)
+				} else if i == 1 { // point record
+					sum := emis[Pollutant{Name: "testpol"}].Sum()
+					if math.Abs(sum-1) > 0.000001 {
+						t.Errorf("%d point gridded emissions should sum to 1 for scc %s and fips %s but "+
+							"instead sums to %f", i, scc, fips, sum)
 					}
 				}
 			}

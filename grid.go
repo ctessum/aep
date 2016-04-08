@@ -47,7 +47,7 @@ type GridDef struct {
 	X0, Y0        float64
 	TimeZones     map[string]*sparse.SparseArray
 	Cells         []*GridCell
-	Sr            proj.SR
+	SR            proj.SR
 	Extent        geom.T
 	IrregularGrid bool // whether the grid is a regular grid
 	rtree         *rtree.Rtree
@@ -78,7 +78,7 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 	grid.Nx, grid.Ny = Nx, Ny
 	grid.Dx, grid.Dy = Dx, Dy
 	grid.X0, grid.Y0 = X0, Y0
-	grid.Sr = sr
+	grid.SR = sr
 	grid.rtree = rtree.NewTree(25, 50)
 	// Create geometry
 	grid.Cells = make([]*GridCell, grid.Nx*grid.Ny)
@@ -111,7 +111,7 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 func NewGridIrregular(Name string, g []geom.T, inputSR, outputSR proj.SR) (grid *GridDef, err error) {
 	grid = new(GridDef)
 	grid.Name = Name
-	grid.Sr = outputSR
+	grid.SR = outputSR
 	grid.IrregularGrid = true
 	grid.Cells = make([]*GridCell, len(g))
 	grid.Ny = len(g)
@@ -169,7 +169,7 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 		return err
 	}
 	var ct *proj.CoordinateTransform
-	ct, err = proj.NewCoordinateTransform(grid.Sr, tzsr)
+	ct, err = proj.NewCoordinateTransform(grid.SR, tzsr)
 	if err != nil {
 		return err
 	}

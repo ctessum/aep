@@ -29,17 +29,19 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"bitbucket.org/ctessum/sparse"
 	"github.com/camlistore/camlistore/pkg/lru"
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/proj"
+	"github.com/ctessum/unit"
 )
 
 // SpatialProcessor spatializes emissions records.
 type SpatialProcessor struct {
 	srgSpecs               *SrgSpecs
-	grids                  []*GridDef
+	Grids                  []*GridDef
 	gridRef                *GridRef
 	surrogateGeneratorChan chan *srgRequest
 	srgCache               map[string]*sparse.SparseArray
@@ -52,8 +54,8 @@ type SpatialProcessor struct {
 	matchFullSCC bool
 
 	// report information
-	totals    map[Period]*SpatialTotals
-	totalGrid map[*GridDef]map[Period]map[string]*sparse.SparseArray
+	totals    *SpatialTotals
+	totalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray
 
 	// DiskCachePath specifies a directory to cache surrogate files in. If it is
 	// empty or invalid, surrogates will not be stored on the disk for later use.
@@ -85,13 +87,13 @@ type SpatialProcessor struct {
 func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef, inputSR proj.SR, matchFullSCC bool) *SpatialProcessor {
 	sp := new(SpatialProcessor)
 	sp.srgSpecs = srgSpecs
-	sp.grids = grids
+	sp.Grids = grids
 	sp.gridRef = gridRef
 	sp.inputSR = inputSR
 	sp.matchFullSCC = matchFullSCC
 
-	sp.totals = make(map[Period]*SpatialTotals)
-	sp.totalGrid = make(map[*GridDef]map[Period]map[string]*sparse.SparseArray)
+	sp.totals = newSpatialTotals()
+	sp.totalGrid = make(map[*GridDef]map[Pollutant]*sparse.SparseArray)
 
 	sp.MemCacheSize = 100
 	sp.MaxMergeDepth = 10
@@ -102,23 +104,23 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 
 // SpatialTotals hold summary results of spatialized emissions records.
 type SpatialTotals struct {
-	InsideDomainTotals  map[string]map[string]*SpecValUnits
-	OutsideDomainTotals map[string]map[string]*SpecValUnits
+	InsideDomainTotals  map[string]map[Pollutant]*SpecValUnits
+	OutsideDomainTotals map[string]map[Pollutant]*SpecValUnits
 }
 
 func newSpatialTotals() *SpatialTotals {
 	out := new(SpatialTotals)
-	out.InsideDomainTotals = make(map[string]map[string]*SpecValUnits)
-	out.OutsideDomainTotals = make(map[string]map[string]*SpecValUnits)
+	out.InsideDomainTotals = make(map[string]map[Pollutant]*SpecValUnits)
+	out.OutsideDomainTotals = make(map[string]map[Pollutant]*SpecValUnits)
 	return out
 }
 
-func (h *SpatialTotals) add(pol, grid string, emis float64,
+func (h *SpatialTotals) add(pol Pollutant, grid string, emis float64,
 	gridEmis *sparse.SparseArray, units string) {
 	t := *h
 	if _, ok := t.InsideDomainTotals[grid]; !ok {
-		t.InsideDomainTotals[grid] = make(map[string]*SpecValUnits)
-		t.OutsideDomainTotals[grid] = make(map[string]*SpecValUnits)
+		t.InsideDomainTotals[grid] = make(map[Pollutant]*SpecValUnits)
+		t.OutsideDomainTotals[grid] = make(map[Pollutant]*SpecValUnits)
 	}
 	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
 		t.InsideDomainTotals[grid][pol] = new(SpecValUnits)
@@ -138,119 +140,135 @@ func (h *SpatialTotals) add(pol, grid string, emis float64,
 	*h = t
 }
 
-// GriddedEmissions returns gridded emissions for a given grid index and period.
-func (r *ParsedRecord) GriddedEmissions(sp *SpatialProcessor,
-	gi int, p Period) (emis map[string]*sparse.SparseArray, units map[string]string, err error) {
+// Spatialize takes a spatial processor (sp) and a grid index number (gi) and
+// returns a gridded spatial surrogate (gridSrg) for an area emissions source,
+// as well as whether the emissions source is completely covered by the grid
+// (coveredByGrid) and whether it is in the grid all all (inGrid).
+func (r *SourceData) Spatialize(sp *SpatialProcessor, gi int) (
+	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
 
-	emis = make(map[string]*sparse.SparseArray)
-	units = make(map[string]string)
-	if r.GridSrgs == nil {
-		r.inGrid = make([]bool, len(sp.grids))
-		r.inGrid = make([]bool, len(sp.grids))
-		err := r.spatialize(sp)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	if r.GridSrgs[gi] == nil {
+	var srgNum string
+	srgNum, err = sp.gridRef.GetSrgCode(r.SCC, r.Country, r.FIPS, sp.matchFullSCC)
+	if err != nil {
 		return
 	}
-	for pol, data := range r.ANN_EMIS[p] {
-		emis[pol] = r.GridSrgs[gi].ScaleCopy(data.Val)
-		units[pol] = data.Units
+	var srgSpec *SrgSpec
+	srgSpec, err = sp.srgSpecs.GetByCode(r.Country, srgNum)
+	if err != nil {
+		return
+	}
+
+	gridSrg, coveredByGrid, err = sp.surrogate(srgSpec, sp.Grids[gi], r.FIPS)
+	if err != nil {
+		return
+	}
+	if gridSrg != nil {
+		inGrid = true
 	}
 	return
 }
 
-// spatialize spatializes a record.
-func (r *ParsedRecord) spatialize(sp *SpatialProcessor) error {
-	r.inGrid = make([]bool, len(sp.grids))
-	r.coveredByGrid = make([]bool, len(sp.grids))
-	switch r.sectorType {
-	case point:
-		// assume all grids have the same spatial reference.
-		ct, err := proj.NewCoordinateTransform(sp.inputSR, sp.grids[0].Sr)
+// Spatialize takes a spatial processor (sp) and a grid index number (gi) and
+// returns a gridded spatial surrogate (gridSrg) for a point emissions source,
+// as well as whether the emissions source is completely covered by the grid
+// (coveredByGrid) and whether it is in the grid all all (inGrid).
+func (r *PointSourceData) Spatialize(sp *SpatialProcessor, gi int) (
+	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
 
-		r.GridSrgs = make([]*sparse.SparseArray, len(sp.grids))
-		for i, grid := range sp.grids {
-			var row, col int
-			r.PointXcoord, r.PointYcoord, row, col,
-				r.inGrid[i], err = grid.GetIndex(r.XLOC, r.YLOC, ct)
-			if err != nil {
-				return err
-			}
-			// for points, inGrid and coveredByGrid are the same thing.
-			r.coveredByGrid[i] = r.inGrid[i]
-			if r.inGrid[i] {
-				r.GridSrgs[i] = sparse.ZerosSparse(grid.Ny,
-					grid.Nx)
-				// For points, all emissions are in the same cell.
-				r.GridSrgs[i].Set(1., row, col)
-			}
-		}
-	case area, mobile:
-		srgNum, err := sp.gridRef.GetSrgCode(r.SCC, r.Country, r.FIPS, sp.matchFullSCC)
-		if err != nil {
-			return err
-		}
-		srgSpec, err := sp.srgSpecs.GetByCode(r.Country, srgNum)
-		if err != nil {
-			return err
-		}
-
-		r.GridSrgs = make([]*sparse.SparseArray, len(sp.grids))
-		for i, grid := range sp.grids {
-			r.GridSrgs[i], r.coveredByGrid[i], err = sp.surrogate(srgSpec, grid, r.FIPS)
-			if err != nil {
-				return err
-			}
-			if r.GridSrgs[i] != nil {
-				r.inGrid[i] = true
-			}
-		}
-	default:
-		return fmt.Errorf("unknown sectorType %v", r.sectorType)
+	var ct *proj.CoordinateTransform
+	ct, err = proj.NewCoordinateTransform(r.SR, sp.Grids[gi].SR)
+	if err != nil {
+		return
 	}
-	return sp.addEmisToReport(r)
+
+	var row, col int
+	_, _, row, col, inGrid, err = sp.Grids[gi].GetIndex(r.Point.X, r.Point.Y, ct)
+	if err != nil {
+		return
+	}
+	// for points, inGrid and coveredByGrid are the same thing.
+	coveredByGrid = inGrid
+	if inGrid {
+		gridSrg = sparse.ZerosSparse(sp.Grids[gi].Ny, sp.Grids[gi].Nx)
+		// For points, all emissions are in the same cell.
+		gridSrg.Set(1., row, col)
+	}
+	return
 }
 
-func (sp *SpatialProcessor) addEmisToReport(r *ParsedRecord) error {
-	// Add emissions to reports
-	for p, periodEmis := range r.ANN_EMIS {
-		if _, ok := sp.totals[p]; !ok {
-			sp.totals[p] = newSpatialTotals()
+// Spatialize takes a spatial processor (sp) and a grid index number (gi) and
+// returns a gridded spatial surrogate (gridSrg) for a point emissions source,
+// as well as whether the emissions source is completely covered by the grid
+// (coveredByGrid) and whether it is in the grid all all (inGrid).
+func (r *PointRecord) Spatialize(sp *SpatialProcessor, gi int) (
+	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
+	return r.PointSourceData.Spatialize(sp, gi)
+}
+
+// Spatialize takes a spatial processor (sp) and a grid index number (gi) and
+// returns a gridded spatial surrogate (gridSrg) for a point emissions source,
+// as well as whether the emissions source is completely covered by the grid
+// (coveredByGrid) and whether it is in the grid all all (inGrid).
+func (r *pointRecordIDA) Spatialize(sp *SpatialProcessor, gi int) (
+	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
+	return r.PointSourceData.Spatialize(sp, gi)
+}
+
+// Spatialize is added here to fulfill the Record in interace, but
+// it does not contain enough information on its own to be spatialized so
+// it panics if used. (It should never be used).
+func (r *supplementalPointRecord) Spatialize(sp *SpatialProcessor, gi int) (
+	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
+	panic("supplementalPointRecord cannot be spatialized")
+}
+
+// GriddedEmissions returns gridded emissions of record r for a given grid index and period.
+func GriddedEmissions(r Record, begin, end time.Time, sp *SpatialProcessor,
+	gi int) (emis map[Pollutant]*sparse.SparseArray, units map[Pollutant]unit.Dimensions, err error) {
+
+	var gridSrg *sparse.SparseArray
+	gridSrg, _, _, err = r.Spatialize(sp, gi)
+	if err != nil || gridSrg == nil {
+		return
+	}
+
+	emis = make(map[Pollutant]*sparse.SparseArray)
+	units = make(map[Pollutant]unit.Dimensions)
+	periodEmis := r.PeriodTotals(begin, end)
+	for pol, data := range periodEmis {
+		emis[pol] = gridSrg.ScaleCopy(data.Value())
+		units[pol] = data.Dimensions()
+	}
+	sp.addEmisToReport(emis, units, periodEmis, gi)
+	return
+}
+
+// addEmisToReport adds spatialized emissions to the spatial reports.
+func (sp *SpatialProcessor) addEmisToReport(emis map[Pollutant]*sparse.SparseArray,
+	units map[Pollutant]unit.Dimensions, periodEmis map[Pollutant]*unit.Unit, gi int) error {
+
+	grid := sp.Grids[gi]
+	if _, ok := sp.totalGrid[grid]; !ok {
+		sp.totalGrid[grid] = make(map[Pollutant]*sparse.SparseArray)
+	}
+	for pol, polGridEmis := range emis {
+		unit := units[pol]
+
+		if _, ok := sp.totalGrid[grid][pol]; !ok {
+			sp.totalGrid[grid][pol] =
+				sparse.ZerosSparse(grid.Ny, grid.Nx)
 		}
-		for i, grid := range sp.grids {
-			gridEmis, units, err := r.GriddedEmissions(sp, i, p)
-			if err != nil {
-				return err
-			}
-			if _, ok := sp.totalGrid[grid]; !ok {
-				sp.totalGrid[grid] =
-					make(map[Period]map[string]*sparse.SparseArray)
-			}
-			if _, ok := sp.totalGrid[grid][p]; !ok {
-				sp.totalGrid[grid][p] =
-					make(map[string]*sparse.SparseArray)
-			}
-			for pol, polGridEmis := range gridEmis {
-				if _, ok := sp.totalGrid[grid][p][pol]; !ok {
-					sp.totalGrid[grid][p][pol] =
-						sparse.ZerosSparse(grid.Ny, grid.Nx)
-				}
-				sp.totalGrid[grid][p][pol].AddSparse(polGridEmis)
-				sp.totals[p].add(pol, grid.Name, periodEmis[pol].Val,
-					polGridEmis, units[pol])
-			}
-		}
+		sp.totalGrid[grid][pol].AddSparse(polGridEmis)
+		sp.totals.add(pol, grid.Name, periodEmis[pol].Value(),
+			polGridEmis, unit.String())
 	}
 	return nil
 }
 
 // Report returns summary information on the records that have been processed
 // by sp.
-func (sp *SpatialProcessor) Report() (totals map[Period]*SpatialTotals,
-	totalGrid map[*GridDef]map[Period]map[string]*sparse.SparseArray) {
+func (sp *SpatialProcessor) Report() (totals *SpatialTotals,
+	totalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray) {
 	return sp.totals, sp.totalGrid
 }
 
@@ -547,7 +565,10 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 	for i := 1; i < len(records); i++ {
 		record := records[i]
 		srg := new(SrgSpec)
-		srg.Region = getCountryFromName(record[0])
+		srg.Region, err = countryFromName(record[0])
+		if err != nil {
+			return nil, fmt.Errorf("in ReadSrgSpec: %v", err)
+		}
 		srg.Name = strings.TrimSpace(record[1])
 		srg.Code = record[2]
 		srg.DATASHAPEFILE = record[3]
@@ -731,11 +752,9 @@ func (gr GridRef) GetSrgCode(SCC string, c Country, FIPS string, matchFullSCC bo
 	var err error
 	var matchedVal interface{}
 	if !matchFullSCC {
-		_, _, matchedVal, err = MatchCodeDouble(
-			SCC, FIPS, gr[c])
+		_, _, matchedVal, err = MatchCodeDouble(SCC, FIPS, gr[c])
 	} else {
-		_, matchedVal, err = MatchCode(FIPS,
-			gr[c][SCC])
+		_, matchedVal, err = MatchCode(FIPS, gr[c][SCC])
 	}
 	if err != nil {
 		return "", fmt.Errorf("in aep.GridRef.GetSrgCode: %v. (SCC=%v, Country=%v, FIPS=%v)",

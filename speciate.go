@@ -192,9 +192,16 @@ func (c *Context) readMechAssignment(
 				err.Error()))
 		}
 		mech := rec[0]
-		specID := stringToInt(rec[1])
+		specID64, err := strconv.ParseInt(rec[1], 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		specID := int(specID64)
 		mechGroup := rec[2]
-		ratio := stringToFloat(rec[3])
+		ratio, err := stringToFloat(rec[3])
+		if err != nil {
+			panic(err)
+		}
 		if _, ok := out[mech]; !ok {
 			out[mech] = make(map[int]map[string]float64)
 		}
@@ -238,7 +245,8 @@ func (c *Context) readMechMW(e *ErrCat) map[string]map[string]mechData {
 		mech := rec[0]
 		massOrMol := rec[1] // mol or mass
 		mechGroup := rec[2]
-		MW := stringToFloat(rec[3])
+		MW, err := stringToFloat(rec[3])
+		e.Add(err)
 		if MW < 0. {
 			MW = math.NaN()
 		}
@@ -281,13 +289,15 @@ func (c *Context) readSpecInfoVOC(e *ErrCat) map[int]specInfo {
 			e.Add(fmt.Errorf("Problem reading Species Info file: %v",
 				err.Error()))
 		}
-		id := stringToInt(rec[0])
+		id, err := strconv.ParseInt(rec[0], 10, 64)
+		e.Add(err)
 		name := rec[1]
-		MW := stringToFloat(rec[8])
+		MW, err := stringToFloat(rec[8])
+		e.Add(err)
 		if MW < 0. {
 			MW = math.NaN()
 		}
-		out[id] = specInfo{name, MW}
+		out[int(id)] = specInfo{name, MW}
 	}
 	return out
 }

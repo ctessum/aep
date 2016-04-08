@@ -383,23 +383,38 @@ func (t *temporalSector) getCEMdata() {
 			blrID := trimString(rec[1])
 			yymmdd := rec[2]
 			hour := rec[3]
-			noxmass := float32(stringToFloat(rec[4]))
+			noxmass, err := stringToFloat(rec[4])
+			if err != nil {
+				panic(err)
+			}
 			if noxmass < 0. {
 				noxmass = 0
 			}
-			so2mass := float32(stringToFloat(rec[5]))
+			so2mass, err := stringToFloat(rec[5])
+			if err != nil {
+				panic(err)
+			}
 			if so2mass < 0. {
 				so2mass = 0
 			}
-			gload := float32(stringToFloat(rec[6]))
+			gload, err := stringToFloat(rec[6])
+			if err != nil {
+				panic(err)
+			}
 			if gload < 0. {
 				gload = 0
 			}
-			sload := float32(stringToFloat(rec[7]))
+			sload, err := stringToFloat(rec[7])
+			if err != nil {
+				panic(err)
+			}
 			if sload < 0. {
 				sload = 0
 			}
-			htinput := float32(stringToFloat(rec[8]))
+			htinput, err := stringToFloat(rec[8])
+			if err != nil {
+				panic(err)
+			}
 			if htinput < 0. {
 				htinput = 0
 			}
@@ -409,8 +424,8 @@ func (t *temporalSector) getCEMdata() {
 				t.cemSum[id] = new(cemSum)
 			}
 			// cem time format = "060102 15"
-			t.cemArray[id][yymmdd+" "+hour] = &cemData{NOXMASS: noxmass,
-				SO2MASS: so2mass, GLOAD: gload, SLOAD: sload, HTINPUT: htinput}
+			t.cemArray[id][yymmdd+" "+hour] = &cemData{NOXMASS: float32(noxmass),
+				SO2MASS: float32(so2mass), GLOAD: float32(gload), SLOAD: float32(sload), HTINPUT: float32(htinput)}
 		}
 		f.Close()
 	}
