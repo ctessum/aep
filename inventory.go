@@ -483,15 +483,16 @@ func (e *EmissionsReader) ReadFiles(files []*InventoryFile, f RecFilter) ([]Reco
 }
 
 // splitPol splits a pollutant name from its prefix.
-func splitPol(pol string) (polname, prefix string) {
+func splitPol(pol string) Pollutant {
 	pol = trimString(pol)
+	var p Pollutant
 	if strings.Index(pol, "__") != -1 {
-		polname = strings.Split(pol, "__")[1]
-		prefix = strings.Split(pol, "__")[0]
+		p.Name = strings.Split(pol, "__")[1]
+		p.Prefix = strings.Split(pol, "__")[0]
 	} else {
-		polname = pol
+		p.Name = pol
 	}
-	return
+	return p
 }
 
 type recordErr struct {

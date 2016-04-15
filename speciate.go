@@ -19,10 +19,8 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
-	"bufio"
 	"database/sql"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -34,137 +32,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
-
 var (
 	SpecProfChan = make(chan *SpecProfRequest)
 )
-
-// SpecRef reads the SMOKE gsref file, which maps SCC codes to chemical speciation profiles.
-func (c *Context) SpecRef() (specRef map[string]map[string]interface{}, err error) {
-	specRef = make(map[string]map[string]interface{})
-	// map[SCC][pol]code
-	var record string
-	fid, err := os.Open(c.SpecRefFile)
-	if err != nil {
-		msg := "SpecRef: " + err.Error() + "\nFile= " +
-			c.SpecRefFile + "\nRecord= " + record
-		err = errors.New(msg)
-		return
-	} else {
-		defer fid.Close()
-	}
-	buf := bufio.NewReader(fid)
-	for {
-		record, err = buf.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
-				break
-			} else {
-				msg := record + "\n" + err.Error() + "\nFile= " +
-					c.SpecRefFile + "\nRecord= " + record
-				err = errors.New(msg)
-				return
-			}
-		}
-		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
-		}
-
-		if record[0] != '#' && record[0] != '/' && record[0] != '\n' {
-			// for point sources, only match to SCC code.
-			splitLine := strings.Split(record, ";")
-			SCC := strings.Trim(splitLine[0], "\"")
-			if len(SCC) == 8 {
-				SCC = "00" + SCC
-			}
-			code := strings.Trim(splitLine[1], "\"")
-			pol := strings.Trim(splitLine[2], "\"\n")
-
-			if _, ok := specRef[SCC]; !ok {
-				specRef[SCC] = make(map[string]interface{})
-			}
-			specRef[SCC][pol] = code
-		}
-	}
-	return
-}
-
-// SpecRefCombo reads the SMOKE gspro_combo file, which maps location
-// codes to chemical speciation profiles for mobile sources.
-func (c *Context) SpecRefCombo(runPeriod Period) (specRef map[string]map[string]interface{}, err error) {
-	specRef = make(map[string]map[string]interface{})
-	// map[pol][FIPS][code]frac
-	var record string
-	fid, err := os.Open(c.SpecRefComboFile)
-	if err != nil {
-		msg := "SpecRefCombo: " + err.Error() + "\nFile= " +
-			c.SpecRefComboFile + "\nRecord= " + record
-		err = errors.New(msg)
-		return
-	} else {
-		defer fid.Close()
-	}
-
-	periods := map[string]string{"0": "annual", "1": "jan", "2": "feb",
-		"3": "mar", "4": "apr", "5": "may", "6": "jun", "7": "jul",
-		"8": "aug", "9": "sep", "10": "oct", "11": "nov", "12": "dec"}
-
-	buf := bufio.NewReader(fid)
-	for {
-		record, err = buf.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
-				break
-			} else {
-				msg := record + "\n" + err.Error() + "\nFile= " +
-					c.SpecRefComboFile + "\nRecord= " + record
-				err = errors.New(msg)
-				return
-			}
-		}
-		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
-		}
-
-		if record[0] != '#' && record[0] != '/' && record[0] != '\n' {
-			// for point sources, only match to SCC code.
-			splitLine := strings.Split(record, ";")
-			pol := strings.Trim(splitLine[0], "\" ")
-			// The FIPS number here is 6 characters instead of the usual 5.
-			// The first character is a country code.
-			FIPS := strings.Trim(splitLine[1], "\" ")
-
-			period, ok := periods[splitLine[2]]
-			if !ok {
-				err = fmt.Errorf("Missing or mislabeled period in %v.",
-					c.SpecRefComboFile)
-				panic(err)
-			}
-			if period == runPeriod.String() {
-				if _, ok := specRef[pol]; !ok {
-					specRef[pol] = make(map[string]interface{})
-				}
-				if _, ok := specRef[pol][FIPS]; !ok {
-					specRef[pol][FIPS] = make(map[string]float64)
-				}
-				for i := 4; i < len(splitLine); i += 2 {
-					code := strings.Trim(splitLine[i], "\n\" ")
-					frac, err := strconv.ParseFloat(strings.Trim(splitLine[i+1], "\n\" "), 64)
-					if err != nil {
-						panic(err)
-					}
-					specRef[pol][FIPS].(map[string]float64)[code] = frac
-				}
-			}
-		}
-	}
-	return
-}
 
 // Read file specifying moles of a chemical mechanism model species
 // to chemicals in the SPECIATE database. Data can be obtained at
@@ -661,11 +531,6 @@ func (c *Context) handleGroupString(specName string, groupString sql.NullString)
 		}
 	}
 	return
-}
-
-type SpecRef struct {
-	sRef      map[string]map[string]interface{} // map[SCC][pol]code
-	sRefCombo map[string]map[string]interface{} // map[pol][FIPS][code]frac
 }
 
 func (c *Context) NewSpecRef() (sp *SpecRef, err error) {

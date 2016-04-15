@@ -10,8 +10,8 @@ type SourceData struct {
 	// Five digit FIPS code for state and county (required)
 	FIPS string
 
-	// Ten character Source Classification Code (required)
-	SCC string
+	// Source Classification Code (required)
+	SCC
 
 	// Source type (2 characters maximum), used by SMOKE in determining
 	// applicable MACT-based controls (required)
@@ -61,22 +61,7 @@ func (r *SourceData) parseFIPS(FIPS string) {
 // If SCC is less than 8 digits, add 2 zeros to the front and
 // the rest to the end.
 func (r *SourceData) parseSCC(SCC string) {
-	r.SCC = trimString(SCC)
-	if len(r.SCC) == 8 {
-		r.SCC = "00" + r.SCC
-	} else if len(r.SCC) == 7 {
-		r.SCC = "00" + r.SCC + "0"
-	} else if len(r.SCC) == 6 {
-		r.SCC = "00" + r.SCC + "00"
-	} else if len(r.SCC) == 5 {
-		r.SCC = "00" + r.SCC + "000"
-	} else if len(r.SCC) == 4 {
-		r.SCC = "00" + r.SCC + "0000"
-	} else if len(r.SCC) == 3 {
-		r.SCC = "00" + r.SCC + "00000"
-	} else if len(r.SCC) == 2 {
-		r.SCC = "00" + r.SCC + "000000"
-	}
+	r.SCC = parse(SCC)
 }
 
 // Key returns a unique key for this record.

@@ -175,7 +175,8 @@ type Period int
 // The Periods are the months of the year, annual, or Cem which is hourly
 // continuous emissions monitoring data.
 const (
-	Jan Period = iota + 1
+	Annual Period = iota
+	Jan
 	Feb
 	Mar
 	Apr
@@ -187,8 +188,6 @@ const (
 	Oct
 	Nov
 	Dec
-	Annual
-	Cem
 )
 
 func (p Period) String() string {
@@ -222,6 +221,19 @@ func (p Period) String() string {
 	default:
 		panic(fmt.Sprintf("unknown period: %d", int(p)))
 	}
+}
+
+// periodFromString converts a string representation of a month number
+// to a Period.
+func periodFromString(p string) (Period, error) {
+	i, err := strconv.ParseInt(p, 10, 64)
+	if err != nil {
+		return Period(-9), fmt.Errorf("parsing period %s: %v", p, err)
+	}
+	if i < 0 || i > 12 {
+		return Period(-9), fmt.Errorf("parsing period %s: needs to be between 0 and 12", p)
+	}
+	return Period(i), nil
 }
 
 // periodToTimeInterval calculates the start and the end of the given period

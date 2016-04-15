@@ -24,6 +24,61 @@ import (
 	"strings"
 )
 
+// SCC is the US EPA's Source Classification Code:
+// https://www.cmascenter.org/smoke/documentation/3.6.5/html/ch02s03s05.html.
+type SCC struct {
+	Tier1, Tier2, Tier3, Tier4 int
+}
+
+func cleanSCC(scc string) string {
+	scc = trimString(scc)
+	if len(scc) == 8 {
+		scc = "00" + scc
+	} else if len(scc) == 7 {
+		scc = "00" + scc + "0"
+	} else if len(scc) == 6 {
+		scc = "00" + scc + "00"
+	} else if len(scc) == 5 {
+		scc = "00" + scc + "000"
+	} else if len(scc) == 4 {
+		scc = "00" + scc + "0000"
+	} else if len(scc) == 3 {
+		scc = "00" + scc + "00000"
+	} else if len(scc) == 2 {
+		scc = "00" + scc + "000000"
+	}
+	return scc
+}
+
+// ParseSCC takes and SCC in string format and returns an SCC object.
+func ParseSCC(scc string) SCC {
+	scc = cleanSCC
+	if scc[0:2] == "00" { // 8 digit code
+		return SCC{
+			Tier1: scc[2:3],
+			Tier2: scc[3:5],
+			Tier3: scc[5:8],
+			Tier4: scc[8:10],
+		}
+	}
+	return SCC{ // 10 digit code
+		Tier1: scc[0:2],
+		Tier2: scc[2:4],
+		Tier3: scc[4:7],
+		Tier4: scc[7:10],
+	}
+}
+
+func (s SCC) String() string {
+	return s.Tier1 + s.Tier2 + s.Tier3 + s.Tier4
+}
+
+// matchSCC matches scc with one of sccs. If matchFull is true, an exact
+// match must be made, otherwise the closest more general SCC is returned.
+func matchSCC(scc string, sccs map[string]empty, matchFull bool) string {
+
+}
+
 // For cases where a specific code needs to be matched with a more
 // general code. For instance, if code is "10101" and matchmap is
 // {"10102":"xxx","10100":"yyyy"}, "10100" will be returned as the
