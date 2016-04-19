@@ -158,7 +158,7 @@ func (r *SourceData) Spatialize(sp *SpatialProcessor, gi int) (
 		return
 	}
 
-	gridSrg, coveredByGrid, err = sp.surrogate(srgSpec, sp.Grids[gi], r.FIPS)
+	gridSrg, coveredByGrid, err = sp.Surrogate(srgSpec, sp.Grids[gi], r.FIPS)
 	if err != nil {
 		return
 	}
@@ -315,7 +315,7 @@ func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *sr
 				if !r.waitInQueue {
 					// Skip the queue for surrogates that are being created to merge into
 					// other surrogates to avoid a channel lock.
-					r.data, r.err = sp.CreateSurrogate(r.srgSpec, r.grid)
+					r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
 					if r.err != nil {
 						r.returnChan <- r
 					}
@@ -386,11 +386,11 @@ func (sp *SpatialProcessor) writeSrgToDisk(r *srgRequest) error {
 	return nil
 }
 
-// surrogate gets the specified spatial surrogate.
+// Surrogate gets the specified spatial surrogate.
 // It is important not to edit the returned surrogate in place, because the
 // same copy is used over and over again. The second return value indicates
 // whether the shape corresponding to fips is completely covered by the grid.
-func (sp *SpatialProcessor) surrogate(srgSpec *SrgSpec, grid *GridDef, fips string) (*sparse.SparseArray, bool, error) {
+func (sp *SpatialProcessor) Surrogate(srgSpec *SrgSpec, grid *GridDef, fips string) (*sparse.SparseArray, bool, error) {
 
 	r := newSrgRequest(srgSpec, grid)
 	sp.surrogateGeneratorChan <- r
@@ -458,7 +458,7 @@ func newSrgRequest(srgSpec *SrgSpec, grid *GridDef) *srgRequest {
 // Generate spatial surrogates
 func (sp *SpatialProcessor) surrogateGenerator(inChan chan *srgRequest) {
 	for r := range inChan {
-		r.data, r.err = sp.CreateSurrogate(r.srgSpec, r.grid)
+		r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
 		r.returnChan <- r
 	}
 }
@@ -600,9 +600,9 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 						strings.TrimSpace(mulFunc[0]))
 					srg.WeightFactors = append(srg.WeightFactors, 1.)
 				} else if len(mulFunc) == 2 {
-					v, err := strconv.ParseFloat(mulFunc[0], 64)
-					if err != nil {
-						return nil, fmt.Errorf("srgspec weight function: %v", err)
+					v, err2 := strconv.ParseFloat(mulFunc[0], 64)
+					if err2 != nil {
+						return nil, fmt.Errorf("srgspec weight function: %v", err2)
 					}
 					srg.WeightColumns = append(srg.WeightColumns,
 						strings.TrimSpace(mulFunc[1]))
@@ -623,9 +623,9 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 			for _, s2 := range s {
 				s3 := strings.Split(s2, "*")
 				srg.MergeNames = append(srg.MergeNames, strings.TrimSpace(s3[1]))
-				val, err := strconv.ParseFloat(strings.TrimSpace(s3[0]), 64)
-				if err != nil {
-					return nil, err
+				val, err2 := strconv.ParseFloat(strings.TrimSpace(s3[0]), 64)
+				if err2 != nil {
+					return nil, err2
 				}
 				srg.MergeMultipliers = append(srg.MergeMultipliers, val)
 			}
@@ -710,7 +710,7 @@ func ReadGridRef(f io.Reader) (*GridRef, error) {
 	for {
 		record, err := buf.ReadString('\n')
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err == io.EOF {
 				break
 			} else {
 				return nil, fmt.Errorf("in ReadGridRef: %v \nrecord= %s",

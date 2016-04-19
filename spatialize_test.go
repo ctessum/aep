@@ -161,6 +161,9 @@ func TestCreateSurrogates(t *testing.T) {
 		t.Fatal(err)
 	}
 	grid, err := createGrid()
+	if err != nil {
+		t.Fatal(err)
+	}
 	matchFullSCC := false
 	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, matchFullSCC)
 
@@ -174,7 +177,7 @@ func TestCreateSurrogates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		srgs, err := sp.CreateSurrogate(srgSpec, grid)
+		srgs, err := sp.createSurrogate(srgSpec, grid)
 		if err != nil {
 			t.Errorf("creating surrogate %s: %v", code, err)
 		}

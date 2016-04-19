@@ -179,7 +179,7 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*Grid
 		}
 		if r.data == nil {
 			// If it's not in the cache, directly create it.
-			r.data, r.err = sp.CreateSurrogate(newSrg, gridData)
+			r.data, r.err = sp.createSurrogate(newSrg, gridData)
 			if r.err != nil {
 				return nil, err
 			}
@@ -189,9 +189,9 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*Grid
 	return mergeSrgs(mrgSrgs, srg.MergeMultipliers), nil
 }
 
-// CreateSurrogate creates a new gridding surrogate based on a
+// createSurrogate creates a new gridding surrogate based on a
 // surrogate specification and grid definition.
-func (sp SpatialProcessor) CreateSurrogate(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
+func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
 	log.Println("Creating", srg.Code, srg.Name)
 	if len(srg.MergeNames) != 0 {
 		return sp.createMerged(srg, gridData)
