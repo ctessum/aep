@@ -40,9 +40,9 @@ import (
 
 // SpatialProcessor spatializes emissions records.
 type SpatialProcessor struct {
-	srgSpecs               *SrgSpecs
-	Grids                  []*GridDef
-	gridRef                *GridRef
+	SrgSpecs
+	Grids []*GridDef
+	GridRef
 	surrogateGeneratorChan chan *srgRequest
 	srgCache               map[string]*sparse.SparseArray
 
@@ -86,9 +86,9 @@ type SpatialProcessor struct {
 // NewSpatialProcessor creates a new spatial processor.
 func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef, inputSR proj.SR, matchFullSCC bool) *SpatialProcessor {
 	sp := new(SpatialProcessor)
-	sp.srgSpecs = srgSpecs
+	sp.SrgSpecs = *srgSpecs
 	sp.Grids = grids
-	sp.gridRef = gridRef
+	sp.GridRef = *gridRef
 	sp.inputSR = inputSR
 	sp.matchFullSCC = matchFullSCC
 
@@ -148,12 +148,12 @@ func (r *SourceData) Spatialize(sp *SpatialProcessor, gi int) (
 	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
 
 	var srgNum string
-	srgNum, err = sp.gridRef.GetSrgCode(r.SCC, r.Country, r.FIPS, sp.matchFullSCC)
+	srgNum, err = sp.GridRef.GetSrgCode(r.SCC, r.Country, r.FIPS, sp.matchFullSCC)
 	if err != nil {
 		return
 	}
 	var srgSpec *SrgSpec
-	srgSpec, err = sp.srgSpecs.GetByCode(r.Country, srgNum)
+	srgSpec, err = sp.SrgSpecs.GetByCode(r.Country, srgNum)
 	if err != nil {
 		return
 	}
@@ -404,7 +404,7 @@ func (sp *SpatialProcessor) Surrogate(srgSpec *SrgSpec, grid *GridDef, fips stri
 	}
 	// if srg was nil, try backup surrogates.
 	for _, newName := range srgSpec.BackupSurrogateNames {
-		newSrgSpec, err := sp.srgSpecs.GetByName(srgSpec.Region, newName)
+		newSrgSpec, err := sp.SrgSpecs.GetByName(srgSpec.Region, newName)
 		if err != nil {
 			return nil, false, err
 		}

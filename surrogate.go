@@ -163,7 +163,7 @@ func ParseSurrogateFilter(filterFunction string) *SurrogateFilter {
 func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
 	mrgSrgs := make([]*GriddingSurrogate, len(srg.MergeNames))
 	for i, mrgName := range srg.MergeNames {
-		newSrg, err := sp.srgSpecs.GetByName(srg.Region, mrgName)
+		newSrg, err := sp.SrgSpecs.GetByName(srg.Region, mrgName)
 		if err != nil {
 			return nil, err
 		}
