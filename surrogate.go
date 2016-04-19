@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -382,13 +383,12 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 	}
 	defer srgShp.Close()
 
-	// TODO: For now, assume lambert projection. This needs to be fixed.
-	//prjf, err := os.Open(strings.TrimSuffix(srg.WEIGHTSHAPEFILE, ".shp") + ".prj")
-	//if err != nil {
-	//	return nil, err
-	//}
-	//srgSR, err := proj.ReadPrj(prjf)
-	srgSR, err := proj.FromProj4("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
+	prjf, err := os.Open(strings.TrimSuffix(srg.WEIGHTSHAPEFILE, ".shp") + ".prj")
+	if err != nil {
+		return nil, err
+	}
+	srgSR, err := proj.ReadPrj(prjf)
+	//srgSR, err := proj.FromProj4("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
 	if err != nil {
 		return nil, err
 	}
@@ -469,8 +469,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 						} else {
 							v, err = strconv.ParseFloat(data[name], 64)
 							if err != nil {
-								fmt.Println("xxxxxxxxxxxxxxxxxxxxxxxxxx")
-								return srgData, err
+								return srgData, fmt.Errorf("aep.getSrgData: %v", err)
 							}
 						}
 						weightval += v * srg.WeightFactors[i]
