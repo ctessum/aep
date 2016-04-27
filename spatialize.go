@@ -48,7 +48,7 @@ type SpatialProcessor struct {
 
 	// inputSR is the spatial reference of the input data. It will usually be
 	// "+longlat".
-	inputSR proj.SR
+	inputSR *proj.SR
 
 	// matchFullSCC indicates whether partial SCC matches are okay.
 	matchFullSCC bool
@@ -84,7 +84,7 @@ type SpatialProcessor struct {
 }
 
 // NewSpatialProcessor creates a new spatial processor.
-func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef, inputSR proj.SR, matchFullSCC bool) *SpatialProcessor {
+func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef, inputSR *proj.SR, matchFullSCC bool) *SpatialProcessor {
 	sp := new(SpatialProcessor)
 	sp.SrgSpecs = *srgSpecs
 	sp.Grids = grids
@@ -175,8 +175,8 @@ func (r *SourceData) Spatialize(sp *SpatialProcessor, gi int) (
 func (r *PointSourceData) Spatialize(sp *SpatialProcessor, gi int) (
 	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
 
-	var ct *proj.CoordinateTransform
-	ct, err = proj.NewCoordinateTransform(r.SR, sp.Grids[gi].SR)
+	var ct proj.Transformer
+	ct, err = r.SR.NewTransform(sp.Grids[gi].SR)
 	if err != nil {
 		return
 	}

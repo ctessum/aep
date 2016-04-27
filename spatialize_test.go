@@ -100,7 +100,7 @@ func TestReadGridRef(t *testing.T) {
 }
 
 func createGrid() (*GridDef, error) {
-	sr, err := proj.FromProj4("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
+	sr, err := proj.Parse("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
 	if err != nil {
 		return nil, err
 	}
@@ -122,22 +122,22 @@ func TestNewGridRegular(t *testing.T) {
 		t.Errorf("grid extent = %g, want %g", op.Area(grid.Extent), gridArea)
 	}
 	cellResult := []*GridCell{
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 280000}}}, Row: 0, Col: 0, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 300000}}}, Row: 1, Col: 0, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 320000}}}, Row: 2, Col: 0, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 340000}}}, Row: 3, Col: 0, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 280000}}}, Row: 0, Col: 1, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 300000}}}, Row: 1, Col: 1, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 320000}}}, Row: 2, Col: 1, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 340000}}}, Row: 3, Col: 1, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 280000}}}, Row: 0, Col: 2, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 300000}}}, Row: 1, Col: 2, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 320000}}}, Row: 2, Col: 2, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 340000}}}, Row: 3, Col: 2, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 280000}}}, Row: 0, Col: 3, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 300000}}}, Row: 1, Col: 3, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 320000}}}, Row: 2, Col: 3, Weight: 0},
-		&GridCell{T: geom.Polygon{[]geom.Point{geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 340000}}}, Row: 3, Col: 3, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.87e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.87e+06, Y: 280000}}}, Row: 0, Col: 0, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.87e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.87e+06, Y: 300000}}}, Row: 1, Col: 0, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.87e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.87e+06, Y: 320000}}}, Row: 2, Col: 0, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.87e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 360000}, geom.Point{X: 1.87e+06, Y: 340000}}}, Row: 3, Col: 0, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.89e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.89e+06, Y: 280000}}}, Row: 0, Col: 1, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.89e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.89e+06, Y: 300000}}}, Row: 1, Col: 1, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.89e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.89e+06, Y: 320000}}}, Row: 2, Col: 1, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.89e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 360000}, geom.Point{X: 1.89e+06, Y: 340000}}}, Row: 3, Col: 1, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.91e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.91e+06, Y: 280000}}}, Row: 0, Col: 2, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.91e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.91e+06, Y: 300000}}}, Row: 1, Col: 2, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.91e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.91e+06, Y: 320000}}}, Row: 2, Col: 2, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.91e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 360000}, geom.Point{X: 1.91e+06, Y: 340000}}}, Row: 3, Col: 2, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.93e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 280000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.93e+06, Y: 280000}}}, Row: 0, Col: 3, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.93e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 300000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.93e+06, Y: 300000}}}, Row: 1, Col: 3, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.93e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 320000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.93e+06, Y: 320000}}}, Row: 2, Col: 3, Weight: 0},
+		&GridCell{Polygonal: geom.Polygon{{geom.Point{X: 1.93e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 340000}, geom.Point{X: 1.95e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 360000}, geom.Point{X: 1.93e+06, Y: 340000}}}, Row: 3, Col: 3, Weight: 0},
 	}
 	diff := pretty.Diff(cellResult, grid.Cells)
 	if len(diff) != 0 {
@@ -146,7 +146,7 @@ func TestNewGridRegular(t *testing.T) {
 }
 
 func TestCreateSurrogates(t *testing.T) {
-	inputSR, err := proj.FromProj4("+proj=longlat")
+	inputSR, err := proj.Parse("+proj=longlat")
 	if err != nil {
 		t.Error(err)
 	}
@@ -244,7 +244,7 @@ func TestCreateSurrogates(t *testing.T) {
 }
 
 func TestSpatializeRecord(t *testing.T) {
-	inputSR, err := proj.FromProj4("+proj=longlat")
+	inputSR, err := proj.Parse("+proj=longlat")
 	if err != nil {
 		t.Error(err)
 	}
@@ -273,11 +273,11 @@ func TestSpatializeRecord(t *testing.T) {
 	}
 
 	// Test spatial projection.
-	ct, err := proj.NewCoordinateTransform(pointData.SR, sp.Grids[0].SR)
+	ct, err := pointData.SR.NewTransform(sp.Grids[0].SR)
 	if err != nil {
 		t.Error(err)
 	}
-	pointI, err := ct.Reproject(pointData.Point)
+	pointI, err := pointData.Point.Transform(ct)
 	if err != nil {
 		t.Error(err)
 	}

@@ -151,12 +151,11 @@ func (t *temporalSector) getTemporalRef() (err error) {
 	var record string
 	fid, err := os.Open(t.c.TemporalRefFile)
 	if err != nil {
-		err = fmt.Errorf("termporalRef: %v \nFile= %v\nRecord= ",
+		err = fmt.Errorf("termporalRef: %v \nFile= %v\nRecord= %v",
 			err.Error(), t.c.TemporalRefFile, record)
 		return
-	} else {
-		defer fid.Close()
 	}
+	defer fid.Close()
 	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
@@ -165,7 +164,7 @@ func (t *temporalSector) getTemporalRef() (err error) {
 				err = nil
 				break
 			} else {
-				err = fmt.Errorf("TemporalRef: %v \nFile= %v\nRecord= ",
+				err = fmt.Errorf("TemporalRef: %v \nFile= %v\nRecord= %v",
 					err.Error(), t.c.TemporalRefFile, record)
 				return
 			}

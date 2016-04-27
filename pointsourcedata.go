@@ -57,22 +57,22 @@ type PointSourceData struct {
 	geom.Point
 
 	// SR holds the spatial reference system of the coordinates of this point
-	proj.SR
+	SR *proj.SR
 }
 
-var longlat, nad27, nad83 proj.SR
+var longlat, nad27, nad83 *proj.SR
 
 func init() {
 	var err error
-	longlat, err = proj.FromProj4("+proj=longlat")
+	longlat, err = proj.Parse("+proj=longlat")
 	if err != nil {
 		panic(err)
 	}
-	nad27, err = proj.FromProj4("+proj=longlat +datum=NAD27")
+	nad27, err = proj.Parse("+proj=longlat +datum=NAD27")
 	if err != nil {
 		panic(err)
 	}
-	nad83, err = proj.FromProj4("+proj=longlat +datum=NAD83")
+	nad83, err = proj.Parse("+proj=longlat +datum=NAD83")
 	if err != nil {
 		panic(err)
 	}

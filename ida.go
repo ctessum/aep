@@ -54,9 +54,9 @@ func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) e
 	// get pollutant IDs
 	var polids []string
 	for {
-		record, err := buf.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("aep: in file %s: %v", f.Name, err)
+		record, err2 := buf.ReadString('\n')
+		if err2 != nil {
+			return fmt.Errorf("aep: in file %s: %v", f.Name, err2)
 		}
 		if len(record) > 6 && record[1:6] == "POLID" && len(polids) == 0 {
 			polids = strings.Split(strings.Trim(record[6:], " \n\r"), " ")
@@ -64,9 +64,9 @@ func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) e
 		if len(record) > 5 && record[1:5] == "DATA" && len(polids) == 0 {
 			polids = strings.Split(strings.Trim(record[5:], " \n\r"), " ")
 		}
-		end, err := endofHeader(buf)
-		if err != nil {
-			return err
+		end, err3 := endofHeader(buf)
+		if err3 != nil {
+			return err3
 		}
 		if end {
 			break

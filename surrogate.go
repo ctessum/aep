@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,7 +32,6 @@ import (
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/index/rtree"
 	"github.com/ctessum/geom/op"
-	"github.com/ctessum/geom/proj"
 )
 
 type srgGenWorker struct {
@@ -101,10 +99,10 @@ func mergeSrgs(srgs []*GriddingSurrogate, factors []float64) *GriddingSurrogate 
 			}
 			for _, cell := range gsd.Cells {
 				o.Srg[id].Cells = append(o.Srg[id].Cells, &GridCell{
-					Row:    cell.Row,
-					Col:    cell.Col,
-					Weight: cell.Weight * fac,
-					T:      cell.T,
+					Row:       cell.Row,
+					Col:       cell.Col,
+					Weight:    cell.Weight * fac,
+					Polygonal: cell.Polygonal,
 				})
 			}
 		}
@@ -115,7 +113,7 @@ func mergeSrgs(srgs []*GriddingSurrogate, factors []float64) *GriddingSurrogate 
 // GriddedSrgData holds the data for a single input shape of a gridding surrogate.
 type GriddedSrgData struct {
 	InputID              string
-	InputGeom            geom.T
+	InputGeom            geom.Polygonal
 	Cells                []*GridCell
 	SingleShapeSrgWeight float64
 	CoveredByGrid        bool
@@ -123,7 +121,7 @@ type GriddedSrgData struct {
 
 type srgHolder struct {
 	Weight float64
-	geom.T
+	geom.Geom
 }
 
 // SurrogateFilter can be used to limit which rows in a shapefile are
@@ -281,7 +279,7 @@ func (g *GriddedSrgData) WriteToShp(s *shp.Encoder) error {
 		} else {
 			covered = "F"
 		}
-		err := s.EncodeFields(cell.T,
+		err := s.EncodeFields(cell.Polygonal,
 			cell.Row, cell.Col, g.InputID, cell.Weight, covered)
 		if err != nil {
 			return err
@@ -291,7 +289,7 @@ func (g *GriddedSrgData) WriteToShp(s *shp.Encoder) error {
 }
 
 // Get input shapes. tol is simplifcation tolerance.
-func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geom.T, error) {
+func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geom.Polygonal, error) {
 	srg.progressLock.Lock()
 	srg.status = "getting surrogate input shape data"
 	srg.progress = 0.
@@ -302,66 +300,44 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 	if err != nil {
 		return nil, err
 	}
-	//prjf, err := os.Open(strings.TrimSuffix(srg.DATASHAPEFILE, ".shp") + ".prj")
-	//if err != nil {
-	//	return nil, err
-	//}
-	// TODO: For now, assume lambert projection. This needs to be fixed.
-	inputSR, err := proj.FromProj4("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
-	//inputSR, err := proj.ReadPrj(prjf)
+	inputSR, err := inputShp.SR()
 	if err != nil {
 		return nil, err
 	}
-	ct, err := proj.NewCoordinateTransform(inputSR, gridData.SR)
+	ct, err := inputSR.NewTransform(gridData.SR)
 	if err != nil {
 		return nil, err
 	}
-	inputData := make(map[string]geom.T)
-	var ggeom geom.T
-	var fields map[string]string
-	var intersects bool
-	var more bool
-	gridBounds := gridData.Extent.Bounds(nil)
+	inputData := make(map[string]geom.Polygonal)
+	gridBounds := gridData.Extent.Bounds()
 	for {
-		ggeom, fields, more = inputShp.DecodeRowFields(srg.DATAATTRIBUTE)
+		g, fields, more := inputShp.DecodeRowFields(srg.DATAATTRIBUTE)
 		if !more {
 			break
 		}
+		g, err = g.Transform(ct)
+		if err != nil {
+			return inputData, err
+		}
+		ggeom := g.(geom.Polygonal)
 		srg.progressLock.Lock()
 		srg.progress += 100. / float64(inputShp.AttributeCount())
 		srg.progressLock.Unlock()
 
-		if err := op.FixOrientation(ggeom); err != nil {
-			// op.Within requires correct orientation.
-			return inputData, err
-		}
+		ggeom.FixOrientation() // 'Within' requires correct orientation.
 
-		ggeom, err = ct.Reproject(ggeom)
-		if err != nil {
-			return inputData, err
-		}
 		if tol > 0 {
-			ggeom, err = op.Simplify(ggeom, tol)
-			if err != nil {
-				// TODO: Fix this upstream
-				log.Println(err, "Problem simplifying")
-				continue
-				//return inputData, err
-			}
+			ggeom = ggeom.Simplify(tol).(geom.Polygonal)
 		}
 
-		intersects = ggeom.Bounds(nil).Overlaps(gridBounds)
+		intersects := ggeom.Bounds().Overlaps(gridBounds)
 		if intersects {
 			inputID := fields[srg.DATAATTRIBUTE]
 			// Extend existing polygon if one already exists for this InputID
 			if _, ok := inputData[inputID]; !ok {
 				inputData[inputID] = ggeom
 			} else {
-				inputData[inputID], err = op.Construct(ggeom,
-					inputData[inputID], op.UNION)
-				if err != nil {
-					return inputData, err
-				}
+				inputData[inputID] = ggeom.Union(inputData[inputID])
 			}
 		}
 	}
@@ -383,16 +359,12 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 	}
 	defer srgShp.Close()
 
-	prjf, err := os.Open(strings.TrimSuffix(srg.WEIGHTSHAPEFILE, ".shp") + ".prj")
+	srgSR, err := srgShp.SR()
 	if err != nil {
 		return nil, err
 	}
-	srgSR, err := proj.ReadPrj(prjf)
-	//srgSR, err := proj.FromProj4("+proj=lcc +lat_1=33.000000 +lat_2=45.000000 +lat_0=40.000000 +lon_0=-97.000000 +x_0=0 +y_0=0 +a=6370997.000000 +b=6370997.000000 +to_meter=1")
-	if err != nil {
-		return nil, err
-	}
-	ct, err := proj.NewCoordinateTransform(srgSR, gridData.SR)
+
+	ct, err := srgSR.NewTransform(gridData.SR)
 	if err != nil {
 		return nil, err
 	}
@@ -404,14 +376,14 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 		fieldNames = append(fieldNames, srg.WeightColumns...)
 	}
 	srgData := rtree.NewTree(25, 50)
-	var recGeom geom.T
+	var recGeom geom.Geom
 	var data map[string]string
 	var intersects bool
 	var keepFeature bool
 	var featureVal string
 	var size float64
 	var more bool
-	gridBounds := gridData.Extent.Bounds(nil)
+	gridBounds := gridData.Extent.Bounds()
 	for {
 		recGeom, data, more = srgShp.DecodeRowFields(fieldNames...)
 		if !more {
@@ -443,20 +415,17 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 		}
 		if keepFeature && recGeom != nil {
 			srgH := new(srgHolder)
-			srgH.T, err = ct.Reproject(recGeom)
+			srgH.Geom, err = recGeom.Transform(ct)
 			if err != nil {
 				return srgData, err
 			}
 			if tol > 0 {
-				srgH.T, err = op.Simplify(srgH.T, tol)
-				if err != nil {
-					// TODO: Fix this upstream
-					log.Println(err, "Problem simplifying")
-					continue
-					//return srgData, err
+				switch srgH.Geom.(type) {
+				case geom.Simplifier:
+					srgH.Geom = srgH.Geom.(geom.Simplifier).Simplify(tol)
 				}
 			}
-			intersects = srgH.T.Bounds(nil).Overlaps(gridBounds)
+			intersects = srgH.Geom.Bounds().Overlaps(gridBounds)
 			if intersects {
 				if len(srg.WeightColumns) != 0 {
 					weightval := 0.
@@ -474,9 +443,9 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 						}
 						weightval += v * srg.WeightFactors[i]
 					}
-					switch srgH.T.(type) {
-					case geom.Polygon, geom.MultiPolygon:
-						size = op.Area(srgH.T)
+					switch srgH.Geom.(type) {
+					case geom.Polygonal:
+						size = srgH.Geom.(geom.Polygonal).Area()
 						if size == 0. {
 							if tol > 0 {
 								// We probably simplified the shape down to zero area.
@@ -490,18 +459,19 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 							}
 						}
 						srgH.Weight = weightval / size
-					case geom.LineString, geom.MultiLineString:
-						size = op.Length(srgH.T)
+					case geom.Linear:
+						size = srgH.Geom.(geom.Linear).Length()
 						if size == 0. {
 							err = fmt.Errorf("Length should not equal "+
 								"zero in %v", srg.WEIGHTSHAPEFILE)
 							return srgData, err
 						}
 						srgH.Weight = weightval / size
-					case geom.Point:
+					case geom.PointLike:
 						srgH.Weight = weightval
 					default:
-						err = op.UnsupportedGeometryError{G: srgH.T}
+						err = fmt.Errorf("aep: in file %s, unsupported geometry type %#v",
+							srg.WEIGHTSHAPEFILE, srgH.Geom)
 						return srgData, err
 					}
 				} else {
@@ -601,7 +571,7 @@ func (s *srgGenWorker) intersections1(
 	var wg sync.WaitGroup
 
 	// Figure out which grid cells might intersect with the input shape
-	inputBounds := data.InputGeom.Bounds(nil)
+	inputBounds := data.InputGeom.Bounds()
 	GridCells = make([]*GridCell, 0, 30)
 	wg.Add(nprocs)
 	for procnum := 0; procnum < nprocs; procnum++ {
@@ -610,7 +580,7 @@ func (s *srgGenWorker) intersections1(
 			var intersects bool
 			for i := procnum; i < len(s.GridCells.Cells); i += nprocs {
 				cell := s.GridCells.Cells[i]
-				intersects = cell.T.Bounds(nil).Overlaps(inputBounds)
+				intersects = cell.Polygonal.Bounds().Overlaps(inputBounds)
 				if intersects {
 					mu.Lock()
 					GridCells = append(GridCells, cell)
@@ -630,51 +600,18 @@ func (s *srgGenWorker) intersections1(
 	errChan := make(chan error)
 	for procnum := 0; procnum < nprocs; procnum++ {
 		go func(procnum int) {
-			var err2 error
 			for i := procnum; i < len(srgsWithinBounds); i += nprocs {
-				var intersection geom.T
 				srg := srgsWithinBounds[i].(*srgHolder)
-				switch srg.T.(type) {
-				case geom.Point:
-					var in bool
-					in, err2 = op.Within(srg.T, data.InputGeom)
-					if err2 != nil {
-						errChan <- err2
-						return
-					}
-					if in {
-						intersection = srg.T
-					} else {
-						continue
-					}
-				default:
-					intersection, err2 = op.Construct(srg.T,
-						data.InputGeom, op.INTERSECTION)
-					if err2 != nil {
-						log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
-						continue
-					}
-					if intersection == nil {
-						continue
-					}
+				intersection := intersection(srg.Geom, data.InputGeom)
+				if intersection == nil {
+					continue
 				}
 				mu.Lock()
 				srgs = append(srgs, &srgHolder{Weight: srg.Weight,
-					T: intersection})
+					Geom: intersection})
 				// Add the individual surrogate weight to the total
 				// weight for the input shape.
-				switch srg.T.(type) {
-				case geom.Polygon, geom.MultiPolygon:
-					singleShapeSrgWeight += srg.Weight *
-						op.Area(intersection)
-				case geom.LineString, geom.MultiLineString:
-					singleShapeSrgWeight += srg.Weight *
-						op.Length(intersection)
-				case geom.Point:
-					singleShapeSrgWeight += srg.Weight
-				default:
-					panic(op.UnsupportedGeometryError{G: intersection})
-				}
+				singleShapeSrgWeight += geomWeight(srg.Weight, intersection)
 				mu.Unlock()
 			}
 			errChan <- nil
@@ -686,6 +623,44 @@ func (s *srgGenWorker) intersections1(
 		}
 	}
 	return
+}
+
+// intersection calculates the intersection of g and poly
+func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
+	var intersection geom.Geom
+	switch g.(type) {
+	case geom.PointLike:
+		in := g.Within(poly)
+		if in {
+			intersection = g
+		} else {
+			return nil
+		}
+	case geom.Polygonal:
+		intersection = g.(geom.Polygonal).Intersection(poly)
+	case geom.Linear:
+		var err error
+		intersection, err = op.Construct(g,
+			poly, op.INTERSECTION)
+		if err != nil {
+			log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
+		}
+	}
+	return intersection
+}
+
+// geomWeight multiplies w by a relevant property of g.
+func geomWeight(w float64, g geom.Geom) float64 {
+	switch g.(type) {
+	case geom.Polygonal:
+		return w * g.(geom.Polygonal).Area()
+	case geom.LineString, geom.MultiLineString:
+		return w * g.(geom.Linear).Length()
+	case geom.PointLike:
+		return w
+	default:
+		panic(op.UnsupportedGeometryError{G: g})
+	}
 }
 
 // Given the surrogate shapes that are within an input shape,
@@ -702,47 +677,15 @@ func (s *srgGenWorker) intersections2(data *GriddedSrgData,
 	errChan := make(chan error)
 	for procnum := 0; procnum < nprocs; procnum++ {
 		go func(procnum int) {
-			var err2 error
 			for i := procnum; i < len(GridCells); i += nprocs {
 				cell := GridCells[i].Copy()
-				var intersection geom.T
 				for _, srg := range InputShapeSrgs {
-					switch srg.T.(type) {
-					case geom.Point:
-						var in bool
-						in, err2 = op.Within(srg.T, cell.T)
-						if err2 != nil {
-							errChan <- err2
-							return
-						}
-						if in {
-							intersection = srg.T
-						} else {
-							continue
-						}
-					default:
-						intersection, err2 = op.Construct(srg.T,
-							cell.T, op.INTERSECTION)
-						if err2 != nil {
-							log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
-							continue
-						}
-						if intersection == nil {
-							continue
-						}
+					intersection := intersection(srg.Geom, cell.Polygonal)
+					if intersection == nil {
+						continue
 					}
-					switch srg.T.(type) {
-					case geom.Polygon, geom.MultiPolygon:
-						cell.Weight += srg.Weight * op.Area(intersection) /
-							data.SingleShapeSrgWeight
-					case geom.LineString, geom.MultiLineString:
-						cell.Weight += srg.Weight * op.Length(intersection) /
-							data.SingleShapeSrgWeight
-					case geom.Point:
-						cell.Weight += srg.Weight / data.SingleShapeSrgWeight
-					default:
-						panic(op.UnsupportedGeometryError{G: intersection})
-					}
+					cell.Weight += geomWeight(srg.Weight, intersection) /
+						data.SingleShapeSrgWeight
 				}
 				mu.Lock()
 				if cell.Weight > 0. {

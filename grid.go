@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 
 	"bitbucket.org/ctessum/sparse"
@@ -47,15 +46,15 @@ type GridDef struct {
 	X0, Y0        float64
 	TimeZones     map[string]*sparse.SparseArray
 	Cells         []*GridCell
-	SR            proj.SR
-	Extent        geom.T
+	SR            *proj.SR
+	Extent        geom.Polygonal
 	IrregularGrid bool // whether the grid is a regular grid
 	rtree         *rtree.Rtree
 }
 
 // GridCell defines an individual cell in a grid.
 type GridCell struct {
-	geom.T
+	geom.Polygonal
 	Row, Col int
 	Weight   float64
 	TimeZone string
@@ -64,7 +63,7 @@ type GridCell struct {
 // Copy copies a grid cell.
 func (c *GridCell) Copy() *GridCell {
 	o := new(GridCell)
-	o.T = c.T
+	o.Polygonal = c.Polygonal
 	o.Row, o.Col = c.Row, c.Col
 	return o
 }
@@ -72,7 +71,7 @@ func (c *GridCell) Copy() *GridCell {
 // NewGridRegular creates a new regular grid, where all grid cells are the
 // same size.
 func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
-	sr proj.SR) (grid *GridDef) {
+	sr *proj.SR) (grid *GridDef) {
 	grid = new(GridDef)
 	grid.Name = Name
 	grid.Nx, grid.Ny = Nx, Ny
@@ -89,18 +88,18 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			x := grid.X0 + float64(ix)*grid.Dx
 			y := grid.Y0 + float64(iy)*grid.Dy
 			cell.Row, cell.Col = iy, ix
-			cell.T = geom.T(geom.Polygon([][]geom.Point{{
+			cell.Polygonal = geom.Polygon([][]geom.Point{{
 				{x, y}, {x + grid.Dx, y},
-				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}}))
+				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}})
 			grid.rtree.Insert(cell)
 			grid.Cells[i] = cell
 			i++
 		}
 	}
-	grid.Extent = geom.T(geom.Polygon([][]geom.Point{{{X0, Y0},
+	grid.Extent = geom.Polygon([][]geom.Point{{{X0, Y0},
 		{X0 + Dx*float64(Nx), Y0},
 		{X0 + Dx*float64(Nx), Y0 + Dy*float64(Ny)},
-		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}}))
+		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}})
 	return
 }
 
@@ -108,7 +107,7 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 // Irregular grids have 1 column and n rows, where n is the number of
 // shapes in g. inputSR is the spatial reference of g, and outputSR is the
 // desired spatial reference of the grid.
-func NewGridIrregular(Name string, g []geom.T, inputSR, outputSR proj.SR) (grid *GridDef, err error) {
+func NewGridIrregular(Name string, g []geom.Polygonal, inputSR, outputSR *proj.SR) (grid *GridDef, err error) {
 	grid = new(GridDef)
 	grid.Name = Name
 	grid.SR = outputSR
@@ -116,32 +115,28 @@ func NewGridIrregular(Name string, g []geom.T, inputSR, outputSR proj.SR) (grid 
 	grid.Cells = make([]*GridCell, len(g))
 	grid.Ny = len(g)
 	grid.Nx = 1
-	var ct *proj.CoordinateTransform
-	ct, err = proj.NewCoordinateTransform(inputSR, outputSR)
+	var ct proj.Transformer
+	ct, err = inputSR.NewTransform(outputSR)
 	if err != nil {
 		return
 	}
 	grid.rtree = rtree.NewTree(25, 50)
 	for i, gg := range g {
 		cell := new(GridCell)
-		cell.T, err = ct.Reproject(gg)
+		var gg2 geom.Geom
+		gg2, err = gg.Transform(ct)
 		if err != nil {
 			return
 		}
+		cell.Polygonal = gg2.(geom.Polygonal)
 		cell.Row = i
 		grid.Cells[i] = cell
 
 		if grid.Extent == nil {
-			grid.Extent = cell.T
+			grid.Extent = cell.Polygonal
 		} else {
-			grid.Extent, err = op.Construct(grid.Extent, cell.T, op.UNION)
-			if err != nil {
-				return
-			}
-			grid.Extent, err = op.Simplify(grid.Extent, 1.e-8)
-			if err != nil {
-				return
-			}
+			grid.Extent = grid.Extent.Union(cell.Polygonal)
+			grid.Extent = grid.Extent.Simplify(1.e-8).(geom.Polygonal)
 		}
 		grid.rtree.Insert(cell)
 		i++
@@ -152,24 +147,13 @@ func NewGridIrregular(Name string, g []geom.T, inputSR, outputSR proj.SR) (grid 
 // GetTimeZones gets the time zone of each grid cell.
 func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 
-	var err error
-	var timezones *rtree.Rtree
-	timezones, err = getTimeZones(tzFile, tzColumn)
+	timezones, tzsr, err := getTimeZones(tzFile, tzColumn)
 	if err != nil {
 		return err
 	}
 	grid.TimeZones = make(map[string]*sparse.SparseArray)
 
-	f, err := os.Open(strings.Replace(tzFile, ".shp", ".prj", -1))
-	if err != nil {
-		return err
-	}
-	tzsr, err := proj.ReadPrj(f)
-	if err != nil {
-		return err
-	}
-	var ct *proj.CoordinateTransform
-	ct, err = proj.NewCoordinateTransform(grid.SR, tzsr)
+	ct, err := grid.SR.NewTransform(tzsr)
 	if err != nil {
 		return err
 	}
@@ -180,32 +164,28 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 	for proc := 0; proc < nprocs; proc++ {
 		go func(proc int) {
 			var err2 error
-			var cellCenter geom.T
+			var cellCenter geom.Geom
 			for ii := proc; ii < len(grid.Cells); ii += nprocs {
 				cell := grid.Cells[ii]
 				// find timezone nearest to the center of the cell.
 				// Need to project grid to timezone projection rather than the
 				// other way around because the timezones can include the north
 				// and south poles which don't convert well to other projections.
-				cellCenter, err2 = op.Centroid(cell.T)
+				cellCenter, err2 = op.Centroid(cell.Polygonal)
 				if err2 != nil {
 					errChan <- err2
 					return
 				}
-				cellCenter, err2 = ct.Reproject(cellCenter)
+				cellCenter, err2 = cellCenter.Transform(ct)
 				if err2 != nil {
 					errChan <- err2
 					return
 				}
 				var tz string
 				var foundtz, intersects bool
-				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds(nil)) {
+				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds()) {
 					tzData := tzDataI.(*tzHolder)
-					intersects, err2 = op.Within(cellCenter, tzData.T)
-					if err2 != nil {
-						errChan <- err2
-						return
-					}
+					intersects = cellCenter.Within(tzData.Polygonal)
 					if intersects {
 						if foundtz {
 							panic("In spatialsrg.GetTimeZones, there is a " +
@@ -245,17 +225,21 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 
 type tzHolder struct {
 	tz string
-	geom.T
+	geom.Polygonal
 }
 
-func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
+func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, *proj.SR, error) {
 	timezones := rtree.NewTree(25, 50)
 
 	tzShp, err := shp.NewDecoder(tzFile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer tzShp.Close()
+	sr, err := tzShp.SR()
+	if err != nil {
+		return nil, nil, err
+	}
 	for {
 		g, fields, more := tzShp.DecodeRowFields(tzColumn)
 		if !more {
@@ -263,20 +247,20 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, error) {
 		}
 
 		tzData := new(tzHolder)
-		tzData.T = g
+		tzData.Polygonal = g.(geom.Polygonal)
 		tzData.tz = fields[tzColumn]
 		timezones.Insert(tzData)
 	}
-	return timezones, tzShp.Error()
+	return timezones, sr, tzShp.Error()
 }
 
 // GetIndex gets the returns the x and y coordinates as projected by ct
 // and the row and column index of point (X,Y) in the grid. withinGrid is false
 // if point (X,Y) is not within the grid.
-func (grid *GridDef) GetIndex(x, y float64, ct *proj.CoordinateTransform) (
+func (grid *GridDef) GetIndex(x, y float64, ct proj.Transformer) (
 	X, Y float64, row, col int, withinGrid bool, err error) {
-	g := geom.T(geom.Point{X: x, Y: y})
-	g, err = ct.Reproject(g)
+	g := geom.Geom(geom.Point{X: x, Y: y})
+	g, err = g.Transform(ct)
 	if err != nil {
 		return
 	}
@@ -286,7 +270,7 @@ func (grid *GridDef) GetIndex(x, y float64, ct *proj.CoordinateTransform) (
 	if err != nil || !withinGrid {
 		return
 	}
-	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds(nil))
+	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds())
 	cell := gridCellsTemp[0].(*GridCell)
 	row = cell.Row
 	col = cell.Col
@@ -310,7 +294,7 @@ func (grid *GridDef) WriteToShp(outdir string) error {
 	}
 	for _, cell := range grid.Cells {
 		data := []interface{}{cell.Row, cell.Col}
-		err = shpf.EncodeFields(cell.T, data...)
+		err = shpf.EncodeFields(cell.Polygonal, data...)
 		if err != nil {
 			return err
 		}

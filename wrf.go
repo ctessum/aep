@@ -275,7 +275,7 @@ type WRFconfigData struct {
 	Frames_per_auxinput5 []int
 	Kemit                int
 	Nocolons             bool
-	sr                   proj.SR
+	sr                   *proj.SR
 }
 
 // ParseWRFConfig extracts configuration information from a set of WRF namelists.
@@ -307,18 +307,16 @@ func (d *WRFconfigData) projection(e *wrfErrCat) {
 			" that are currently supported (your projection is `%v').",
 			d.Map_proj))
 	}
-	projInfo := new(proj.ParsedProj4)
-	projInfo.Proj = mapProj
-	projInfo.Lat_1 = d.Truelat1
-	projInfo.Lat_2 = d.Truelat2
-	projInfo.Lat_0 = d.Ref_lat
-	projInfo.Lon_0 = d.Ref_lon
-	projInfo.EarthRadius_a = EarthRadius
-	projInfo.EarthRadius_b = EarthRadius
-	projInfo.To_meter = 1.
-	var err error
-	d.sr, err = proj.FromProj4(projInfo.ToString())
-	e.Add(err)
+	d.sr = proj.NewSR()
+	d.sr.Name = mapProj
+	d.sr.Lat1 = d.Truelat1
+	d.sr.Lat2 = d.Truelat2
+	d.sr.Lat0 = d.Ref_lat
+	d.sr.Long0 = d.Ref_lon
+	d.sr.A = EarthRadius
+	d.sr.B = EarthRadius
+	d.sr.ToMeter = 1.
+	d.sr.DeriveConstants()
 }
 
 // Grids creates grid definitions for the grids in WRF configuration d,
