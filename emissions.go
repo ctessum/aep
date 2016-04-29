@@ -138,8 +138,10 @@ func (e *Emissions) DropPols(polsToKeep map[string]*PolHolder) map[Pollutant]*un
 			}
 		}
 	}
+	numDeleted := 0
 	for _, i := range iToDelete {
-		e.deleteItem(i)
+		e.deleteItem(i - numDeleted)
+		numDeleted++
 	}
 	return droppedTotals
 }

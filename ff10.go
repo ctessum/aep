@@ -262,6 +262,11 @@ func NewFF10Nonpoint(rec []string, annualBegin, annualEnd time.Time,
 		return nil, fmt.Errorf("aep.NewFF10Nonpoint: record should have 45 fields but instead has %d", len(rec))
 	}
 
+	if rec[0] == "country_cd" {
+		// This record is an uncommented header so ignore it.
+		return nil, nil
+	}
+
 	r := new(nobusinessPolygonRecord)
 
 	var err error

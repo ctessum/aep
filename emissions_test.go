@@ -22,10 +22,12 @@ func TestEmissions(t *testing.T) {
 	rate2 := unit.New(1, map[unit.Dimension]int{unit.MassDim: 1, unit.TimeDim: -1})
 	e.Add(begin2, end2, "testpol", "", rate2)
 	e.Add(begin2, end2, "testpol2", "", rate2)
+	e.Add(begin2, end2, "testpol3", "", rate2)
 
 	wantTotals := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol"}:  unit.New(6.3072e+07, unit.Kilogram),
 		Pollutant{Name: "testpol2"}: unit.New(3.1536e+07, unit.Kilogram),
+		Pollutant{Name: "testpol3"}: unit.New(3.1536e+07, unit.Kilogram),
 	}
 	haveTotals := e.Totals()
 	if !reflect.DeepEqual(wantTotals, haveTotals) {
@@ -37,6 +39,7 @@ func TestEmissions(t *testing.T) {
 	wantPeriod1 := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol"}:  unit.New(5.00256e+07, unit.Kilogram),
 		Pollutant{Name: "testpol2"}: unit.New(1.84896e+07, unit.Kilogram),
+		Pollutant{Name: "testpol3"}: unit.New(1.84896e+07, unit.Kilogram),
 	}
 	if !reflect.DeepEqual(wantPeriod1, havePeriod1) {
 		t.Errorf("period1: want %v but have %v", wantPeriod1, havePeriod1)
@@ -67,6 +70,7 @@ func TestEmissions(t *testing.T) {
 	newTotals := e.Totals()
 	wantDroppedTotals := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol2"}: unit.New(3.1536e+07, unit.Kilogram),
+		Pollutant{Name: "testpol3"}: unit.New(3.1536e+07, unit.Kilogram),
 	}
 	wantNewTotals := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol"}: unit.New(6.3072e+07, unit.Kilogram),
