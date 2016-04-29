@@ -96,6 +96,11 @@ func NewFF10Point(rec []string, annualBegin, annualEnd time.Time,
 		return nil, fmt.Errorf("aep.NewFF10Point: record should have 77 fields but instead has %d", len(rec))
 	}
 
+	if rec[0] == "country_cd" {
+		// This record is an uncommented header so ignore it.
+		return nil, nil
+	}
+
 	r := new(PointRecord)
 
 	var err error

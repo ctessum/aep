@@ -1259,6 +1259,28 @@ func TestInventory(t *testing.T) {
 "US","01001",,"10583111","52263813","50940312","71809514","0010","X001B","001B","01","20100201","100414",0.156291000000000013,,"Southern Power Company-E B Harris Generating Plant","2",160,19,167,14504.7999999999993,51.2000000000000028,"221112",-86.5738249999999994,32.3819889999999972,,,2260,"E6BTU/HR","R63-0083","125","140",,,,,,"USEPA",8,"2011 EPA EG","HAPCA","7897","1B","7897_G_ST1","2011",20130317,,,,,"36067",,,,,,,,,,,,,,,,,,,,,,,,,,"calc from CAMD2011 heat input and 2008 Pechan EF"
 `,
 		},
+		testData{
+			name:   "canada_point_2010",
+			freq:   Annually,
+			period: Annual,
+			fileData: `#FORMAT=FF10_POINT
+#COUNTRY=CANADA
+#YEAR=2010
+#YEAR     2010
+#DESC     Point emissions for non-VOC species
+#DESC     ANNUAL
+#DESC     david.niemi@ec.gc.ca, mourad.sassi@ec.gc.ca
+#DESC     VOC emissions for CB05 mechanism, in short tons, for facilities reporting to the NPRI
+#DESC     Created: July 7, 2014
+#DESC     2010v1
+#EXPORT_DATE=Mon Jan 05 12:34:12 EST 2015
+#EXPORT_VERSION_NAME=Initial Version
+#EXPORT_VERSION_NUMBER=0
+country_cd,region_cd,tribal_code,facility_id,unit_id,rel_point_id,process_id,agy_facility_id,agy_unit_id,agy_rel_point_id,agy_process_id,scc,poll,ann_value,ann_pct_red,facility_name,erptype,stkhgt,stkdiam,stktemp,stkflow,stkvel,naics,longitude,latitude,ll_datum,horiz_coll_mthd,design_capacity,design_capacity_units,reg_codes,fac_source_type,unit_type_code,control_ids,control_measures,current_cost,cumulative_cost,projection_factor,submitter_id,calc_method,data_set_id,facil_category_code,oris_facility_code,oris_boiler_id,ipm_yn,calc_year,date_updated,fug_height,fug_width_ydim,fug_length_xdim,fug_angle,zipcode,annual_avg_hours_per_year,jan_value,feb_value,mar_value,apr_value,may_value,jun_value,jul_value,aug_value,sep_value,oct_value,nov_value,dec_value,jan_pctred,feb_pctred,mar_pctred,apr_pctred,may_pctred,jun_pctred,jul_pctred,aug_pctred,sep_pctred,oct_pctred,nov_pctred,dec_pctred,comment
+"CA","24001",,"3060","53998084","-9","-9",,,,,"30300199","PM2_5",50.1876681999999974,,"RioTintoAlcan",,-9,-9,-9,,-9,"331313",-71.1289000000000016,48.3006999999999991,,,,,,,,,,,,,,,,,,,,"2010",20130606,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"CA","24001",,"3060","53998084","10579","-9",,,,,"30300199","SO2",1073.64442200000008,,"RioTintoAlcan",,164.041994799999998,11.1220472400000006,185,,49.2125984299999999,"331313",-71.1289000000000016,48.3006999999999991,,,,,,,,,,,,,,,,,,,,"2010",20130606,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+`,
+		},
 	}
 	overallReport := new(InventoryReport)
 	for _, test := range table {
@@ -1316,6 +1338,11 @@ func TestInventory(t *testing.T) {
 		[]string{"", "nonroad_2011", "93.71130358715548", "7.910698922124", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
 		[]string{"", "ptegu_daily_2011", "", "", "", "", "", "", "", "", "", "", "", "61.492991821185", "", "", "", ""},
 		[]string{"", "ptegu_annual_2011", "281.92815041250003", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+		[]string{"", "canada_point_2010", "", "", "", "", "", "", "", "", "", "", "", "", "", "45529.49977601699", "973994.11497207", ""},
+	}
+
+	if len(wantReportTable) != len(reportTable) {
+		t.Errorf("reportTable: want length does not equal have length")
 	}
 
 	for i, w := range wantReportTable {

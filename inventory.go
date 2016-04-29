@@ -514,6 +514,10 @@ func (f *InventoryFile) parseLines(e *EmissionsReader, filter RecFilter, recordC
 			return
 		}
 
+		if record == nil {
+			continue
+		}
+
 		if filter != nil && !filter(record) {
 			continue // Skip this record if it doesn't match our filter.
 		}
