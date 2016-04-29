@@ -145,7 +145,7 @@ func countryFromName(name string) (Country, error) {
 		return USA, nil
 	case "CANADA", "CA", "CAN":
 		return Canada, nil
-	case "MEXICO", "MEX":
+	case "MEXICO", "MEX", "MX":
 		return Mexico, nil
 	case "CUBA":
 		return Cuba, nil
