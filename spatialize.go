@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -505,6 +506,18 @@ func (s *SrgSpecs) GetByCode(region Country, code string) (*SrgSpec, error) {
 	return nil, fmt.Errorf("can't find surrogate for region=%s, code=%s", region, code)
 }
 
+// Status returns the status of the spatial surrogates in s.
+func (s *SrgSpecs) Status() []Status {
+	var o statuses
+	for _, ss := range s.byName {
+		for _, sss := range ss {
+			o = append(o, sss.Status())
+		}
+	}
+	sort.Sort(statuses(o))
+	return o
+}
+
 // SrgSpec holds spatial surrogate specification information.
 type SrgSpec struct {
 	Region          Country
@@ -543,6 +556,19 @@ type SrgSpec struct {
 	progressLock sync.Mutex
 	// status specifies what the surrogate generator is currently doing.
 	status string
+}
+
+// Status returns information about the status of s.
+func (s *SrgSpec) Status() Status {
+	s.progressLock.Lock()
+	o := Status{
+		Name:     s.Name,
+		Code:     s.Code,
+		Status:   s.status,
+		Progress: s.progress,
+	}
+	s.progressLock.Unlock()
+	return o
 }
 
 // ReadSrgSpec reads a SMOKE formatted spatial surrogate specification file.

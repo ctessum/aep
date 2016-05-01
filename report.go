@@ -44,6 +44,24 @@ import (
 	"github.com/gonum/floats"
 )
 
+// Status holds information on the progress or status of a job.
+type Status struct {
+	// Name and Code hold information about the job
+	Name, Code string
+
+	// Status holds information about the status of the job.
+	Status string
+
+	// Progress holds information about how close the job is to completion.
+	Progress float64
+}
+
+type statuses []Status
+
+func (s statuses) Len() int           { return len(s) }
+func (s statuses) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s statuses) Less(i, j int) bool { return s[i].Name < s[j].Name }
+
 // Write a message to standard error.
 func (c *Context) Log(msg interface{}, DebugLevel int) {
 	if DebugLevel <= c.DebugLevel {
@@ -142,7 +160,6 @@ func (c *Context) ErrorReport(errmesg interface{}) {
 var (
 	reportMx sync.Mutex
 	Report   = new(ReportHolder)
-	Status   *StatusHolder
 )
 
 func init() {
