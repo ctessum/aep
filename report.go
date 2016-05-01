@@ -81,9 +81,6 @@ func (c *Context) ErrorRecover() {
 			c.ErrorReport(err) // Handle error
 			c.ErrorFlag = true
 		}
-		//Status.Lock.Lock()
-		Status.Sectors[c.Sector] = "Failed!"
-		//Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 	}
 }
@@ -99,7 +96,6 @@ func (c *Context) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
 			c.ErrorFlag = true
 		}
 		//Status.Lock.Lock()
-		Status.Sectors[c.Sector] = "Failed!"
 		//Status.Lock.Unlock()
 		c.msgchan <- c.Sector + " failed!"
 		close(recordChan)
@@ -152,7 +148,6 @@ func (c *Context) ErrorReport(errmesg interface{}) {
 	err += "--------------------------\n"
 	fmt.Print(err)
 	//Status.Lock.Lock()
-	Status.ErrorMessages += err + "\n\n"
 	//Status.Lock.Unlock()
 	return
 }
@@ -165,7 +160,6 @@ var (
 func init() {
 	Report.SectorResults = make(map[string]map[string]*Results)
 	// track status of all of the running sectors
-	Status = NewStatus()
 	// Start server for html report (go to localhost:6060 in web browser to view report)
 	// Here, we run the report server in the background while the rest of the program is running.
 }
@@ -309,7 +303,6 @@ func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
 	} else if _, ok := s.Surrogates[srg]; !ok {
 		if _, err := os.Stat(srgfile); err == nil {
 			//Status.Lock.Lock()
-			Status.Surrogates[srg] = "Ready"
 			//Status.Lock.Unlock()
 			return "Ready"
 		} else {
@@ -734,13 +727,7 @@ func renderBodyTemplate(w http.ResponseWriter, tmpl string) {
 func renderStatusTemplate(w http.ResponseWriter) {
 	//Status.Lock.Lock()
 	//Status.SrgProgress = SrgProgress
-	Status.HTMLerrorMessages = template.HTML(strings.Replace(Status.ErrorMessages,
-		"\n", "<br>", -1))
 	//Status.Lock.Unlock()
-	err := templates.ExecuteTemplate(w, "status.html", Status)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 func renderHeaderFooter(w http.ResponseWriter, tmpl string, data *htmlData) {
