@@ -319,6 +319,7 @@ func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *sr
 					r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
 					if r.err != nil {
 						r.returnChan <- r
+						continue
 					}
 					r.err = sp.writeSrgToDisk(r)
 					r.returnChan <- r

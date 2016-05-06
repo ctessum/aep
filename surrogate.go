@@ -197,12 +197,17 @@ func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*Gr
 
 	inputData, err := srg.getInputData(gridData, sp.SimplifyTolerance)
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
 	srgData, err := srg.getSrgData(gridData, sp.SimplifyTolerance)
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
+
+	log.Printf("Input data: %d shapes", len(inputData))
+	log.Printf("Surrogate data: %d shapes", srgData.Size())
 
 	// Start workers
 	nprocs := runtime.GOMAXPROCS(0)

@@ -139,7 +139,6 @@ func NewGridIrregular(Name string, g []geom.Polygonal, inputSR, outputSR *proj.S
 			grid.Extent = grid.Extent.Simplify(1.e-8).(geom.Polygonal)
 		}
 		grid.rtree.Insert(cell)
-		i++
 	}
 	return
 }
