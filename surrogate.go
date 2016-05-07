@@ -648,6 +648,8 @@ func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 		if err != nil {
 			log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
 		}
+	default:
+		panic(fmt.Errorf("unsupported intersection geometry type %v", g))
 	}
 	return intersection
 }
