@@ -33,10 +33,10 @@ import (
 	"time"
 
 	"bitbucket.org/ctessum/sparse"
-	"github.com/camlistore/camlistore/pkg/lru"
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/proj"
 	"github.com/ctessum/unit"
+	"github.com/golang/groupcache/lru"
 )
 
 // SpatialProcessor spatializes emissions records.
