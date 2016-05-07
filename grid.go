@@ -184,7 +184,7 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 				var foundtz, intersects bool
 				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds()) {
 					tzData := tzDataI.(*tzHolder)
-					intersects = cellCenter.Within(tzData.Polygonal)
+					intersects = cellCenter.(geom.Point).Within(tzData.Polygonal)
 					if intersects {
 						if foundtz {
 							panic("In spatialsrg.GetTimeZones, there is a " +

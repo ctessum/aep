@@ -329,8 +329,6 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 		srg.progress += 100. / float64(inputShp.AttributeCount())
 		srg.progressLock.Unlock()
 
-		ggeom.FixOrientation() // 'Within' requires correct orientation.
-
 		if tol > 0 {
 			ggeom = ggeom.Simplify(tol).(geom.Polygonal)
 		}
@@ -635,7 +633,7 @@ func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 	var intersection geom.Geom
 	switch g.(type) {
 	case geom.PointLike:
-		in := g.Within(poly)
+		in := g.(geom.PointLike).Within(poly)
 		if in {
 			intersection = g
 		} else {
