@@ -34,3 +34,8 @@ func (r *EconomicData) parseSIC(SIC string) {
 		r.SIC = strings.Replace(fmt.Sprintf("%-4s", r.SIC), " ", "0", -1)
 	}
 }
+
+// GetEconomicData returns r.
+func (r *EconomicData) GetEconomicData() *EconomicData {
+	return r
+}

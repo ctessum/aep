@@ -460,6 +460,8 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 								//	"zero in %v", srg.WEIGHTSHAPEFILE)
 								//return srgData, err
 							}
+						} else if size < 0 {
+							panic(fmt.Errorf("negative area: %g, geom:%#v", size, srgH.Geom))
 						}
 						srgH.Weight = weightval / size
 					case geom.Linear:

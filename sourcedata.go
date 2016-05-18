@@ -40,6 +40,11 @@ func (r SourceData) GetCountry() Country {
 	return r.Country
 }
 
+// GetSourceData returns r.
+func (r SourceData) GetSourceData() *SourceData {
+	return &r
+}
+
 // Get rid of extra quotation marks, replace spaces with
 // zeros, make sure it is five digits long.
 func (r *SourceData) parseFIPS(FIPS string) {

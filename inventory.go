@@ -76,6 +76,9 @@ type Record interface {
 	// (coveredByGrid) and whether it is in the grid all all (inGrid).
 	Spatialize(sp *SpatialProcessor, gi int) (gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error)
 
+	// GetSourceData returns the source information associated with this record.
+	GetSourceData() *SourceData
+
 	// Key returns a unique identifier for this record.
 	Key() string
 }
@@ -84,6 +87,12 @@ type Record interface {
 type PointSource interface {
 	// PointData returns the data specific to point sources.
 	PointData() *PointSourceData
+}
+
+// EconomicRecord is any record that contains economic information.
+type EconomicRecord interface {
+	// GetEconomicData returns the economic information associated with this record.
+	GetEconomicData() *EconomicData
 }
 
 // PointRecord holds information about an emissions source that has a point
