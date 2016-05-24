@@ -634,8 +634,8 @@ func (s *srgGenWorker) intersections1(
 func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 	var intersection geom.Geom
 	switch g.(type) {
-	case geom.PointLike:
-		in := g.(geom.PointLike).Within(poly)
+	case geom.Point:
+		in := g.(geom.Point).Within(poly)
 		if in {
 			intersection = g
 		} else {
@@ -651,7 +651,7 @@ func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 			log.Println("error intersecting shapes; continuing without this shape.") // error:", err2)
 		}
 	default:
-		panic(fmt.Errorf("unsupported intersection geometry type %v", g))
+		panic(fmt.Errorf("unsupported intersection geometry type %#v", g))
 	}
 	return intersection
 }
