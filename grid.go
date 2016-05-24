@@ -20,6 +20,7 @@ package aep
 
 import (
 	"encoding/gob"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -265,11 +266,16 @@ func (grid *GridDef) GetIndex(x, y float64, ct proj.Transformer) (
 	}
 	gp := g.(geom.Point)
 	X, Y = gp.X, gp.Y // coordinates transformed to output projection
-	withinGrid, err = op.Within(g, grid.Extent)
-	if err != nil || !withinGrid {
+	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds())
+	if len(gridCellsTemp) == 0 {
+		withinGrid = false
+		row, col = -1, -1
+		return
+	} else if len(gridCellsTemp) != 1 {
+		err = fmt.Errorf("aep.GridDef.GetIndex: incorrect number of intersections: %d",
+			len(gridCellsTemp))
 		return
 	}
-	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds())
 	cell := gridCellsTemp[0].(*GridCell)
 	row = cell.Row
 	col = cell.Col
