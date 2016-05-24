@@ -472,7 +472,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 							return srgData, err
 						}
 						srgH.Weight = weightval / size
-					case geom.PointLike:
+					case geom.Point:
 						srgH.Weight = weightval
 					default:
 						err = fmt.Errorf("aep: in file %s, unsupported geometry type %#v",
@@ -663,7 +663,7 @@ func geomWeight(w float64, g geom.Geom) float64 {
 		return w * g.(geom.Polygonal).Area()
 	case geom.LineString, geom.MultiLineString:
 		return w * g.(geom.Linear).Length()
-	case geom.PointLike:
+	case geom.Point:
 		return w
 	default:
 		panic(op.UnsupportedGeometryError{G: g})
