@@ -39,3 +39,7 @@ func (r *EconomicData) parseSIC(SIC string) {
 func (r *EconomicData) GetEconomicData() *EconomicData {
 	return r
 }
+
+func (r *nobusinessPolygonRecord) GetEconomicData() *EconomicData {
+	return nil
+}
