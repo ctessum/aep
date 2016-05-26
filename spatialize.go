@@ -96,7 +96,7 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 	sp.totals = newSpatialTotals()
 	sp.totalGrid = make(map[*GridDef]map[Pollutant]*sparse.SparseArray)
 
-	sp.MemCacheSize = 100
+	sp.MemCacheSize = 3
 	sp.MaxMergeDepth = 10
 	sp.surrogateGeneratorChan = make(chan *srgRequest)
 	go sp.surrogateGenerator(sp.diskCache(sp.memCache(sp.surrogateGeneratorChan)))
