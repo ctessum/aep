@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"bitbucket.org/ctessum/sparse"
+	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/proj"
 	"github.com/ctessum/unit"
@@ -182,8 +183,13 @@ func (r *PointSourceData) Spatialize(sp *SpatialProcessor, gi int) (
 		return
 	}
 
+	p2, err := r.Point.Transform(ct)
+	if err != nil {
+		return
+	}
+
 	var row, col int
-	_, _, row, col, inGrid, err = sp.Grids[gi].GetIndex(r.Point.X, r.Point.Y, ct)
+	row, col, inGrid, err = sp.Grids[gi].GetIndex(p2.(geom.Point))
 	if err != nil {
 		return
 	}

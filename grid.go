@@ -254,19 +254,10 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, *proj.SR, error) {
 	return timezones, sr, tzShp.Error()
 }
 
-// GetIndex gets the returns the x and y coordinates as projected by ct
-// and the row and column index of point (X,Y) in the grid. withinGrid is false
-// if point (X,Y) is not within the grid.
-func (grid *GridDef) GetIndex(x, y float64, ct proj.Transformer) (
-	X, Y float64, row, col int, withinGrid bool, err error) {
-	g := geom.Geom(geom.Point{X: x, Y: y})
-	g, err = g.Transform(ct)
-	if err != nil {
-		return
-	}
-	gp := g.(geom.Point)
-	X, Y = gp.X, gp.Y // coordinates transformed to output projection
-	gridCellsTemp := grid.rtree.SearchIntersect(g.Bounds())
+// GetIndex gets the returns the row and column index of point p in the grid.
+// withinGrid is false if point (X,Y) is not within the grid.
+func (grid *GridDef) GetIndex(p geom.Point) (row, col int, withinGrid bool, err error) {
+	gridCellsTemp := grid.rtree.SearchIntersect(p.Bounds())
 	if len(gridCellsTemp) == 0 {
 		withinGrid = false
 		row, col = -1, -1
@@ -276,6 +267,7 @@ func (grid *GridDef) GetIndex(x, y float64, ct proj.Transformer) (
 			len(gridCellsTemp))
 		return
 	}
+	withinGrid = true
 	cell := gridCellsTemp[0].(*GridCell)
 	row = cell.Row
 	col = cell.Col
