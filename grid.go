@@ -182,11 +182,11 @@ func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
 					return
 				}
 				var tz string
-				var foundtz, intersects bool
+				var foundtz bool
 				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds()) {
 					tzData := tzDataI.(*tzHolder)
-					intersects = cellCenter.(geom.Point).Within(tzData.Polygonal)
-					if intersects {
+					intersects := cellCenter.(geom.Point).Within(tzData.Polygonal)
+					if intersects == geom.Inside || intersects == geom.OnEdge {
 						if foundtz {
 							panic("In spatialsrg.GetTimeZones, there is a " +
 								"grid cell that overlaps with more than one timezone." +

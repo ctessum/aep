@@ -636,7 +636,7 @@ func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 	switch g.(type) {
 	case geom.Point:
 		in := g.(geom.Point).Within(poly)
-		if in {
+		if in == geom.Inside || in == geom.OnEdge {
 			intersection = g
 		} else {
 			return nil
