@@ -14,24 +14,11 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 ## Installation
 
-1. Install the [Go compiler](http://golang.org/doc/install). Make sure you install the correct version (32 or 64 bit) for your system. Also make sure to set the [`$GOPATH`](http://golang.org/doc/code.html#GOPATH) environment variable to a different directory than the `$GOROOT` environment variable.
+1. Install the [Go compiler](http://golang.org/doc/install). Make sure you install the correct version (32 or 64 bit) for your system. It is recommended to install the compiler to the default location; if you experience problems try seeing if they are resolved by installing the compiler to the default location. Also make sure to set the [`$GOPATH`](http://golang.org/doc/code.html#GOPATH) environment variable.
 
-2. Install the required (non-Go) dependencies. These are:
-	* [proj4](http://trac.osgeo.org/proj/) 
-	* [GDAL](http://www.gdal.org/)
-		* To install using Ubuntu linux:
+2. Download and install the main program:
 
-				sudo apt-get libgdal-dev
-				curl -ks 'https://gist.github.com/nicerobot/5160658/raw/install-gdalpc.sh' | sudo bash -
-			Because Ubuntu doesn't install a pkg-config entry for gdal, the second line downloads and runs a script [from here](https://gist.github.com/nicerobot/5160658) to generate one.
-
-	* The [git](http://git-scm.com/) and [mercurial](http://mercurial.selenic.com/) version control programs.
-
-	If the above libraries and programs are in a nonstandard location, be sure to set the `$CGO_CFLAGS` and `$CGO_LDFLAGS` environment variables to ensure that the Go compiler can find the libraries. Also make sure your `$PATH` environment variable includes the directories containing git and mercurial, as well as the `$GOROOT/bin` and `$GOPATH/bin` directories.
-
-3. Download and install the main program:
-
-		go get bitbucket.org/ctessum/aep 
+		go get github.com/ctessum/aep
 	The Go language has an automatic system for finding and installing library dependencies; you may want to refer [here](http://golang.org/doc/code.html) to understand how it works.
 
 ## Use
@@ -41,13 +28,13 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 2. Obtain the input emissions data. For the 2005 NEI, you can download them from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into `$GOPATH/src/bitbucket.org/ctessum/aep/test/inputdata/emissions`.
 	The file locations will need to match the locations specified in the configuration file described below.
-			
 
-2. Run the program: 
 
-		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/scripts/config2005nei.json 
+2. Run the program:
+
+		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/scripts/config2005nei.json
 	While the program is running, you can open a web browser and navigate to `localhost:6060` to view status and diagnostic information.
-	After the program finishes running, output can be found in the directory 
+	After the program finishes running, output can be found in the directory
 
 		$GOPATH/src/bitbucket.org/ctessum/aep/test/Output
 	After running the default scenario, you can edit the configuration file to your specific needs by setting it to point to the `namelist.input` and `namelist.wps` files for your WRF domain, and changing the starting and ending dates. Additionally, the WRF output files from a previous simulation which are required to calculate emissions plume rise, which is not calculated in the default scenario.
@@ -75,7 +62,7 @@ The configuration file needs to be a valid [json](http://en.wikipedia.org/wiki/J
 			}
 		}
 	}
-Refer directly to the source code documentation for the fields that make up the 
+Refer directly to the source code documentation for the fields that make up the
 [DirInfo](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep#DirInfo)
 and [RunData](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep#RunData) data holders.
 
@@ -86,13 +73,10 @@ Some of the fields in the configuration file have automatic default values assoc
 ### API
 
 The AEP package is split into an executable program and an application programming interface (API). To see what capabilities are available in the API refer to the online [source code documentation](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep).
-	
+
 
 to see the functions available in the API and investigate how they work.
 
-### Distributed computing
-
-AEP is able to utilize a distributed computing system when generating spatial surrogates. All that needs to be done is to start the program in 'slave' mode on several nodes, and then run the program in 'master' mode on the head node, giving the master program the addresses of the slave nodes as a command line option. A script that shows how to run the program on 10 nodes with 8 processors each is available [here](aep/src/default/scripts/run_distributed.pbs).
 
 ### TODO (Things that SMOKE can do that AEP cannot)
 
