@@ -348,6 +348,10 @@ type EmissionsReader struct {
 	freq       InventoryFrequency
 
 	inputConv func(float64) *unit.Unit
+
+	// Group specifies a group name for files read by this reader.
+	// It is used for report creation
+	Group string
 }
 
 // InputUnits specify available options for emissions input units.
@@ -416,6 +420,7 @@ func (e *EmissionsReader) OpenFilesFromTemplate(filetemplate string) ([]*Invento
 			if err != nil {
 				return nil, err
 			}
+			files[i].Group = e.Group
 		}
 		return files, nil
 	}
@@ -429,6 +434,7 @@ func (e *EmissionsReader) OpenFilesFromTemplate(filetemplate string) ([]*Invento
 		if err != nil {
 			return nil, err
 		}
+		invF.Group = e.Group
 		return []*InventoryFile{invF}, nil
 	}
 	panic(fmt.Errorf("unsupported inventory frequency '%v'", e.freq))
