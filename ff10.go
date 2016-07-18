@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ctessum/unit"
@@ -96,7 +97,7 @@ func NewFF10Point(rec []string, annualBegin, annualEnd time.Time,
 		return nil, fmt.Errorf("aep.NewFF10Point: record should have 77 fields but instead has %d", len(rec))
 	}
 
-	if rec[0] == "country_cd" {
+	if strings.Contains(rec[0], "country") {
 		// This record is an uncommented header so ignore it.
 		return nil, nil
 	}
