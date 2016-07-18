@@ -2,6 +2,7 @@ package aep
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/ctessum/unit"
@@ -136,6 +137,7 @@ func (e *Emissions) DropPols(polsToKeep map[string]*PolHolder) map[Pollutant]*un
 			} else {
 				droppedTotals[em.Pollutant].Add(v)
 			}
+			delete(e.units, em.Pollutant)
 		}
 	}
 	numDeleted := 0
@@ -216,4 +218,13 @@ func (e *Emissions) GetEmissions() *Emissions {
 func (e *Emissions) CombineEmissions(r2 Record) {
 	e2 := *r2.GetEmissions()
 	e.e = append(e.e, e2.e...)
+	for pol, u := range e2.units {
+		if uu, ok := e.units[pol]; ok {
+			if !reflect.DeepEqual(uu, u) {
+				panic(fmt.Errorf("units don't match: %v != %v", uu, u))
+			}
+		} else {
+			e.units[pol] = u
+		}
+	}
 }

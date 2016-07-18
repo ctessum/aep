@@ -75,11 +75,17 @@ func TestEmissions(t *testing.T) {
 	wantNewTotals := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol"}: unit.New(6.3072e+07, unit.Kilogram),
 	}
+	wantUnits := map[Pollutant]unit.Dimensions{
+		Pollutant{Name: "testpol"}: map[unit.Dimension]int{unit.MassDim: 1, unit.TimeDim: -1},
+	}
 	if !reflect.DeepEqual(wantDroppedTotals, droppedTotals) {
 		t.Errorf("dropped totals: want %v but have %v", wantDroppedTotals, droppedTotals)
 	}
 	if !reflect.DeepEqual(wantNewTotals, newTotals) {
 		t.Errorf("new totals: want %v but have %v", wantNewTotals, newTotals)
+	}
+	if !reflect.DeepEqual(wantUnits, e.units) {
+		t.Errorf("new units: want %v but have %v", wantUnits, e.units)
 	}
 
 	v, err := parseEmisRateAnnual(nullVal, "1", badunit.Ton) // 1 ton/day
@@ -100,4 +106,14 @@ func TestEmissions(t *testing.T) {
 		t.Errorf("parseEmisRate: want %v but have %v", want, v)
 	}
 
+	e2 := new(Emissions)
+	e2.Add(begin2, end2, "testpol8", "", rate2)
+	e.CombineEmissions(&PointRecord{Emissions: *e2})
+	wantUnits = map[Pollutant]unit.Dimensions{
+		Pollutant{Name: "testpol", Prefix: ""}:  unit.Dimensions{4: 1, 6: -1},
+		Pollutant{Name: "testpol8", Prefix: ""}: unit.Dimensions{4: 1, 6: -1},
+	}
+	if !reflect.DeepEqual(wantUnits, e.units) {
+		t.Errorf("combined units: want %v but have %v", wantUnits, e.units)
+	}
 }
