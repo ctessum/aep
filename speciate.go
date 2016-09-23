@@ -30,8 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	_ "github.com/mattn/go-sqlite3"
+	//_ "github.com/mattn/go-sqlite3"
 )
 
 const tolerance = 1.e-4 // fractional difference between two numbers where they can be considered the same
