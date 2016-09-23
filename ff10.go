@@ -97,7 +97,7 @@ func NewFF10Point(rec []string, annualBegin, annualEnd time.Time,
 		return nil, fmt.Errorf("aep.NewFF10Point: record should have 77 fields but instead has %d", len(rec))
 	}
 
-	if strings.Contains(rec[0], "country") {
+	if strings.Contains(rec[0], "country_cd") {
 		// This record is an uncommented header so ignore it.
 		return nil, nil
 	}
@@ -181,6 +181,11 @@ func NewFF10DailyPoint(rec []string, annualBegin, annualEnd time.Time, periods [
 
 	if len(rec) != 46 {
 		return nil, fmt.Errorf("aep.NewFF10DailyPoint: record should have 46 fields but instead has %d", len(rec))
+	}
+
+	if strings.Contains(rec[0], "country_cd") {
+		// This record is an uncommented header so ignore it.
+		return nil, nil
 	}
 
 	r := new(supplementalPointRecord)
