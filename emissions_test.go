@@ -117,3 +117,41 @@ func TestEmissions(t *testing.T) {
 		t.Errorf("combined units: want %v but have %v", wantUnits, e.units)
 	}
 }
+
+func TestDropTotals(t *testing.T) {
+	e := new(Emissions)
+
+	begin, _ := time.Parse("Jan 2006", "Jan 2005")
+	end, _ := time.Parse("Jan 2006", "Jan 2006")
+	rate := unit.New(1, map[unit.Dimension]int{unit.MassDim: 1, unit.TimeDim: -1})
+	e.Add(begin, end, "testpol", "", rate)
+	e.Add(begin, end, "testpol", "", rate)
+	e.Add(begin, end, "testpol2", "", rate)
+
+	polsToKeep := map[string]*PolHolder{"testpol2": &PolHolder{}}
+
+	droppedPols := e.DropPols(polsToKeep)
+
+	droppedPolsWant := map[Pollutant]*unit.Unit{
+		Pollutant{Name: "testpol", Prefix: ""}: unit.New(6.3072e+07, unit.Dimensions{4: 1}),
+	}
+	eWant := &Emissions{
+		e: []*emissionsPeriod{
+			&emissionsPeriod{
+				begin:     begin,
+				end:       end,
+				rate:      rate.Value(),
+				Pollutant: Pollutant{Name: "testpol2"},
+			},
+		},
+		units: map[Pollutant]unit.Dimensions{Pollutant{Name: "testpol2", Prefix: ""}: unit.Dimensions{6: -1, 4: 1}},
+	}
+
+	if !reflect.DeepEqual(droppedPols, droppedPolsWant) {
+		t.Errorf("droppedPols have %#v, want %#v", droppedPols, droppedPolsWant)
+	}
+
+	if !reflect.DeepEqual(e, eWant) {
+		t.Errorf("e have %#v, want %#v", e, eWant)
+	}
+}

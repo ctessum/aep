@@ -127,18 +127,26 @@ func (e *Emissions) DropPols(polsToKeep map[string]*PolHolder) map[Pollutant]*un
 	}
 	droppedTotals := make(map[Pollutant]*unit.Unit)
 	var iToDelete []int
+	unitsToDelete := make(map[Pollutant]empty)
 	for i, em := range e.e {
 		if _, ok := polsToKeep[em.Pollutant.Name]; !ok {
 			iToDelete = append(iToDelete, i)
-			v := unit.Mul(unit.New(em.rate, e.units[em.Pollutant]),
+			units, ok := e.units[em.Pollutant]
+			if !ok {
+				panic(fmt.Errorf("aep: missing units for pollutant %s", em.Pollutant))
+			}
+			v := unit.Mul(unit.New(em.rate, units),
 				unit.New(em.end.Sub(em.begin).Seconds(), unit.Second))
 			if _, ok := droppedTotals[em.Pollutant]; !ok {
 				droppedTotals[em.Pollutant] = v
 			} else {
 				droppedTotals[em.Pollutant].Add(v)
 			}
-			delete(e.units, em.Pollutant)
+			unitsToDelete[em.Pollutant] = empty{}
 		}
+	}
+	for p := range unitsToDelete {
+		delete(e.units, p)
 	}
 	numDeleted := 0
 	for _, i := range iToDelete {
