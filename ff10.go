@@ -206,6 +206,11 @@ func NewFF10DailyPoint(rec []string, annualBegin, annualEnd time.Time, periods [
 
 	pol, prefix := splitPol(rec[8])
 
+	if rec[12] == "" {
+		// This record is missing required information so ignore it.
+		return nil, nil
+	}
+
 	month64, err := strconv.ParseInt(rec[12], 10, 64)
 	if err != nil {
 		return nil, err
