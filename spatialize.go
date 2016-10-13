@@ -188,8 +188,8 @@ func (r *PointSourceData) Spatialize(sp *SpatialProcessor, gi int) (
 		return
 	}
 
-	var row, col int
-	row, col, inGrid, err = sp.Grids[gi].GetIndex(p2.(geom.Point))
+	var rows, cols []int
+	rows, cols, inGrid, err = sp.Grids[gi].GetIndex(p2.(geom.Point))
 	if err != nil {
 		return
 	}
@@ -197,8 +197,12 @@ func (r *PointSourceData) Spatialize(sp *SpatialProcessor, gi int) (
 	coveredByGrid = inGrid
 	if inGrid {
 		gridSrg = sparse.ZerosSparse(sp.Grids[gi].Ny, sp.Grids[gi].Nx)
-		// For points, all emissions are in the same cell.
-		gridSrg.Set(1., row, col)
+		// A point can be allocated to more than one grid cell if it lies
+		// on the boundary between two cells.
+		frac := 1.0 / float64(len(rows))
+		for i, row := range rows {
+			gridSrg.Set(frac, row, cols[i])
+		}
 	}
 	return
 }

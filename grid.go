@@ -20,7 +20,6 @@ package aep
 
 import (
 	"encoding/gob"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -254,23 +253,23 @@ func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, *proj.SR, error) {
 	return timezones, sr, tzShp.Error()
 }
 
-// GetIndex gets the returns the row and column index of point p in the grid.
-// withinGrid is false if point (X,Y) is not within the grid.
-func (grid *GridDef) GetIndex(p geom.Point) (row, col int, withinGrid bool, err error) {
-	gridCellsTemp := grid.rtree.SearchIntersect(p.Bounds())
-	if len(gridCellsTemp) == 0 {
-		withinGrid = false
-		row, col = -1, -1
-		return
-	} else if len(gridCellsTemp) != 1 {
-		err = fmt.Errorf("aep.GridDef.GetIndex: incorrect number of intersections: %d",
-			len(gridCellsTemp))
-		return
+// GetIndex gets the returns the row and column indices of point p in the grid.
+// withinGrid is false if point (X,Y) is not within the grid. Usually
+// there will be only one row and column for each point, but it the point
+// lies on a shared edge among multiple grid cells, all of the overlapping
+// grid cells will be returned.
+func (grid *GridDef) GetIndex(p geom.Point) (rows, cols []int, withinGrid bool, err error) {
+	for _, cI := range grid.rtree.SearchIntersect(p.Bounds()) {
+		c := cI.(*GridCell)
+		if grid.IrregularGrid && p.Within(c.Polygonal) == geom.Outside {
+			continue
+		}
+		rows = append(rows, c.Row)
+		cols = append(cols, c.Col)
 	}
-	withinGrid = true
-	cell := gridCellsTemp[0].(*GridCell)
-	row = cell.Row
-	col = cell.Col
+	if len(rows) > 0 {
+		withinGrid = true
+	}
 	return
 }
 
