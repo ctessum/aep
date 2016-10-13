@@ -1,6 +1,6 @@
 # Retrieving the 2011 NEI data
 
-Data for the air quality modeling version of the U.S. EPA's 2011 National emissions inventory is available for download from an [EPA FTP server](ftp://ftp.epa.gov/EmisInventory/2011v6/).A description of the included data is available [here](ftp://ftp.epa.gov/EmisInventory/2011v6/v2platform/README_2011v6.2_package.txt), and a technical description of the inventory is available [here](https://www.epa.gov/air-emissions-modeling/2011-version-62-technical-support-document).
+Data for the air quality modeling version of the U.S. EPA's 2011 National emissions inventory is available for download from an [EPA FTP server](ftp://ftp.epa.gov/EmisInventory/2011v6/). A description of the included data is available [here](ftp://ftp.epa.gov/EmisInventory/2011v6/v2platform/README_2011v6.2_package.txt), and a technical description of the inventory is available [here](https://www.epa.gov/air-emissions-modeling/2011-version-62-technical-support-document).
 
 This repository includes two tools designed to simplify the process of downloading the data and preparing it for use. They both assume that the `${nei2011Dir}` environment variable has been set to the desired location for the data download.
 

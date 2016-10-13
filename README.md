@@ -23,20 +23,20 @@ The program is designed to more or less reproduce the functionality of the [SMOK
 
 ## Use
 
-1. Obtain the necessary shapefiles for spatial allocation. For the 2005 NEI, most of them can be obtained by running the script at [`$GOPATH/src/bitbucket.org/ctessum/aepscripts/downloadShapefiles.sh`](src/default/scripts/downloadShapefiles.sh). The default download location is `$GOPATH/src/bitbucket.org/ctessum/aep/test/inputdata/shapefiles`. Otherwise, most of them are [here](ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/). The script at  will download these files automatically, plus add the missing .prj files.
+1. Obtain the necessary shapefiles for spatial allocation. For the 2005 NEI, most of them can be obtained by running the script at [`$GOPATH/src/github.com/ctessum/aep/scripts/downloadShapefiles.sh`](src/default/scripts/downloadShapefiles.sh). The default download location is `$GOPATH/src/github.com/ctessum/aep/test/inputdata/shapefiles`. Otherwise, most of them are [here](ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/). The script at  will download these files automatically, plus add the missing .prj files.
 	* You may additionally need the shapefiles [here](https://bitbucket.org/ctessum/aep/downloads/additionalShapefiles.tar.gz). These will need to be downloaded manually.
 
-2. Obtain the input emissions data. For the 2005 NEI, you can download them from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into `$GOPATH/src/bitbucket.org/ctessum/aep/test/inputdata/emissions`.
+2. Obtain the input emissions data. For the 2005 NEI, you can download them from [here](ftp://ftp.epa.gov/EmisInventory/2005v4_2/2005emis) and extract them into `$GOPATH/src/github.com/ctessum/aep/test/inputdata/emissions`.
 	The file locations will need to match the locations specified in the configuration file described below.
 
 
 2. Run the program:
 
-		aep -config=$GOPATH/src/bitbucket.org/ctessum/aep/scripts/config2005nei.json
+		aep -config=$GOPATH/src/github.com/ctessum/aep/scripts/config2005nei.json
 	While the program is running, you can open a web browser and navigate to `localhost:6060` to view status and diagnostic information.
 	After the program finishes running, output can be found in the directory
 
-		$GOPATH/src/bitbucket.org/ctessum/aep/test/Output
+		$GOPATH/src/github.com/ctessum/aep/test/Output
 	After running the default scenario, you can edit the configuration file to your specific needs by setting it to point to the `namelist.input` and `namelist.wps` files for your WRF domain, and changing the starting and ending dates. Additionally, the WRF output files from a previous simulation which are required to calculate emissions plume rise, which is not calculated in the default scenario.
 
 
@@ -72,7 +72,7 @@ Some of the fields in the configuration file have automatic default values assoc
 
 ### API
 
-The AEP package is split into an executable program and an application programming interface (API). To see what capabilities are available in the API refer to the online [source code documentation](http://godoc.org/bitbucket.org/ctessum/aep/lib.aep).
+The AEP package is split into an executable program and an application programming interface (API). To see what capabilities are available in the API refer to the online [source code documentation](http://godoc.org/github.com/ctessum/aep).
 
 
 to see the functions available in the API and investigate how they work.
