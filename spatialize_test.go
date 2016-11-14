@@ -1,6 +1,7 @@
 package aep
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -166,6 +167,7 @@ func TestCreateSurrogates(t *testing.T) {
 	}
 	matchFullSCC := false
 	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, matchFullSCC)
+	sp.load()
 
 	// surrogates that should be nil based on manual inspection.
 	nilSrgs := map[string]map[string]bool{
@@ -177,10 +179,11 @@ func TestCreateSurrogates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		srgs, err := sp.createSurrogate(srgSpec, grid)
+		srgsI, err := sp.createSurrogate(context.Background(), &srgGrid{srg: srgSpec, gridData: grid})
 		if err != nil {
 			t.Errorf("creating surrogate %s: %v", code, err)
 		}
+		srgs := srgsI.(*GriddingSurrogate)
 		if len(srgs.Srg) != 19 {
 			t.Errorf("in code %s: there should be %d surrogates instead of %d",
 				code, 19, len(srgs.Srg))

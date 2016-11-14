@@ -19,6 +19,7 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.
 package aep
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -165,31 +166,34 @@ func (sp *SpatialProcessor) createMerged(srg *SrgSpec, gridData *GridDef) (*Grid
 		if err != nil {
 			return nil, err
 		}
-		// First, send a srg request to see if it's already in the cache.
-		// We need to cancel the request if it's not in the cache to avoid a
-		// channel lock.
-		r := newSrgRequest(newSrg, gridData)
-		r.waitInQueue = false
-		sp.surrogateGeneratorChan <- r
-		r = <-r.returnChan
-		if r.err != nil {
-			return nil, r.err
+		// If we use the cache here it is possible to end up with a channel deadlock,
+		// so we generate the surrogate from scratch here.
+		data, err := sp.createSurrogate(context.Background(), &srgGrid{srg: newSrg, gridData: gridData})
+		if err != nil {
+			return nil, err
 		}
-		if r.data == nil {
-			// If it's not in the cache, directly create it.
-			r.data, r.err = sp.createSurrogate(newSrg, gridData)
-			if r.err != nil {
-				return nil, err
-			}
-		}
-		mrgSrgs[i] = r.data
+		mrgSrgs[i] = data.(*GriddingSurrogate)
 	}
 	return mergeSrgs(mrgSrgs, srg.MergeMultipliers), nil
 }
 
+// srgGrid holds a surrogate specification and a grid definition.
+type srgGrid struct {
+	srg      *SrgSpec
+	gridData *GridDef
+}
+
+// key returns a unique key for this surrogate request.
+func (s *srgGrid) key() string {
+	return fmt.Sprintf("%s_%s_%s", s.srg.Region, s.srg.Code, s.gridData.Name)
+}
+
 // createSurrogate creates a new gridding surrogate based on a
 // surrogate specification and grid definition.
-func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*GriddingSurrogate, error) {
+func (sp SpatialProcessor) createSurrogate(_ context.Context, inData interface{}) (interface{}, error) {
+	in := inData.(*srgGrid)
+	srg := in.srg
+	gridData := in.gridData
 	log.Println("Creating", srg.Code, srg.Name)
 	if len(srg.MergeNames) != 0 {
 		return sp.createMerged(srg, gridData)
@@ -197,12 +201,10 @@ func (sp SpatialProcessor) createSurrogate(srg *SrgSpec, gridData *GridDef) (*Gr
 
 	inputData, err := srg.getInputData(gridData, sp.SimplifyTolerance)
 	if err != nil {
-		panic(err)
 		return nil, err
 	}
 	srgData, err := srg.getSrgData(gridData, sp.SimplifyTolerance)
 	if err != nil {
-		panic(err)
 		return nil, err
 	}
 

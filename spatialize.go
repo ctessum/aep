@@ -20,12 +20,15 @@ package aep
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,8 +39,8 @@ import (
 	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/proj"
+	"github.com/ctessum/requestcache"
 	"github.com/ctessum/unit"
-	"github.com/golang/groupcache/lru"
 )
 
 // SpatialProcessor spatializes emissions records.
@@ -45,8 +48,6 @@ type SpatialProcessor struct {
 	SrgSpecs
 	Grids []*GridDef
 	GridRef
-	surrogateGeneratorChan chan *srgRequest
-	srgCache               map[string]*sparse.SparseArray
 
 	// inputSR is the spatial reference of the input data. It will usually be
 	// "+longlat".
@@ -58,6 +59,9 @@ type SpatialProcessor struct {
 	// report information
 	totals    *SpatialTotals
 	totalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray
+
+	cache    *requestcache.Cache
+	lazyLoad sync.Once
 
 	// DiskCachePath specifies a directory to cache surrogate files in. If it is
 	// empty or invalid, surrogates will not be stored on the disk for later use.
@@ -99,9 +103,34 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 
 	sp.MemCacheSize = 100
 	sp.MaxMergeDepth = 10
-	sp.surrogateGeneratorChan = make(chan *srgRequest)
-	go sp.surrogateGenerator(sp.diskCache(sp.memCache(sp.surrogateGeneratorChan)))
 	return sp
+}
+
+func init() {
+	gob.Register(GriddingSurrogate{})
+}
+
+// unmarshalGob unmarshals an interface from a byte array and fulfills
+// the requirements for the Disk cache unmarshalFunc input.
+func unmarshalGob(b []byte) (interface{}, error) {
+	r := bytes.NewBuffer(b)
+	d := gob.NewDecoder(r)
+	var data GriddingSurrogate
+	if err := d.Decode(&data); err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (sp *SpatialProcessor) load() {
+	if sp.DiskCachePath == "" {
+		sp.cache = requestcache.NewCache(sp.createSurrogate, runtime.GOMAXPROCS(-1),
+			requestcache.Deduplicate(), requestcache.Memory(sp.MemCacheSize))
+	} else {
+		sp.cache = requestcache.NewCache(sp.createSurrogate, runtime.GOMAXPROCS(-1),
+			requestcache.Deduplicate(), requestcache.Memory(sp.MemCacheSize),
+			requestcache.Disk(sp.DiskCachePath, requestcache.MarshalGob, unmarshalGob))
+	}
 }
 
 // SpatialTotals hold summary results of spatialized emissions records.
@@ -283,149 +312,38 @@ func (sp *SpatialProcessor) Report() (totals *SpatialTotals,
 	return sp.totals, sp.totalGrid
 }
 
-// memCache implements an in-memory cache for spatial surrogates.
-func (sp *SpatialProcessor) memCache(inChan chan *srgRequest) (outChan chan *srgRequest) {
-	outChan = make(chan *srgRequest)
-	cache := lru.New(sp.MemCacheSize)
-	// Spawn multiple cachers to deals with merged surrogates.
-	for i := 0; i < sp.MaxMergeDepth; i++ {
-		go func() {
-			for request := range inChan {
-				key := request.key()
-				v, ok := cache.Get(key)
-				if ok { // the data we want is in the cache.
-					request.data = v.(*GriddingSurrogate)
-					request.returnChan <- request
-				} else { // the data we want is not in the cache.
-					newRequest := request.repeat()
-					outChan <- newRequest
-					result := <-newRequest.returnChan
-					cache.Add(key, result.data)
-					request.returnChan <- result
-				}
-			}
-		}()
-	}
-	return outChan
-}
-
-// diskCache implements a disk cache for spatial surrogates.
-func (sp *SpatialProcessor) diskCache(inChan chan *srgRequest) (outChan chan *srgRequest) {
-	outChan = make(chan *srgRequest)
-	// Spawn multiple cachers to deals with merged surrogates.
-	for i := 0; i < sp.MaxMergeDepth; i++ {
-		go func() {
-			for r := range inChan {
-				var ok bool
-				r.data, ok = sp.getSrgFromDisk(r)
-				if ok {
-					// Send result and continue: we're done here.
-					r.returnChan <- r
-					continue
-				}
-				if !r.waitInQueue {
-					// Skip the queue for surrogates that are being created to merge into
-					// other surrogates to avoid a channel lock.
-					r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
-					if r.err != nil {
-						r.returnChan <- r
-						continue
-					}
-					r.err = sp.writeSrgToDisk(r)
-					r.returnChan <- r
-					continue
-				}
-				// Send the request to the queue and wait for it to return.
-				newRequest := r.repeat()
-				outChan <- newRequest
-				newRequest = <-newRequest.returnChan
-				if newRequest.err != nil {
-					r.returnChan <- newRequest
-				}
-				newRequest.err = sp.writeSrgToDisk(newRequest)
-				r.returnChan <- newRequest
-			}
-		}()
-	}
-	return outChan
-}
-
-// getSrgFromDisk attempts to get a gridding surrogate from a disk cache, returnin
-// the surrogate and a boolean indicating whether the retrieval was successful.
-func (sp *SpatialProcessor) getSrgFromDisk(r *srgRequest) (*GriddingSurrogate, bool) {
-	if sp.DiskCachePath == "" {
-		return nil, false
-	}
-
-	f, err := os.Open(filepath.Join(sp.DiskCachePath, r.key()+".gob"))
-	if err != nil {
-		return nil, false
-	}
-
-	var data GriddingSurrogate
-	e := gob.NewDecoder(f)
-	err = e.Decode(&data)
-	if err != nil {
-		// Ignore the error and just regenerate the file.
-		return nil, false
-	}
-	err = f.Close()
-	if err != nil {
-		// Ignore the error and just regenerate the file.
-		return nil, false
-	}
-	return &data, true
-}
-
-// writeSrgToDisk writes a gridding surrogate to a disk cache.
-func (sp *SpatialProcessor) writeSrgToDisk(r *srgRequest) error {
-	if sp.DiskCachePath == "" || r.data == nil || r.err != nil {
-		return r.err
-	}
-	f, err := os.Create(filepath.Join(sp.DiskCachePath, r.key()+".gob"))
-	if err != nil {
-		return err
-	}
-	e := gob.NewEncoder(f)
-	err = e.Encode(r.data)
-	if err != nil {
-		return err
-	}
-	err = f.Close()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Surrogate gets the specified spatial surrogate.
 // It is important not to edit the returned surrogate in place, because the
 // same copy is used over and over again. The second return value indicates
 // whether the shape corresponding to fips is completely covered by the grid.
 func (sp *SpatialProcessor) Surrogate(srgSpec *SrgSpec, grid *GridDef, fips string) (*sparse.SparseArray, bool, error) {
 
-	r := newSrgRequest(srgSpec, grid)
-	sp.surrogateGeneratorChan <- r
-	r = <-r.returnChan
-	if r.err != nil {
-		return nil, false, r.err
+	sp.lazyLoad.Do(sp.load)
+
+	s := &srgGrid{srg: srgSpec, gridData: grid}
+	req := sp.cache.NewRequest(context.Background(), s, s.key())
+	resultI, err := req.Result()
+	if err != nil {
+		return nil, false, err
 	}
-	srg, coveredByGrid := r.data.ToGrid(fips)
+	result := resultI.(*GriddingSurrogate)
+	srg, coveredByGrid := result.ToGrid(fips)
 	if srg != nil {
-		return srg, coveredByGrid, r.err
+		return srg, coveredByGrid, nil
 	}
 	// if srg was nil, try backup surrogates.
 	for _, newName := range srgSpec.BackupSurrogateNames {
 		newSrgSpec, err := sp.SrgSpecs.GetByName(srgSpec.Region, newName)
+		s := &srgGrid{srg: newSrgSpec, gridData: grid}
+		req := sp.cache.NewRequest(context.Background(), s, s.key())
+		resultI, err := req.Result()
 		if err != nil {
 			return nil, false, err
 		}
-		r := newSrgRequest(newSrgSpec, grid)
-		sp.surrogateGeneratorChan <- r
-		r = <-r.returnChan
-		srg, coveredByGrid := r.data.ToGrid(fips)
+		result := resultI.(*GriddingSurrogate)
+		srg, coveredByGrid := result.ToGrid(fips)
 		if srg != nil {
-			return srg, coveredByGrid, r.err
+			return srg, coveredByGrid, nil
 		}
 	}
 	return nil, false, nil
@@ -465,14 +383,6 @@ func newSrgRequest(srgSpec *SrgSpec, grid *GridDef) *srgRequest {
 	d.returnChan = make(chan *srgRequest)
 	d.waitInQueue = true
 	return d
-}
-
-// Generate spatial surrogates
-func (sp *SpatialProcessor) surrogateGenerator(inChan chan *srgRequest) {
-	for r := range inChan {
-		r.data, r.err = sp.createSurrogate(r.srgSpec, r.grid)
-		r.returnChan <- r
-	}
 }
 
 // SrgSpecs holds a group of surrogate specifications
