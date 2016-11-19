@@ -190,7 +190,7 @@ func (s *srgGrid) key() string {
 
 // createSurrogate creates a new gridding surrogate based on a
 // surrogate specification and grid definition.
-func (sp SpatialProcessor) createSurrogate(_ context.Context, inData interface{}) (interface{}, error) {
+func (sp *SpatialProcessor) createSurrogate(_ context.Context, inData interface{}) (interface{}, error) {
 	in := inData.(*srgGrid)
 	srg := in.srg
 	gridData := in.gridData

@@ -320,7 +320,7 @@ func TestSpatializeRecord(t *testing.T) {
 
 				emis, _, err := GriddedEmissions(rec, begin, end, sp, 0)
 				if err != nil {
-					t.Errorf("scc: %s, fips: %s, i: %d, err: %v", scc, fips, i, err)
+					t.Fatalf("scc: %s, fips: %s, i: %d, err: %v", scc, fips, i, err)
 					continue
 				}
 

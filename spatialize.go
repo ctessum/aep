@@ -122,6 +122,19 @@ func unmarshalGob(b []byte) (interface{}, error) {
 	return &data, nil
 }
 
+// marshalGob marshals an interface to a byte array and fulfills
+// the requirements for the Disk cache marshalFunc input.
+func marshalGob(data interface{}) ([]byte, error) {
+	w := bytes.NewBuffer(nil)
+	e := gob.NewEncoder(w)
+	d := *data.(*interface{})
+	dd := d.(*GriddingSurrogate)
+	if err := e.Encode(dd); err != nil {
+		return nil, err
+	}
+	return w.Bytes(), nil
+}
+
 func (sp *SpatialProcessor) load() {
 	if sp.DiskCachePath == "" {
 		sp.cache = requestcache.NewCache(sp.createSurrogate, runtime.GOMAXPROCS(-1),
@@ -129,7 +142,7 @@ func (sp *SpatialProcessor) load() {
 	} else {
 		sp.cache = requestcache.NewCache(sp.createSurrogate, runtime.GOMAXPROCS(-1),
 			requestcache.Deduplicate(), requestcache.Memory(sp.MemCacheSize),
-			requestcache.Disk(sp.DiskCachePath, requestcache.MarshalGob, unmarshalGob))
+			requestcache.Disk(sp.DiskCachePath, marshalGob, unmarshalGob))
 	}
 }
 
