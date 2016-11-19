@@ -208,9 +208,6 @@ func (sp *SpatialProcessor) createSurrogate(_ context.Context, inData interface{
 		return nil, err
 	}
 
-	log.Printf("Input data: %d shapes", len(inputData))
-	log.Printf("Surrogate data: %d shapes", srgData.Size())
-
 	// Start workers
 	nprocs := runtime.GOMAXPROCS(0)
 	singleShapeChan := make(chan *GriddedSrgData, nprocs*2)
