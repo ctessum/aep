@@ -88,7 +88,7 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			x := grid.X0 + float64(ix)*grid.Dx
 			y := grid.Y0 + float64(iy)*grid.Dy
 			cell.Row, cell.Col = iy, ix
-			cell.Polygonal = geom.Polygon([][]geom.Point{{
+			cell.Polygonal = geom.Polygon([]geom.Path{{
 				{x, y}, {x + grid.Dx, y},
 				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}})
 			grid.rtree.Insert(cell)
@@ -96,7 +96,7 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			i++
 		}
 	}
-	grid.Extent = geom.Polygon([][]geom.Point{{{X0, Y0},
+	grid.Extent = geom.Polygon([]geom.Path{{{X0, Y0},
 		{X0 + Dx*float64(Nx), Y0},
 		{X0 + Dx*float64(Nx), Y0 + Dy*float64(Ny)},
 		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}})
