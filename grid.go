@@ -22,14 +22,10 @@ import (
 	"encoding/gob"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync"
 
-	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/encoding/shp"
 	"github.com/ctessum/geom/index/rtree"
-	"github.com/ctessum/geom/op"
 	"github.com/ctessum/geom/proj"
 	goshp "github.com/jonas-p/go-shp"
 )
@@ -44,7 +40,6 @@ type GridDef struct {
 	Nx, Ny        int
 	Dx, Dy        float64
 	X0, Y0        float64
-	TimeZones     map[string]*sparse.SparseArray
 	Cells         []*GridCell
 	SR            *proj.SR
 	Extent        geom.Polygonal
@@ -89,17 +84,17 @@ func NewGridRegular(Name string, Nx, Ny int, Dx, Dy, X0, Y0 float64,
 			y := grid.Y0 + float64(iy)*grid.Dy
 			cell.Row, cell.Col = iy, ix
 			cell.Polygonal = geom.Polygon([]geom.Path{{
-				{x, y}, {x + grid.Dx, y},
-				{x + grid.Dx, y + grid.Dy}, {x, y + grid.Dy}, {x, y}}})
+				{X: x, Y: y}, {X: x + grid.Dx, Y: y},
+				{X: x + grid.Dx, Y: y + grid.Dy}, {X: x, Y: y + grid.Dy}, {X: x, Y: y}}})
 			grid.rtree.Insert(cell)
 			grid.Cells[i] = cell
 			i++
 		}
 	}
-	grid.Extent = geom.Polygon([]geom.Path{{{X0, Y0},
-		{X0 + Dx*float64(Nx), Y0},
-		{X0 + Dx*float64(Nx), Y0 + Dy*float64(Ny)},
-		{X0, Y0 + Dy*float64(Ny)}, {X0, Y0}}})
+	grid.Extent = geom.Polygon([]geom.Path{{{X: X0, Y: Y0},
+		{X: X0 + Dx*float64(Nx), Y: Y0},
+		{X: X0 + Dx*float64(Nx), Y: Y0 + Dy*float64(Ny)},
+		{X: X0, Y: Y0 + Dy*float64(Ny)}, {X: X0, Y: Y0}}})
 	return
 }
 
@@ -141,116 +136,6 @@ func NewGridIrregular(Name string, g []geom.Polygonal, inputSR, outputSR *proj.S
 	}
 	grid.Extent = grid.Extent.Simplify(1.e-8).(geom.Polygonal)
 	return
-}
-
-// GetTimeZones gets the time zone of each grid cell.
-func (grid *GridDef) GetTimeZones(tzFile, tzColumn string) error {
-
-	timezones, tzsr, err := getTimeZones(tzFile, tzColumn)
-	if err != nil {
-		return err
-	}
-	grid.TimeZones = make(map[string]*sparse.SparseArray)
-
-	ct, err := grid.SR.NewTransform(tzsr)
-	if err != nil {
-		return err
-	}
-
-	var lock sync.Mutex
-	errChan := make(chan error)
-	nprocs := runtime.GOMAXPROCS(-1)
-	for proc := 0; proc < nprocs; proc++ {
-		go func(proc int) {
-			var err2 error
-			var cellCenter geom.Geom
-			for ii := proc; ii < len(grid.Cells); ii += nprocs {
-				cell := grid.Cells[ii]
-				// find timezone nearest to the center of the cell.
-				// Need to project grid to timezone projection rather than the
-				// other way around because the timezones can include the north
-				// and south poles which don't convert well to other projections.
-				cellCenter, err2 = op.Centroid(cell.Polygonal)
-				if err2 != nil {
-					errChan <- err2
-					return
-				}
-				cellCenter, err2 = cellCenter.Transform(ct)
-				if err2 != nil {
-					errChan <- err2
-					return
-				}
-				var tz string
-				var foundtz bool
-				for _, tzDataI := range timezones.SearchIntersect(cellCenter.Bounds()) {
-					tzData := tzDataI.(*tzHolder)
-					intersects := cellCenter.(geom.Point).Within(tzData.Polygonal)
-					if intersects == geom.Inside || intersects == geom.OnEdge {
-						if foundtz {
-							panic("In spatialsrg.GetTimeZones, there is a " +
-								"grid cell that overlaps with more than one timezone." +
-								" This probably shouldn't be happening.")
-						}
-						tz = tzData.tz
-						foundtz = true
-					}
-				}
-				if !foundtz {
-					//err = fmt.Errorf("In spatialsrg.GetTimeZones, there is a " +
-					//	"grid cell that doesn't match any timezones")
-					//return
-					tz = "UTC" // The timezone shapefile doesn't include timezones
-					// over the ocean, so we assume all timezones that don't have
-					// tz info are UTC.
-				}
-				cell.TimeZone = tz
-				lock.Lock()
-				if _, ok := grid.TimeZones[tz]; !ok {
-					grid.TimeZones[tz] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-				}
-				grid.TimeZones[tz].Set(1., cell.Row, cell.Col)
-				lock.Unlock()
-			}
-			errChan <- nil
-		}(proc)
-	}
-	for procnum := 0; procnum < nprocs; procnum++ {
-		if err = <-errChan; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type tzHolder struct {
-	tz string
-	geom.Polygonal
-}
-
-func getTimeZones(tzFile, tzColumn string) (*rtree.Rtree, *proj.SR, error) {
-	timezones := rtree.NewTree(25, 50)
-
-	tzShp, err := shp.NewDecoder(tzFile)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer tzShp.Close()
-	sr, err := tzShp.SR()
-	if err != nil {
-		return nil, nil, err
-	}
-	for {
-		g, fields, more := tzShp.DecodeRowFields(tzColumn)
-		if !more {
-			break
-		}
-
-		tzData := new(tzHolder)
-		tzData.Polygonal = g.(geom.Polygonal)
-		tzData.tz = fields[tzColumn]
-		timezones.Insert(tzData)
-	}
-	return timezones, sr, tzShp.Error()
 }
 
 // GetIndex gets the returns the row and column indices of point p in the grid.

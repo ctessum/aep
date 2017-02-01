@@ -23,150 +23,156 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"os"
-	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"bitbucket.org/ctessum/sparse"
+	"github.com/ctessum/unit"
 )
 
+// EmisAtTime returns the emissions from the given Record occurring
+// during the hour after t, after being adjusted with the temporal profiles
+// in tp. If partialMatch is true, temporal profiles will be
+// used for SCC codes partially matching the SCC code of the given record
+// if no exact match is found.
+func EmisAtTime(r Record, t time.Time, tp *TemporalProcessor, partialMatch bool) (map[Pollutant]*unit.Unit, error) {
+	switch r.(type) {
+	// Check if we should be using CEM allocation.
+	case PointSource:
+		rp := r.(PointSource)
+		pointData := rp.PointData()
+		id := [2]string{pointData.ORISFacilityCode, pointData.ORISBoilerID}
+		_, ok := tp.cemSum[id]
+		if rp.UseCEM() && ok {
+			return emisAtTimeCEM(rp, t, tp, partialMatch)
+		}
+	}
+
+	location, ok := tp.TimeZones[r.GetFIPS()]
+	if !ok {
+		return nil, fmt.Errorf("aep: can't find timezone for FIPS %s", r.GetFIPS())
+	}
+	tLocal := t.In(location)
+	emis := r.PeriodTotals(tLocal, tLocal.Add(time.Hour))
+	codes, err := tp.getTemporalCodes(r.GetSCC(), r.GetFIPS(), partialMatch)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the fraction of annual emissions occuring at during the hour
+	// including our midpoint.
+	factor, err := tp.temporalFactor(codes[0], codes[1], codes[2], tLocal)
+	if err != nil {
+		return nil, err
+	}
+
+	// Adjust the factor to account for that fact that we have already
+	// done linear scaling of one hour of emissions, so we just need
+	// to adjust that value to account for the temporal profiles.
+	yearBegin := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+	yearEnd := time.Date(t.Year()+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+	hoursInYear := yearEnd.Sub(yearBegin).Hours()
+	adjFactor := factor * hoursInYear
+	for _, v := range emis {
+		v.Mul(unit.New(adjFactor, unit.Dimless))
+	}
+	return emis, nil
+}
+
+// emisAtTimeCEM returns the emissions from the given Record occurring
+// during the hour after t, after being adjusted to match records
+// from continuous emissions monitoring data.
+// If no matching CEM data is found, results will be returned using
+// EmisAtTime instead. In that case, if partialMatch is true,
+// temporal profiles will be used for SCC codes partially matching
+// the SCC code of the given record if no exact match is found.
+func emisAtTimeCEM(r PointSource, t time.Time, tp *TemporalProcessor, partialMatch bool) (map[Pollutant]*unit.Unit, error) {
+	pointData := r.PointData()
+	id := [2]string{pointData.ORISFacilityCode, pointData.ORISBoilerID}
+	cemsum := tp.cemSum[id]
+	location, ok := tp.TimeZones[r.GetFIPS()]
+	if !ok {
+		return nil, fmt.Errorf("aep: can't find timezone for FIPS %s", r.GetFIPS())
+	}
+	tLocal := t.In(location)
+	timeNoDS := timeNoDST(tLocal) // Time with no daylight savings.
+
+	// Get the CEM data. If the result is nil, it means that emissions for
+	// the hour of interest are zero.
+	const cemFormat = "060102 15"
+	cemTime := tp.cemArray[id][timeNoDS.Format(cemFormat)]
+	emis := r.Totals()
+	for pol, v := range emis {
+		tFactor := getCEMtFactor(pol, cemsum, cemTime)
+		v.Mul(unit.New(tFactor, unit.Dimless))
+	}
+	return emis, nil
+}
+
+// timeNoDST returns time with no daylight savings (needed for CEM data)
+func timeNoDST(localTime time.Time) time.Time {
+	_, winterOffset := time.Date(localTime.Year(), 1, 1, 0, 0, 0, 0, localTime.Location()).Zone()
+	_, summerOffset := time.Date(localTime.Year(), 7, 1, 0, 0, 0, 0, localTime.Location()).Zone()
+
+	if winterOffset > summerOffset {
+		return localTime.In(time.FixedZone(localTime.Location().String()+" No DST", summerOffset))
+	}
+	return localTime.In(time.FixedZone(localTime.Location().String()+" No DST", winterOffset))
+}
+
+// TemporalProcessor calculates emissions at specific times.
 type TemporalProcessor struct {
-	c              *Context
-	sectors        map[string]*temporalSector // map[sector]data
-	temporalReport *TemporalReport
-	Units          map[string]string // map[pol]units
-	mu             sync.RWMutex
-	grids          []*GridDef
-	sp             *SpatialProcessor
+	monthlyTpro map[string][]float64 // map[code]vals
+	weeklyTpro  map[string][]float64 // map[code]vals
+	weekdayTpro map[string][]float64 // map[code]vals
+	weekendTpro map[string][]float64 // map[code]vals
+	temporalRef map[string]map[string]interface{}
+	holidays    map[string]string
+	cemArray    map[[2]string]map[string]*cemData // map[id,boiler][time]data
+	cemSum      map[[2]string]*cemSum             // map[id,boiler]data
+
+	// TimeZones hold the time zone code that each FIPS code
+	// belongs to.
+	TimeZones map[string]*time.Location
 }
 
-// NewTemporalProcessor reads in data and starts up subroutines for temporal processing.
-func (c *Context) NewTemporalProcessor(sp *SpatialProcessor, grids []*GridDef) *TemporalProcessor {
+// NewTemporalProcessor initializes a new TemporalProcessor.
+func (c *Context) NewTemporalProcessor(holidays, tref, tpro io.Reader, cem []io.Reader, useCEM bool) (*TemporalProcessor, error) {
 	tp := new(TemporalProcessor)
-	tp.c = c
-	tp.sp = sp
-	tp.grids = grids
-	tp.sectors = make(map[string]*temporalSector)
-	tp.Units = make(map[string]string)
-	tp.temporalReport = tp.newTemporalReport(c, tp.Units)
-	reportMx.Lock()
-	Report.TemporalResults = tp.temporalReport
-	reportMx.Unlock()
-	return tp
-}
 
-type temporalSector struct {
-	c             *Context
-	sp            *SpatialProcessor
-	tp            *TemporalProcessor
-	monthlyTpro   map[string][]float64 // map[code]vals
-	weeklyTpro    map[string][]float64 // map[code]vals
-	weekdayTpro   map[string][]float64 // map[code]vals
-	weekendTpro   map[string][]float64 // map[code]vals
-	temporalRef   map[string]map[string]interface{}
-	holidays      map[string]string
-	cemArray      map[[2]string]map[string]*cemData // map[id,boiler][time]data
-	cemSum        map[[2]string]*cemSum             // map[id,boiler]data
-	mu            sync.RWMutex
-	InputChan     chan *ParsedRecord
-	OutputChan    chan *ParsedRecord
-	PointData     map[[3]string][]*ParsedRecord
-	AreaData      map[[3]string]map[Period]map[string][]*sparse.SparseArray
-	aggregate     func(*temporalSector, *ParsedRecord)
-	addEmisAtTime func(*temporalSector, time.Time, Outputter,
-		map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray
-}
-
-func (tp *TemporalProcessor) NewSector(c *Context,
-	InputChan, OutputChan chan *ParsedRecord, sp *SpatialProcessor) {
-	t := new(temporalSector)
-	t.mu.Lock()
-	tp.mu.Lock()
-	tp.sectors[c.Sector] = t
-	tp.mu.Unlock()
-	t.tp = tp
-	t.InputChan = InputChan
-	t.OutputChan = OutputChan
-	t.c = c
-	t.sp = sp
-	t.PointData = make(map[[3]string][]*ParsedRecord)
-	t.AreaData = make(map[[3]string]map[Period]map[string][]*sparse.SparseArray)
-	// Choose which temporal aggregation function to use.
-	switch t.c.SectorType {
-	case "point":
-		t.aggregate = aggregatePoint
-		if t.c.InventoryFreq == "cem" {
-			t.addEmisAtTime = addEmisAtTimeCEM
-		} else {
-			t.addEmisAtTime = addEmisAtTimeTproPoint
+	if err := tp.getHolidays(holidays); err != nil {
+		return nil, err
+	}
+	if err := tp.getTemporalRef(tref); err != nil {
+		return nil, err
+	}
+	if err := tp.getTemporalPro(tpro); err != nil {
+		return nil, err
+	}
+	if useCEM {
+		if err := tp.getCEMdata(cem); err != nil {
+			return nil, err
 		}
-	case "area", "mobile":
-		t.aggregate = aggregateArea
-		t.addEmisAtTime = addEmisAtTimeTproArea
-	default:
-		err := fmt.Errorf("Unknown sectorType %v", c.SectorType)
-		panic(err)
 	}
-	//e.Add(t.getHolidays())
-	//e.Add(t.getTemporalRef())
-	//e.Add(t.getTemporalPro())
-	err := t.getHolidays()
-	if err != nil {
-		panic(err)
-	}
-	err = t.getTemporalRef()
-	if err != nil {
-		panic(err)
-	}
-	err = t.getTemporalPro()
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		defer t.c.ErrorRecoverCloseChan(t.InputChan)
-		if t.c.InventoryFreq == "cem" {
-			t.getCEMdata()
-		}
-		t.c.Log("Aggregating by temporal profile "+t.c.Sector+"...", 1)
-		for record := range InputChan {
-			t.aggregate(t, record)
-			t.OutputChan <- record
-		}
-		//close(t.OutputChan)
-		t.c.msgchan <- "Finished temporalizing " + t.c.Sector
-		t.mu.Unlock()
-	}()
+	return tp, nil
 }
 
 // temporalRef reads the SMOKE tref file, which maps FIPS and SCC
 // codes to grid surrogates. Although the tref file allows the
 // specification of code by pollutant name, that functionality is
 // not included here.
-func (t *temporalSector) getTemporalRef() (err error) {
+func (t *TemporalProcessor) getTemporalRef(fid io.Reader) error {
 	t.temporalRef = make(map[string]map[string]interface{})
 	var record string
-	fid, err := os.Open(t.c.TemporalRefFile)
-	if err != nil {
-		err = fmt.Errorf("termporalRef: %v \nFile= %v\nRecord= %v",
-			err.Error(), t.c.TemporalRefFile, record)
-		return
-	}
-	defer fid.Close()
 	buf := bufio.NewReader(fid)
+	var err error
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.Error() == "EOF" {
-				err = nil
+			if err == io.EOF {
 				break
 			} else {
-				err = fmt.Errorf("TemporalRef: %v \nFile= %v\nRecord= %v",
-					err.Error(), t.c.TemporalRefFile, record)
-				return
+				return fmt.Errorf("aep: reading temporal reference file: %v", err)
 			}
 		}
 		// Get rid of comments at end of line.
@@ -191,8 +197,7 @@ func (t *temporalSector) getTemporalRef() (err error) {
 			} else if len(FIPS) == 6 {
 				FIPS = FIPS[1:]
 			} else if len(FIPS) != 5 {
-				return fmt.Errorf("in TemporalRef, record %v FIPS %v has "+
-					"wrong number of digits", record, FIPS)
+				return fmt.Errorf("aep: in TemporalRef, record %v FIPS %v has wrong number of digits", record, FIPS)
 			}
 
 			if _, ok := t.temporalRef[SCC]; !ok {
@@ -202,7 +207,7 @@ func (t *temporalSector) getTemporalRef() (err error) {
 				monthCode, weekCode, diurnalCode}
 		}
 	}
-	return
+	return nil
 }
 
 // get decimal number of weeks in the current month.
@@ -213,51 +218,36 @@ func weeksInMonth(t time.Time) float64 {
 
 const holidayFormat = "20060102"
 
-func (t *temporalSector) getHolidays() error {
+func (t *TemporalProcessor) getHolidays(fid io.Reader) error {
 	t.holidays = make(map[string]string)
-	fid, err := os.Open(t.c.HolidayFile)
-	if err != nil {
-		return fmt.Errorf("Holidays: %v \nFile= %v",
-			err.Error(), t.c.HolidayFile)
-	} else {
-		defer fid.Close()
-	}
 	scanner := bufio.NewScanner(fid)
+	var err error
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) < 19 || line[0] == '#' {
 			continue
 		}
-		holiday, err := time.Parse("01 02 2006", line[8:18])
+		var holiday time.Time
+		holiday, err = time.Parse("01 02 2006", line[8:18])
 		if err != nil {
-			return fmt.Errorf("Holidays: %v \nFile= %v",
-				err.Error(), t.c.HolidayFile)
+			return fmt.Errorf("aep: reading holiday file: %v", err)
 		}
-		if holiday.After(t.c.startDate) && holiday.Before(t.c.endDate) {
-			t.holidays[holiday.Format(holidayFormat)] = ""
-		}
+		t.holidays[holiday.Format(holidayFormat)] = ""
 	}
 	if err = scanner.Err(); err != nil {
-		return fmt.Errorf("Holidays: %v \nFile= %v",
-			err.Error(), t.c.HolidayFile)
+		return fmt.Errorf("aep: reading holiday file: %v", err)
 	}
 	return nil
 }
 
-func (t *temporalSector) getTemporalPro() error {
+func (t *TemporalProcessor) getTemporalPro(fid io.Reader) error {
 	t.monthlyTpro = make(map[string][]float64) // map[code]vals
 	t.weeklyTpro = make(map[string][]float64)  // map[code]vals
 	t.weekdayTpro = make(map[string][]float64) // map[code]vals
 	t.weekendTpro = make(map[string][]float64) // map[code]vals
-	fid, err := os.Open(t.c.TemporalProFile)
-	if err != nil {
-		return fmt.Errorf("temporalPro: %v \nFile= %v",
-			err.Error(), t.c.TemporalRefFile)
-	} else {
-		defer fid.Close()
-	}
 	scanner := bufio.NewScanner(fid)
-	tType := ""
+	var tType string
+	var err error
 	// read in Tpro file
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -270,38 +260,43 @@ func (t *temporalSector) getTemporalPro() error {
 		}
 		switch tType {
 		case "monthly":
-			code, pro, err := parseTproLine(line, 12)
+			var code string
+			var pro []float64
+			code, pro, err = parseTproLine(line, 12)
 			if err != nil {
 				return err
 			}
 			t.monthlyTpro[code] = pro
 		case "weekly":
-			code, pro, err := parseTproLine(line, 7)
+			var code string
+			var pro []float64
+			code, pro, err = parseTproLine(line, 7)
 			if err != nil {
-				return err
+				return fmt.Errorf("aep: processing temporal profile line %v: %v", line, err)
 			}
 			t.weeklyTpro[code] = pro
 		case "diurnal weekday":
-			code, pro, err := parseTproLine(line, 24)
+			var code string
+			var pro []float64
+			code, pro, err = parseTproLine(line, 24)
 			if err != nil {
-				return err
+				return fmt.Errorf("aep: processing temporal profile line %v: %v", line, err)
 			}
 			t.weekdayTpro[code] = pro
 		case "diurnal weekend":
-			code, pro, err := parseTproLine(line, 24)
+			var code string
+			var pro []float64
+			code, pro, err = parseTproLine(line, 24)
 			if err != nil {
-				return err
+				return fmt.Errorf("aep: processing temporal profile line %v: %v", line, err)
 			}
 			t.weekendTpro[code] = pro
 		default:
-			err = fmt.Errorf("In %v: Unknown temporal type %v.",
-				t.c.TemporalProFile, tType)
-			return err
+			return fmt.Errorf("aep: processing temporal profiles: unknown temporal type %v", tType)
 		}
 	}
 	if err = scanner.Err(); err != nil {
-		return fmt.Errorf("TemporalPro: %v \nFile= %v",
-			err.Error(), t.c.TemporalRefFile)
+		return fmt.Errorf("aep: reading temporal profile file: %v", err)
 	}
 	return nil
 }
@@ -356,16 +351,12 @@ type cemSum struct {
 	HTINPUT float64 // Heat input (mmBtu) (required)
 }
 
-func (t *temporalSector) getCEMdata() {
-	t.c.Log("Getting CEM data...", 1)
+func (t *TemporalProcessor) getCEMdata(files []io.Reader) error {
+	fmt.Println("Getting CEM data...")
 	t.cemArray = make(map[[2]string]map[string]*cemData) // map[id,boiler][time]data
 	t.cemSum = make(map[[2]string]*cemSum)               // map[id,boiler]data
 
-	for _, fname := range t.c.CEMFileNames {
-		f, err := os.Open(fname)
-		if err != nil {
-			panic(err)
-		}
+	for _, f := range files {
 		r := csv.NewReader(f)
 		for {
 			rec, err := r.Read()
@@ -373,7 +364,7 @@ func (t *temporalSector) getCEMdata() {
 				if err == io.EOF {
 					break
 				}
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			orisID := trimString(rec[0])
 			if orisID == "" {
@@ -384,35 +375,35 @@ func (t *temporalSector) getCEMdata() {
 			hour := rec[3]
 			noxmass, err := stringToFloat(rec[4])
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			if noxmass < 0. {
 				noxmass = 0
 			}
 			so2mass, err := stringToFloat(rec[5])
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			if so2mass < 0. {
 				so2mass = 0
 			}
 			gload, err := stringToFloat(rec[6])
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			if gload < 0. {
 				gload = 0
 			}
 			sload, err := stringToFloat(rec[7])
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			if sload < 0. {
 				sload = 0
 			}
 			htinput, err := stringToFloat(rec[8])
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("aep: reading CEM data: %v", err)
 			}
 			if htinput < 0. {
 				htinput = 0
@@ -426,7 +417,6 @@ func (t *temporalSector) getCEMdata() {
 			t.cemArray[id][yymmdd+" "+hour] = &cemData{NOXMASS: float32(noxmass),
 				SO2MASS: float32(so2mass), GLOAD: float32(gload), SLOAD: float32(sload), HTINPUT: float32(htinput)}
 		}
-		f.Close()
 	}
 	// Calculate annual totals
 	for id, vals := range t.cemArray {
@@ -446,313 +436,26 @@ func (t *temporalSector) getCEMdata() {
 			delete(t.cemArray, id)
 		}
 	}
-	t.c.Log("Finished getting CEM data...", 1)
+	fmt.Println("Finished getting CEM data...")
+	return nil
 }
 
-func (t *temporalSector) getTemporalCodes(SCC, FIPS string) [3]string {
+func (t *TemporalProcessor) getTemporalCodes(SCC, FIPS string, partialMatch bool) ([3]string, error) {
 	var codes interface{}
 	var err error
-	if !t.c.MatchFullSCC {
-		_, _, codes, err =
-			MatchCodeDouble(SCC, FIPS, t.temporalRef)
+	if partialMatch {
+		_, _, codes, err = MatchCodeDouble(SCC, FIPS, t.temporalRef)
 	} else {
 		_, codes, err = MatchCode(FIPS, t.temporalRef[SCC])
 	}
 	if err != nil {
-		err = fmt.Errorf("In temporal reference file: %v. (SCC=%v, FIPS=%v).",
-			err.Error(), SCC, FIPS)
-		panic(err)
+		return [3]string{}, fmt.Errorf("aep: getting temporal code for SCC=%v, FIPS=%v: %v", SCC, FIPS, err)
 	}
-	return codes.([3]string)
+	return codes.([3]string), nil
 }
 
-var aggregateArea = func(t *temporalSector, record *ParsedRecord) {
-	temporalCodes := t.getTemporalCodes(record.SCC, record.FIPS)
-	// Create matrices if they don't exist
-	if _, ok := t.AreaData[temporalCodes]; !ok {
-		t.AreaData[temporalCodes] = make(map[Period]map[string][]*sparse.SparseArray)
-	}
-	// Add data from record into matricies.
-	for p, _ := range record.ANN_EMIS {
-		for i, _ := range t.tp.grids {
-			gridEmis, gridUnits, err := record.GriddedEmissions(t.sp, i, p)
-			if err != nil {
-				panic(err)
-			}
-			for pol, emis := range gridEmis {
-				if _, ok := t.AreaData[temporalCodes][p]; !ok {
-					t.AreaData[temporalCodes][p] =
-						make(map[string][]*sparse.SparseArray)
-				}
-				if _, ok := t.AreaData[temporalCodes][p][pol]; !ok {
-					t.AreaData[temporalCodes][p][pol] =
-						make([]*sparse.SparseArray, len(t.tp.grids))
-					for i, grid := range t.tp.grids {
-						t.AreaData[temporalCodes][p][pol][i] =
-							sparse.ZerosSparse(grid.Ny, grid.Nx)
-					}
-				}
-				// change units from emissions per year to emissions per hour
-				units := strings.Replace(gridUnits[pol], "/year", "/hour", -1)
-				t.addUnits(pol, units)
-				t.AreaData[temporalCodes][p][pol][i].AddSparse(emis)
-			}
-		}
-	}
-}
-
-// add units into an existing units list.
-func (ts *temporalSector) addUnits(pol string, newUnits string) {
-	if unitsCheck, ok := ts.tp.Units[pol]; ok {
-		if unitsCheck != newUnits {
-			panic(fmt.Sprintf("Units don't match: %v != %v",
-				ts.tp.Units[pol], newUnits))
-		}
-	} else {
-		ts.tp.Units[pol] = newUnits
-	}
-}
-
-var aggregatePoint = func(t *temporalSector, record *ParsedRecord) {
-	temporalCodes := t.getTemporalCodes(record.SCC, record.FIPS)
-	// Create point arrays if they don't exist
-	if _, ok := t.PointData[temporalCodes]; !ok {
-		t.PointData[temporalCodes] = make([]*ParsedRecord, 0)
-	}
-	if len(record.ANN_EMIS) != 0 {
-		t.PointData[temporalCodes] = append(t.PointData[temporalCodes], record)
-	}
-	// change units from emissions per year to emissions per hour
-	for _, periodData := range record.ANN_EMIS {
-		for pol, rec := range periodData {
-			units := strings.Replace(rec.Units, "/year", "/hour", -1)
-			t.addUnits(pol, units)
-		}
-	}
-}
-
-// add area data.
-var addEmisAtTimeTproArea = func(t *temporalSector, time time.Time, o Outputter,
-	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
-	t.mu.RLock()
-	p := t.c.getPeriod(time)
-	// Start workers for concurrent processing
-	type dataHolder struct {
-		temporalCodes [3]string
-		data          map[Period]map[string][]*sparse.SparseArray
-	}
-	dataChan := make(chan dataHolder)
-	var addLock sync.Mutex
-	doneChan := make(chan int)
-	nprocs := runtime.GOMAXPROCS(-1)
-	for i := 0; i < nprocs; i++ {
-		go func() {
-			for d := range dataChan {
-				tFactors := t.griddedTemporalFactors(d.temporalCodes, time)
-				for pol, gridData := range d.data[p] {
-					addLock.Lock()
-					if _, ok := emis[pol]; !ok { // initialize array
-						emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
-						for i, grid := range t.tp.grids {
-							emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
-								grid.Ny, grid.Nx)
-						}
-					}
-					addLock.Unlock()
-					for i, g := range gridData {
-						// multiply by temporal factor to get time step
-						for _, ix := range g.Nonzero() {
-							val := g.Get1d(ix)
-							tFactor := tFactors[i].Get1d(ix)
-							index := g.IndexNd(ix)
-							addLock.Lock()
-							emis[pol][i].
-								AddVal(val*tFactor, 0, index[0], index[1])
-							addLock.Unlock()
-						}
-					}
-				}
-			}
-			doneChan <- 0
-		}()
-	}
-	for temporalCodes, data := range t.AreaData {
-		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
-	}
-	close(dataChan)
-	for i := 0; i < nprocs; i++ {
-		<-doneChan
-	}
-	t.mu.RUnlock()
-	return emis
-}
-
-// add point data
-var addEmisAtTimeTproPoint = func(t *temporalSector, time time.Time, o Outputter,
-	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
-	p := t.c.getPeriod(time)
-	t.mu.RLock()
-	// Start workers for concurrent processing
-	type dataHolder struct {
-		temporalCodes [3]string
-		data          []*ParsedRecord
-	}
-	dataChan := make(chan dataHolder)
-	var addLock sync.Mutex
-	doneChan := make(chan int)
-	nprocs := runtime.GOMAXPROCS(-1)
-	for i := 0; i < nprocs; i++ {
-		go func() {
-			for d := range dataChan {
-				tFactors := t.griddedTemporalFactors(d.temporalCodes, time)
-				for _, record := range d.data {
-					e, kPlume := emisAtTimeTproPoint(tFactors, record, p, t.tp.sp, o)
-					for pol, polEmis := range e {
-						addLock.Lock()
-						if _, ok := emis[pol]; !ok { // initialize array
-							emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
-							for i, grid := range t.tp.grids {
-								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
-									grid.Ny, grid.Nx)
-							}
-						}
-						addLock.Unlock()
-						for gi, gridEmis := range polEmis {
-							if gridEmis == nil {
-								continue
-							}
-							for _, ix := range gridEmis.Nonzero() {
-								val := gridEmis.Get1d(ix)
-								index := gridEmis.IndexNd(ix)
-								addLock.Lock()
-								emis[pol][gi].
-									AddVal(val, kPlume[gi], index[0], index[1])
-								addLock.Unlock()
-							}
-						}
-					}
-				}
-			}
-			doneChan <- 0
-		}()
-	}
-	for temporalCodes, data := range t.PointData {
-		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
-	}
-	close(dataChan)
-	for i := 0; i < nprocs; i++ {
-		<-doneChan
-	}
-	t.mu.RUnlock()
-	return emis
-}
-
-func emisAtTimeTproPoint(tFactors []*sparse.SparseArray,
-	record *ParsedRecord, p Period, sp *SpatialProcessor, o Outputter) (
-	map[string][]*sparse.SparseArray, []int) {
-	kPlume := make([]int, len(tFactors))
-	out := make(map[string][]*sparse.SparseArray)
-	for pol, _ := range record.ANN_EMIS[p] {
-		out[pol] = make([]*sparse.SparseArray, len(tFactors))
-	}
-	for gi, tFac := range tFactors {
-		gridEmis, _, err := record.GriddedEmissions(sp, gi, p)
-		if err != nil {
-			panic(err)
-		}
-		kPlume[gi] = o.PlumeRise(gi, record)
-		for pol, vals := range gridEmis {
-			out[pol][gi] = sparse.ArrayMultiply(vals, tFac)
-		}
-	}
-	return out, kPlume
-}
-
-// First, try to match the record ORIS ID and Boiler ID to the cem database
-// and use CEM temporalization.
-// If there is no match, use the normal TPRO temporalization.
-var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
-	emis map[string][]*sparse.SparseArray) map[string][]*sparse.SparseArray {
-	p := t.c.getPeriod(time)
-	t.mu.RLock()
-	cemTimes := t.tp.griddedTimeNoDST(time)
-	// Start workers for concurrent processing
-	type dataHolder struct {
-		temporalCodes [3]string
-		data          []*ParsedRecord
-	}
-	dataChan := make(chan dataHolder)
-	var addLock sync.Mutex
-	doneChan := make(chan int)
-	nprocs := runtime.GOMAXPROCS(-1)
-	for i := 0; i < nprocs; i++ {
-		go func() {
-			for d := range dataChan {
-				tproTFactors := t.griddedTemporalFactors(d.temporalCodes, time)
-				for _, record := range d.data {
-					kPlume := make([]int, len(t.tp.grids))
-					e := make(map[string][]*sparse.SparseArray)
-					id := [2]string{record.ORIS_FACILITY_CODE, record.ORIS_BOILER_ID}
-					if cemsum, ok := t.cemSum[id]; ok {
-						for pol, _ := range record.ANN_EMIS[p] {
-							e[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
-						}
-						for gi, srg := range record.GridSrgs {
-							kPlume[gi] = o.PlumeRise(gi, record)
-							for pol, emisval := range record.ANN_EMIS[p] {
-								for _, ix := range srg.Nonzero() {
-									tFactor := getCEMtFactor(emisval.PolType, cemsum,
-										t.cemArray[id][cemTimes[gi][ix]])
-									e[pol][gi] = sparse.ZerosSparse(
-										t.tp.grids[gi].Ny, t.tp.grids[gi].Nx)
-									e[pol][gi].Elements[ix] = emisval.Val * tFactor *
-										srg.Elements[ix]
-								}
-							}
-						}
-					} else {
-						e, kPlume = emisAtTimeTproPoint(tproTFactors, record, p, t.tp.sp, o)
-					}
-					for pol, polEmis := range e {
-						addLock.Lock()
-						if _, ok := emis[pol]; !ok { // initialize array
-							emis[pol] = make([]*sparse.SparseArray, len(t.tp.grids))
-							for i, grid := range t.tp.grids {
-								emis[pol][i] = sparse.ZerosSparse(o.Kemit(),
-									grid.Ny, grid.Nx)
-							}
-						}
-						addLock.Unlock()
-						for gi, gridEmis := range polEmis {
-							if gridEmis == nil {
-								continue
-							}
-							for _, ix := range gridEmis.Nonzero() {
-								val := gridEmis.Get1d(ix)
-								index := gridEmis.IndexNd(ix)
-								addLock.Lock()
-								emis[pol][gi].
-									AddVal(val, kPlume[gi], index[0], index[1])
-								addLock.Unlock()
-							}
-						}
-					}
-				}
-			}
-			doneChan <- 0
-		}()
-	}
-	for temporalCodes, data := range t.PointData {
-		dataChan <- dataHolder{temporalCodes: temporalCodes, data: data}
-	}
-	close(dataChan)
-	for i := 0; i < nprocs; i++ {
-		<-doneChan
-	}
-	t.mu.RUnlock()
-	return emis
-}
-
+// getCEMtFactor returns the fraction of annual total emissions occurring
+// during the hour of interest.
 // If the pollutant is NOx or SOx and the total annual NOx or SOx emissions are
 // greater than zero, the temporal factor is the NOx or SOx emissions at
 // the given time divided by the total annual NOx emissions.
@@ -763,10 +466,9 @@ var addEmisAtTimeCEM = func(t *temporalSector, time time.Time, o Outputter,
 // use gross load.
 // In all cases, if the hourly value is zero or missing but the annual
 // total value is greater than zero, the temporal factor is zero.
-func getCEMtFactor(polType *PolHolder,
-	cemsum *cemSum, cemtime *cemData) float64 {
+func getCEMtFactor(pol Pollutant, cemsum *cemSum, cemtime *cemData) float64 {
 	if cemtime == nil {
-		return 0.
+		return 0 // We don't have any emissions at this time.
 	}
 	var heatcalc = func() float64 {
 		if cemsum.HTINPUT > 0. {
@@ -775,18 +477,14 @@ func getCEMtFactor(polType *PolHolder,
 			return float64(cemtime.SLOAD) / cemsum.SLOAD
 		} else if cemsum.GLOAD > 0. {
 			return float64(cemtime.GLOAD) / cemsum.GLOAD
-		} else {
-			panic("HTINPUT, SLOAD, and GLOAD are all not > 0. " +
-				"This shouldn't happen.")
 		}
+		panic("HTINPUT, SLOAD, and GLOAD are all not > 0. This shouldn't happen.")
 	}
 	// Figure out what type of pollutant it is.
 	var isNOx, isSOx bool
-	if polType.SpecType == "NOx" ||
-		IsStringInArray(polType.SpecNames, "Nitrogen Dioxide") {
+	if IsStringInArray([]string{"nox", "no2", "no"}, strings.ToLower(pol.Name)) {
 		isNOx = true
-	} else if polType.SpecType == "SOx" ||
-		IsStringInArray(polType.SpecNames, "Sulfur dioxide") {
+	} else if IsStringInArray([]string{"so2", "sox"}, strings.ToLower(pol.Name)) {
 		isSOx = true
 	}
 	if isNOx {
@@ -804,10 +502,14 @@ func getCEMtFactor(polType *PolHolder,
 	}
 }
 
-func (t *temporalSector) getTemporalFactor(monthlyCode, weeklyCode,
-	diurnalCode string, localTime time.Time) float64 {
+// temporalFactor returns the fraction of annual total emissions occurring during
+// the hour starting at localTime for the given temporal profile codes.
+func (t *TemporalProcessor) temporalFactor(monthlyCode, weeklyCode, diurnalCode string, localTime time.Time) (float64, error) {
 	weeksinmonth := weeksInMonth(localTime)
 	month := localTime.Month() - 1
+	if _, ok := t.monthlyTpro[monthlyCode]; !ok {
+		return -1, fmt.Errorf("aep: can't find temporal factor for month code %s; month %v", monthlyCode, month)
+	}
 	mFac := t.monthlyTpro[monthlyCode][month]
 	var weekday int
 	if _, ok := t.holidays[localTime.Format(holidayFormat)]; ok {
@@ -818,143 +520,22 @@ func (t *temporalSector) getTemporalFactor(monthlyCode, weeklyCode,
 		// switch from sunday to monday for first weekday
 		weekday = (int(localTime.Weekday()) + 6) % 7
 	}
+	if _, ok := t.weeklyTpro[weeklyCode]; !ok {
+		return -1, fmt.Errorf("aep: can't find temporal factor for week code %s; weekday %v", weeklyCode, weekday)
+	}
 	wFac := t.weeklyTpro[weeklyCode][weekday]
 	hour := localTime.Hour()
 	var dFac float64
 	if weekday < 5 {
+		if _, ok := t.weekdayTpro[diurnalCode]; !ok {
+			return -1, fmt.Errorf("aep: can't find weekday temporal factor for diurnal code %s; hour %v", diurnalCode, hour)
+		}
 		dFac = t.weekdayTpro[diurnalCode][hour]
 	} else {
+		if _, ok := t.weekendTpro[diurnalCode]; !ok {
+			return -1, fmt.Errorf("aep: can't find weekend temporal factor for diurnal code %s; hour %v", diurnalCode, hour)
+		}
 		dFac = t.weekendTpro[diurnalCode][hour]
 	}
-	return 1. * mFac / weeksinmonth * wFac * dFac
-}
-
-type tFacRequest struct {
-	codes      [3]string
-	outputTime time.Time
-	outChan    chan []*sparse.SparseArray
-}
-
-// get temporal fractors for a given time. This should properly account for
-// daylight savings time.
-func (t *temporalSector) griddedTemporalFactors(codes [3]string,
-	outputTime time.Time) []*sparse.SparseArray {
-	out := make([]*sparse.SparseArray, len(t.tp.grids))
-	for i, grid := range t.tp.grids {
-		out[i] = sparse.ZerosSparse(grid.Ny, grid.Nx)
-		for tz, cells := range grid.TimeZones {
-			location, err := time.LoadLocation(
-				strings.Replace(tz, " ", "_", -1))
-			if err != nil {
-				panic(fmt.Errorf("Unknown timezone %v.\nError: %v", tz, err))
-			}
-			localTime := outputTime.In(location)
-			fac := t.getTemporalFactor(codes[0], codes[1], codes[2], localTime)
-			out[i].AddSparse(cells.ScaleCopy(fac))
-		}
-	}
-	return out
-}
-
-// get times in grid cells with no daylight savings (needed for CEM data)
-func (tp *TemporalProcessor) griddedTimeNoDST(
-	outputTime time.Time) []map[int]string {
-	const format = "060102 15"
-	out := make([]map[int]string, len(tp.grids))
-	for i, grid := range tp.grids {
-		out[i] = make(map[int]string)
-		for tz, cells := range grid.TimeZones {
-			location, err := time.LoadLocation(
-				strings.Replace(tz, " ", "_", -1))
-			if err != nil {
-				panic(fmt.Errorf("Unknown timezone %v.\nError: %v", tz, err))
-			}
-			localTimeNoDST := timeNoDST(outputTime, location)
-			timeString := localTimeNoDST.Format(format)
-			for index, _ := range cells.Elements {
-				out[i][index] = timeString
-			}
-		}
-	}
-	return out
-}
-
-// get time with no daylight savings (needed for CEM data)
-func timeNoDST(output time.Time, loc *time.Location) time.Time {
-	localTime := output.In(loc)
-	_, winterOffset := time.Date(localTime.Year(), 1, 1, 0, 0, 0, 0, loc).Zone()
-	_, summerOffset := time.Date(localTime.Year(), 7, 1, 0, 0, 0, 0, loc).Zone()
-
-	if winterOffset > summerOffset {
-		winterOffset, summerOffset = summerOffset, winterOffset
-	}
-	locNoDST := time.FixedZone(loc.String()+" No DST", winterOffset)
-	return localTime.In(locNoDST)
-}
-
-type TimeStepData struct {
-	Time time.Time
-	Emis map[string][]*sparse.SparseArray // map[pol][grid]array
-}
-
-func (c *Context) CurrentMonth() string {
-	return strings.ToLower(c.currentTime.Format("Jan"))
-}
-
-// Function EmisAtTime returns emissions for the
-// given time (in the output timezone).
-func (tp *TemporalProcessor) EmisAtTime(time time.Time, o Outputter) *TimeStepData {
-	ts := new(TimeStepData)
-	ts.Time = time
-	ts.Emis = make(map[string][]*sparse.SparseArray) // map[pol][grid]array
-	// get sector data
-	for _, sectorData := range tp.sectors {
-		ts.Emis = sectorData.addEmisAtTime(sectorData, time, o, ts.Emis)
-	}
-	tp.temporalReport.addTstep(ts)
-	return ts
-}
-
-type TemporalReport struct {
-	mu        sync.RWMutex
-	Time      []time.Time
-	Data      map[string]map[string][]float64 // map[pol][grid][time]emissions
-	numTsteps int
-	Units     map[string]string // map[pol]units
-	tp        *TemporalProcessor
-}
-
-func (tp *TemporalProcessor) newTemporalReport(c *Context,
-	units map[string]string) *TemporalReport {
-	tr := new(TemporalReport)
-	tr.tp = tp
-	tr.Data = make(map[string]map[string][]float64)
-	tr.numTsteps = int(c.endDate.Sub(c.startDate).Hours()/c.tStep.Hours() + 0.5)
-	tr.Time = make([]time.Time, 0, tr.numTsteps)
-	tr.Units = units
-	return tr
-}
-
-func (tr *TemporalReport) addTstep(ts *TimeStepData) {
-	tr.mu.Lock()
-	tr.Time = append(tr.Time, ts.Time)
-	vals := make(map[string]map[string]float64)
-	for pol, data := range ts.Emis {
-		vals[pol] = make(map[string]float64)
-		for i, gridData := range data {
-			vals[pol][tr.tp.grids[i].Name] += gridData.Sum()
-		}
-	}
-	for pol, d := range vals {
-		for g, data := range d {
-			if _, ok := tr.Data[pol]; !ok {
-				for _, gg := range tr.tp.grids {
-					tr.Data[pol] = make(map[string][]float64)
-					tr.Data[pol][gg.Name] = make([]float64, 0, tr.numTsteps)
-				}
-			}
-			tr.Data[pol][g] = append(tr.Data[pol][g], data)
-		}
-	}
-	tr.mu.Unlock()
+	return 1. * mFac / weeksinmonth * wFac * dFac, nil
 }

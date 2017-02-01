@@ -56,10 +56,6 @@ type SpatialProcessor struct {
 	// matchFullSCC indicates whether partial SCC matches are okay.
 	matchFullSCC bool
 
-	// report information
-	totals    *SpatialTotals
-	totalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray
-
 	cache    *requestcache.Cache
 	lazyLoad sync.Once
 
@@ -97,9 +93,6 @@ func NewSpatialProcessor(srgSpecs *SrgSpecs, grids []*GridDef, gridRef *GridRef,
 	sp.GridRef = *gridRef
 	sp.inputSR = inputSR
 	sp.matchFullSCC = matchFullSCC
-
-	sp.totals = newSpatialTotals()
-	sp.totalGrid = make(map[*GridDef]map[Pollutant]*sparse.SparseArray)
 
 	sp.MemCacheSize = 100
 	sp.MaxMergeDepth = 10
@@ -144,44 +137,6 @@ func (sp *SpatialProcessor) load() {
 			requestcache.Deduplicate(), requestcache.Memory(sp.MemCacheSize),
 			requestcache.Disk(sp.DiskCachePath, marshalGob, unmarshalGob))
 	}
-}
-
-// SpatialTotals hold summary results of spatialized emissions records.
-type SpatialTotals struct {
-	InsideDomainTotals  map[string]map[Pollutant]*SpecValUnits
-	OutsideDomainTotals map[string]map[Pollutant]*SpecValUnits
-}
-
-func newSpatialTotals() *SpatialTotals {
-	out := new(SpatialTotals)
-	out.InsideDomainTotals = make(map[string]map[Pollutant]*SpecValUnits)
-	out.OutsideDomainTotals = make(map[string]map[Pollutant]*SpecValUnits)
-	return out
-}
-
-func (h *SpatialTotals) add(pol Pollutant, grid string, emis float64,
-	gridEmis *sparse.SparseArray, units string) {
-	t := *h
-	if _, ok := t.InsideDomainTotals[grid]; !ok {
-		t.InsideDomainTotals[grid] = make(map[Pollutant]*SpecValUnits)
-		t.OutsideDomainTotals[grid] = make(map[Pollutant]*SpecValUnits)
-	}
-	if _, ok := t.InsideDomainTotals[grid][pol]; !ok {
-		t.InsideDomainTotals[grid][pol] = new(SpecValUnits)
-		t.InsideDomainTotals[grid][pol].Units = units
-		t.OutsideDomainTotals[grid][pol] = new(SpecValUnits)
-		t.OutsideDomainTotals[grid][pol].Units = units
-	} else {
-		if t.InsideDomainTotals[grid][pol].Units != units {
-			err := fmt.Errorf("Units problem: %v! = %v",
-				t.InsideDomainTotals[grid][pol].Units, units)
-			panic(err)
-		}
-	}
-	gridTotal := gridEmis.Sum()
-	t.InsideDomainTotals[grid][pol].Val += gridTotal
-	t.OutsideDomainTotals[grid][pol].Val += emis - gridTotal
-	*h = t
 }
 
 // Spatialize takes a spatial processor (sp) and a grid index number (gi) and
@@ -292,37 +247,7 @@ func GriddedEmissions(r Record, begin, end time.Time, sp *SpatialProcessor,
 		emis[pol] = gridSrg.ScaleCopy(data.Value())
 		units[pol] = data.Dimensions()
 	}
-	sp.addEmisToReport(emis, units, periodEmis, gi)
 	return
-}
-
-// addEmisToReport adds spatialized emissions to the spatial reports.
-func (sp *SpatialProcessor) addEmisToReport(emis map[Pollutant]*sparse.SparseArray,
-	units map[Pollutant]unit.Dimensions, periodEmis map[Pollutant]*unit.Unit, gi int) error {
-
-	grid := sp.Grids[gi]
-	if _, ok := sp.totalGrid[grid]; !ok {
-		sp.totalGrid[grid] = make(map[Pollutant]*sparse.SparseArray)
-	}
-	for pol, polGridEmis := range emis {
-		unit := units[pol]
-
-		if _, ok := sp.totalGrid[grid][pol]; !ok {
-			sp.totalGrid[grid][pol] =
-				sparse.ZerosSparse(grid.Ny, grid.Nx)
-		}
-		sp.totalGrid[grid][pol].AddSparse(polGridEmis)
-		sp.totals.add(pol, grid.Name, periodEmis[pol].Value(),
-			polGridEmis, unit.String())
-	}
-	return nil
-}
-
-// Report returns summary information on the records that have been processed
-// by sp.
-func (sp *SpatialProcessor) Report() (totals *SpatialTotals,
-	totalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray) {
-	return sp.totals, sp.totalGrid
 }
 
 // Surrogate gets the specified spatial surrogate.
@@ -347,6 +272,9 @@ func (sp *SpatialProcessor) Surrogate(srgSpec *SrgSpec, grid *GridDef, fips stri
 	// if srg was nil, try backup surrogates.
 	for _, newName := range srgSpec.BackupSurrogateNames {
 		newSrgSpec, err := sp.SrgSpecs.GetByName(srgSpec.Region, newName)
+		if err != nil {
+			return nil, false, err
+		}
 		s := &srgGrid{srg: newSrgSpec, gridData: grid}
 		req := sp.cache.NewRequest(context.Background(), s, s.key())
 		resultI, err := req.Result()
@@ -505,6 +433,8 @@ func (s *SrgSpec) Status() Status {
 	return o
 }
 
+const none = "NONE"
+
 // ReadSrgSpec reads a SMOKE formatted spatial surrogate specification file.
 // Results are returned as a map of surrogate specifications as indexed by
 // their unique ID, which is Region+SurrogateCode. shapefileDir specifies the
@@ -546,7 +476,7 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 		srg.Details = record[13]
 
 		// Parse weight function
-		if WEIGHTATTRIBUTE != "NONE" && WEIGHTATTRIBUTE != "" {
+		if WEIGHTATTRIBUTE != none && WEIGHTATTRIBUTE != "" {
 			srg.WeightColumns = append(srg.WeightColumns,
 				strings.TrimSpace(WEIGHTATTRIBUTE))
 			srg.WeightFactors = append(srg.WeightFactors, 1.)
@@ -578,7 +508,7 @@ func ReadSrgSpec(fid io.Reader, shapefileDir string, checkShapefiles bool) (*Srg
 		srg.FilterFunction = ParseSurrogateFilter(FILTERFUNCTION)
 
 		// Parse merge function
-		if MERGEFUNCTION != "NONE" && MERGEFUNCTION != "" {
+		if MERGEFUNCTION != none && MERGEFUNCTION != "" {
 			s := strings.Split(MERGEFUNCTION, "+")
 			for _, s2 := range s {
 				s3 := strings.Split(s2, "*")
@@ -726,25 +656,23 @@ func (gr GridRef) GetSrgCode(SCC string, c Country, FIPS string, matchFullSCC bo
 // Merge combines values in gr2 into gr. If gr2 combines any values that
 // conflict with values already in gr, an error is returned.
 func (gr *GridRef) Merge(gr2 GridRef) error {
-	grx := *gr
 	for country, d1 := range gr2 {
-		if _, ok := grx[country]; !ok {
-			grx[country] = make(map[string]map[string]interface{})
+		if _, ok := (*gr)[country]; !ok {
+			(*gr)[country] = make(map[string]map[string]interface{})
 		}
 		for SCC, d2 := range d1 {
-			if _, ok := grx[country][SCC]; !ok {
-				grx[country][SCC] = make(map[string]interface{})
+			if _, ok := (*gr)[country][SCC]; !ok {
+				(*gr)[country][SCC] = make(map[string]interface{})
 			}
 			for FIPS, code := range d2 {
-				if existingCode, ok := grx[country][SCC][FIPS]; ok && existingCode != code {
+				if existingCode, ok := (*gr)[country][SCC][FIPS]; ok && existingCode != code {
 					return fmt.Errorf("GridRef already has code of %s for country=%s, "+
 						"SCC=%s, FIPS=%s. Cannot replace with code %s.",
 						existingCode, country, SCC, FIPS, code)
 				}
-				grx[country][SCC][FIPS] = code
+				(*gr)[country][SCC][FIPS] = code
 			}
 		}
 	}
-	gr = &grx
 	return nil
 }

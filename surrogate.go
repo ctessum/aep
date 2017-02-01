@@ -136,7 +136,7 @@ type SurrogateFilter struct {
 // ParseSurrogateFilter creates a new surrogate filter object from a
 // SMOKE-format spatial surrogate filter definition.
 func ParseSurrogateFilter(filterFunction string) *SurrogateFilter {
-	if filterFunction != "NONE" && filterFunction != "" {
+	if filterFunction != none && filterFunction != "" {
 		srgflt := new(SurrogateFilter)
 		srgflt.Values = make([]string, 0)
 		var s []string

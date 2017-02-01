@@ -121,7 +121,7 @@ func parseEmisRate(emis string, secPerPeriod *unit.Unit, inputConv func(float64)
 // DropPols removes the pollutants that are not in polsToKeep
 // and returns the total emissions removed, in units of [mass].
 // If polsToKeep is nil, all pollutants are kept.
-func (e *Emissions) DropPols(polsToKeep map[string]*PolHolder) map[Pollutant]*unit.Unit {
+func (e *Emissions) DropPols(polsToKeep Speciation) map[Pollutant]*unit.Unit {
 	if polsToKeep == nil {
 		return nil
 	}
@@ -224,7 +224,10 @@ func (e *Emissions) GetEmissions() *Emissions {
 
 // CombineEmissions combines emissions from r2 into this record.
 func (e *Emissions) CombineEmissions(r2 Record) {
-	e2 := *r2.GetEmissions()
+	e.combine(*r2.GetEmissions())
+}
+
+func (e *Emissions) combine(e2 Emissions) {
 	e.e = append(e.e, e2.e...)
 	for pol, u := range e2.units {
 		if uu, ok := e.units[pol]; ok {

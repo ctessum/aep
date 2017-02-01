@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ctessum/geom/proj"
+	"github.com/ctessum/unit"
 
 	"bitbucket.org/ctessum/cdf"
 	"bitbucket.org/ctessum/sparse"
@@ -44,8 +45,8 @@ const (
 	kappa        = 0.2854  // related to von karman's constant
 )
 
+// WRFOutputter outputs emissions in WRF-Chem format.
 type WRFOutputter struct {
-	tp            *TemporalProcessor
 	filebase      string
 	dateFormat    string
 	files         *wrfFiles
@@ -55,17 +56,17 @@ type WRFOutputter struct {
 	oldWRFOut     string
 }
 
-func (w *WRFOutputter) Kemit() int {
+// Layers returns the number of vertical emission layers being used.
+func (w *WRFOutputter) Layers() int {
 	return w.files.config.Kemit
 }
 
 // NewOutputter creates a new WRF-formatted file outputter.
-func (d *WRFconfigData) NewOutputter(tp *TemporalProcessor, outputDir, oldWRFOut string) *WRFOutputter {
+func (d *WRFconfigData) NewOutputter(outputDir, oldWRFOut string) *WRFOutputter {
 	w := new(WRFOutputter)
-	w.tp = tp
 	w.config = d
 	w.oldWRFOut = oldWRFOut
-	w.tstepsPerFile = d.Frames_per_auxinput5[0] // TODO: Allow different nest to have different numbers of records.
+	w.tstepsPerFile = d.FramesPerAuxInput5[0] // TODO: Allow different nest to have different numbers of records.
 	w.filebase = filepath.Join(outputDir, "wrfchemi_[DOMAIN]_[DATE]")
 	if d.Nocolons == true {
 		w.dateFormat = "2006-01-02_15_04_05"
@@ -75,26 +76,32 @@ func (d *WRFconfigData) NewOutputter(tp *TemporalProcessor, outputDir, oldWRFOut
 	return w
 }
 
-func (w *WRFOutputter) Output(tp *TemporalProcessor, startTime, endTime time.Time, timeStep time.Duration) {
+// Output outputs the emissions in recs for every timeStep between
+// startTime and endTime.
+func (w *WRFOutputter) Output(recs []Record, sp *SpatialProcessor, tp *TemporalProcessor, partialMatch bool, startTime, endTime time.Time, timeStep time.Duration) error {
 	tstepsInFile := 0
-	w.newFiles(w.tp.Units, startTime)
+	totals := EmissionsTotal(recs)
+	w.newFiles(totals, sp.Grids, startTime)
 	if w.files.config.Kemit > 1 {
 		w.met = w.files.NewMetData(startTime, tstepsInFile)
 	}
 	ot := newOutputTimer(startTime, endTime, timeStep)
 	for {
-		ts := tp.EmisAtTime(ot.currentTime, w)
-		log.Printf("Writing WRF output for %v...", ts.Time)
+		ts, err := EmissionsGriddedAtTime(recs, ot.currentTime, w, sp, tp, partialMatch)
+		if err != nil {
+			return err
+		}
+		log.Printf("Writing WRF output for %v...", ot.currentTime)
 		if tstepsInFile == w.tstepsPerFile {
 			// open new set of files
 			w.closeFiles()
-			w.newFiles(tp.Units, ts.Time)
+			w.newFiles(totals, sp.Grids, ot.currentTime)
 			tstepsInFile = 0
 		}
-		w.files.writeTimestep(ts, tstepsInFile)
+		w.files.writeTimestep(ts, ot.currentTime, tstepsInFile)
 		if w.files.config.Kemit > 1 {
 			w.met.Close()
-			w.met = w.files.NewMetData(ts.Time, tstepsInFile)
+			w.met = w.files.NewMetData(ot.currentTime, tstepsInFile)
 		}
 		// either advance to next date or end loop
 		keepGoing := ot.NextTime()
@@ -105,25 +112,26 @@ func (w *WRFOutputter) Output(tp *TemporalProcessor, startTime, endTime time.Tim
 	}
 	w.closeFiles()
 	log.Printf("Finished writing WRF output.")
+	return nil
 }
 
 type wrfFiles struct {
 	fids         []*cdf.File
 	fidsToClose  []*os.File
 	config       *WRFconfigData
-	polsAndUnits map[string]string
+	polsAndUnits map[Pollutant]*unit.Unit
 	oldWRFout    string
 	grids        []*GridDef
 }
 
-func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
+func (w *WRFOutputter) newFiles(totals map[Pollutant]*unit.Unit, grids []*GridDef, date time.Time) {
 	var err error
 	w.files = new(wrfFiles)
-	w.files.grids = w.tp.grids
-	w.files.fids = make([]*cdf.File, w.config.Max_dom)
-	w.files.fidsToClose = make([]*os.File, w.config.Max_dom)
+	w.files.grids = grids
+	w.files.fids = make([]*cdf.File, w.config.MaxDom)
+	w.files.fidsToClose = make([]*os.File, w.config.MaxDom)
 	w.files.config = w.config
-	w.files.polsAndUnits = units
+	w.files.polsAndUnits = totals
 	w.files.oldWRFout = w.oldWRFOut
 	filename := strings.Replace(w.filebase, "[DATE]", date.Format(w.dateFormat), -1)
 	for i, domain := range w.config.DomainNames {
@@ -134,19 +142,19 @@ func (w *WRFOutputter) newFiles(units map[string]string, date time.Time) {
 
 		wrfoutH.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
 			"by AEP version "+Version+" ("+Website+")")
-		wrfoutH.AddAttribute("", "CEN_LAT", []float64{w.config.Ref_lat})
-		wrfoutH.AddAttribute("", "CEN_LOC", []float64{w.config.Ref_lon})
-		wrfoutH.AddAttribute("", "TRUELAT1", []float64{w.config.Truelat1})
-		wrfoutH.AddAttribute("", "TRUELAT2", []float64{w.config.Truelat2})
-		wrfoutH.AddAttribute("", "STAND_LON", []float64{w.config.Stand_lon})
-		wrfoutH.AddAttribute("", "MAP_PROJ", w.config.Map_proj)
-		wrfoutH.AddAttribute("", "REF_X", []float64{w.config.Ref_x})
-		wrfoutH.AddAttribute("", "REF_Y", []float64{w.config.Ref_y})
+		wrfoutH.AddAttribute("", "CEN_LAT", []float64{w.config.RefLat})
+		wrfoutH.AddAttribute("", "CEN_LOC", []float64{w.config.RefLon})
+		wrfoutH.AddAttribute("", "TRUELAT1", []float64{w.config.TrueLat1})
+		wrfoutH.AddAttribute("", "TRUELAT2", []float64{w.config.TrueLat2})
+		wrfoutH.AddAttribute("", "STAND_LON", []float64{w.config.StandLon})
+		wrfoutH.AddAttribute("", "MAP_PROJ", w.config.MapProj)
+		wrfoutH.AddAttribute("", "REF_X", []float64{w.config.RefX})
+		wrfoutH.AddAttribute("", "REF_Y", []float64{w.config.RefY})
 
 		wrfoutH.AddVariable("Times", []string{"Time", "DateStrLen"}, "")
 		// Create variables
 		for pol, units := range w.files.polsAndUnits {
-			createWRFvar(wrfoutH, "E_"+pol, units)
+			createWRFvar(wrfoutH, "E_"+pol.Name, units.Dimensions().String())
 		}
 
 		wrfoutH.Define()
@@ -197,48 +205,48 @@ func createWRFvar(h *cdf.Header, name, unitsIn string) {
 	h.AddAttribute(name, "coordinates", "XLONG XLAT")
 }
 
-func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
+func (w *wrfFiles) writeTimestep(ts map[Pollutant][]*sparse.SparseArray, timestep time.Time, ihr int) {
 	var err error
 	// Write out time
 	for _, f := range w.fids {
 		start := []int{ihr, 0}
 		end := []int{ihr + 1, 0}
 		r := f.Writer("Times", start, end)
-		_, err = r.Write(ts.Time.Format("2006-01-02_15:04:05"))
+		_, err = r.Write(timestep.Format("2006-01-02_15:04:05"))
 		if err != nil {
 			panic(err)
 		}
 	}
-	for pol := range ts.Emis {
+	for pol := range ts {
 		if _, ok := w.polsAndUnits[pol]; !ok {
 			panic(fmt.Sprintf("Pollutant %v not in the output file.", pol))
 		}
 	}
 	for pol, units := range w.polsAndUnits {
-		if _, ok := ts.Emis[pol]; !ok {
+		if _, ok := ts[pol]; !ok {
 			continue
 		}
 		for i, f := range w.fids {
 			var outData *sparse.SparseArray
 			// convert units
-			switch units {
+			switch units.Dimensions().String() {
 			case "mol/hour":
 				// gas conversion mole/hr --> mole/km(2)/hr
 				gasconv := float64(1. / (1.e-3 * w.config.Dx[i] *
 					1.e-3 * w.config.Dy[i]))
-				outData = ts.Emis[pol][i].ScaleCopy(gasconv)
+				outData = ts[pol][i].ScaleCopy(gasconv)
 			case "g/hour", "gram/hour":
 				// aerosol conversion g/hr --> microgram/m(2)/sec
 				partconv := float64(1.e6 / w.config.Dx[i] /
 					w.config.Dy[i] / 3600.)
-				outData = ts.Emis[pol][i].ScaleCopy(partconv)
+				outData = ts[pol][i].ScaleCopy(partconv)
 			default:
 				panic(fmt.Errorf("Can't handle units `%v'.", units))
 			}
 
 			start := []int{ihr, 0, 0, 0}
 			end := []int{ihr + 1, 0, 0, 0}
-			r := f.Writer("E_"+pol, start, end)
+			r := f.Writer("E_"+pol.Name, start, end)
 			if _, err = r.Write(outData.ToDense32()); err != nil {
 				panic(err)
 			}
@@ -248,34 +256,34 @@ func (w *wrfFiles) writeTimestep(ts *TimeStepData, ihr int) {
 
 // WRFconfigData hold information about a WRF simulation configuration.
 type WRFconfigData struct {
-	Max_dom              int
-	Parent_id            []int
-	Parent_grid_ratio    []float64
-	I_parent_start       []int
-	J_parent_start       []int
-	E_we                 []int
-	E_sn                 []int
-	Dx0                  float64
-	Dy0                  float64
-	Map_proj             string
-	Ref_lat              float64
-	Ref_lon              float64
-	Truelat1             float64
-	Truelat2             float64
-	Stand_lon            float64
-	Ref_x                float64
-	Ref_y                float64
-	S                    []float64
-	W                    []float64
-	Dx                   []float64
-	Dy                   []float64
-	Nx                   []int
-	Ny                   []int
-	DomainNames          []string
-	Frames_per_auxinput5 []int
-	Kemit                int
-	Nocolons             bool
-	sr                   *proj.SR
+	MaxDom             int
+	ParentID           []int
+	ParentGridRatio    []float64
+	IParentStart       []int
+	JParentStart       []int
+	EWE                []int
+	ESN                []int
+	Dx0                float64
+	Dy0                float64
+	MapProj            string
+	RefLat             float64
+	RefLon             float64
+	TrueLat1           float64
+	TrueLat2           float64
+	StandLon           float64
+	RefX               float64
+	RefY               float64
+	S                  []float64
+	W                  []float64
+	Dx                 []float64
+	Dy                 []float64
+	Nx                 []int
+	Ny                 []int
+	DomainNames        []string
+	FramesPerAuxInput5 []int
+	Kemit              int
+	Nocolons           bool
+	sr                 *proj.SR
 }
 
 // ParseWRFConfig extracts configuration information from a set of WRF namelists.
@@ -294,7 +302,7 @@ func (d *WRFconfigData) projection(e *wrfErrCat) {
 	const EarthRadius = 6370997.
 
 	var mapProj string
-	switch d.Map_proj {
+	switch d.MapProj {
 	case "lambert":
 		mapProj = "lcc"
 	case "lat-lon":
@@ -305,14 +313,14 @@ func (d *WRFconfigData) projection(e *wrfErrCat) {
 		e.Add(fmt.Errorf("ERROR: `lambert', `lat-lon', and `merc' "+
 			"are the only map projections"+
 			" that are currently supported (your projection is `%v').",
-			d.Map_proj))
+			d.MapProj))
 	}
 	d.sr = proj.NewSR()
 	d.sr.Name = mapProj
-	d.sr.Lat1 = d.Truelat1
-	d.sr.Lat2 = d.Truelat2
-	d.sr.Lat0 = d.Ref_lat
-	d.sr.Long0 = d.Ref_lon
+	d.sr.Lat1 = d.TrueLat1
+	d.sr.Lat2 = d.TrueLat2
+	d.sr.Lat0 = d.RefLat
+	d.sr.Long0 = d.RefLon
 	d.sr.A = EarthRadius
 	d.sr.B = EarthRadius
 	d.sr.ToMeter = 1.
@@ -323,17 +331,13 @@ func (d *WRFconfigData) projection(e *wrfErrCat) {
 // where tzFile is a shapefile containing timezone information, and tzColumn
 // is the data attribute column within that shapefile that contains the
 // timezone offsets in hours.
-func (d *WRFconfigData) Grids(tzFile, tzColumn string) ([]*GridDef, error) {
-	grids := make([]*GridDef, d.Max_dom)
-	for i := 0; i < d.Max_dom; i++ {
+func (d *WRFconfigData) Grids() []*GridDef {
+	grids := make([]*GridDef, d.MaxDom)
+	for i := 0; i < d.MaxDom; i++ {
 		grids[i] = NewGridRegular(d.DomainNames[i], d.Nx[i], d.Ny[i],
 			d.Dx[i], d.Dy[i], d.W[i], d.S[i], d.sr)
-		err := grids[i].GetTimeZones(tzFile, tzColumn)
-		if err != nil {
-			return grids, err
-		}
 	}
-	return grids, nil
+	return grids
 }
 
 // Parse a WPS namelist
@@ -362,37 +366,37 @@ func (d *WRFconfigData) parseWPSnamelist(filename string, e *wrfErrCat) {
 			val := strings.Trim(line[i+1:], " ,\n")
 			switch name {
 			case "max_dom":
-				d.Max_dom = namelistInt(val)
+				d.MaxDom = namelistInt(val)
 			case "map_proj":
-				d.Map_proj = strings.Trim(val, " '")
+				d.MapProj = strings.Trim(val, " '")
 			case "ref_lat":
-				d.Ref_lat = namelistFloat(val)
+				d.RefLat = namelistFloat(val)
 			case "ref_lon":
-				d.Ref_lon = namelistFloat(val)
+				d.RefLon = namelistFloat(val)
 			case "truelat1":
-				d.Truelat1 = namelistFloat(val)
+				d.TrueLat1 = namelistFloat(val)
 			case "truelat2":
-				d.Truelat2 = namelistFloat(val)
+				d.TrueLat2 = namelistFloat(val)
 			case "stand_lon":
-				d.Stand_lon = namelistFloat(val)
+				d.StandLon = namelistFloat(val)
 			case "ref_x":
-				d.Ref_x = namelistFloat(val)
+				d.RefX = namelistFloat(val)
 				includesRefx = true
 			case "ref_y":
-				d.Ref_y = namelistFloat(val)
+				d.RefY = namelistFloat(val)
 				includesRefy = true
 			case "parent_id":
-				d.Parent_id = namelistIntList(val)
+				d.ParentID = namelistIntList(val)
 			case "parent_grid_ratio":
-				d.Parent_grid_ratio = namelistFloatList(val)
+				d.ParentGridRatio = namelistFloatList(val)
 			case "i_parent_start":
-				d.I_parent_start = namelistIntList(val)
+				d.IParentStart = namelistIntList(val)
 			case "j_parent_start":
-				d.J_parent_start = namelistIntList(val)
+				d.JParentStart = namelistIntList(val)
 			case "e_we":
-				d.E_we = namelistIntList(val)
+				d.EWE = namelistIntList(val)
 			case "e_sn":
-				d.E_sn = namelistIntList(val)
+				d.ESN = namelistIntList(val)
 			case "dx":
 				d.Dx0 = namelistFloat(val)
 			case "dy":
@@ -401,43 +405,43 @@ func (d *WRFconfigData) parseWPSnamelist(filename string, e *wrfErrCat) {
 		}
 	}
 	if !includesRefx {
-		d.Ref_x = float64(d.E_we[0]) / 2.
+		d.RefX = float64(d.EWE[0]) / 2.
 	}
 	if !includesRefy {
-		d.Ref_y = float64(d.E_sn[0]) / 2.
+		d.RefY = float64(d.ESN[0]) / 2.
 	}
-	d.S = make([]float64, d.Max_dom)
-	d.W = make([]float64, d.Max_dom)
-	switch d.Map_proj {
+	d.S = make([]float64, d.MaxDom)
+	d.W = make([]float64, d.MaxDom)
+	switch d.MapProj {
 	case "lat-lon":
-		d.S[0] = d.Ref_lat - (d.Ref_y-0.5)*d.Dy0
-		d.W[0] = d.Ref_lon - (d.Ref_x-0.5)*d.Dx0
+		d.S[0] = d.RefLat - (d.RefY-0.5)*d.Dy0
+		d.W[0] = d.RefLon - (d.RefX-0.5)*d.Dx0
 	default:
-		d.S[0] = 0 - (d.Ref_y-0.5)*d.Dy0
-		d.W[0] = 0 - (d.Ref_x-0.5)*d.Dx0
+		d.S[0] = 0 - (d.RefY-0.5)*d.Dy0
+		d.W[0] = 0 - (d.RefX-0.5)*d.Dx0
 	}
-	d.Dx = make([]float64, d.Max_dom)
-	d.Dy = make([]float64, d.Max_dom)
+	d.Dx = make([]float64, d.MaxDom)
+	d.Dy = make([]float64, d.MaxDom)
 	d.Dx[0] = d.Dx0
 	d.Dy[0] = d.Dy0
-	d.Nx = make([]int, d.Max_dom)
-	d.Ny = make([]int, d.Max_dom)
-	d.Nx[0] = d.E_we[0] - 1
-	d.Ny[0] = d.E_sn[0] - 1
-	d.DomainNames = make([]string, d.Max_dom)
-	for i := 0; i < d.Max_dom; i++ {
-		parentID := d.Parent_id[i] - 1
+	d.Nx = make([]int, d.MaxDom)
+	d.Ny = make([]int, d.MaxDom)
+	d.Nx[0] = d.EWE[0] - 1
+	d.Ny[0] = d.ESN[0] - 1
+	d.DomainNames = make([]string, d.MaxDom)
+	for i := 0; i < d.MaxDom; i++ {
+		parentID := d.ParentID[i] - 1
 		d.DomainNames[i] = fmt.Sprintf("d%02v", i+1)
 		d.S[i] = d.S[parentID] +
-			float64(d.J_parent_start[i]-1)*d.Dy[parentID]
+			float64(d.JParentStart[i]-1)*d.Dy[parentID]
 		d.W[i] = d.W[parentID] +
-			float64(d.I_parent_start[i]-1)*d.Dx[parentID]
+			float64(d.IParentStart[i]-1)*d.Dx[parentID]
 		d.Dx[i] = d.Dx[parentID] /
-			d.Parent_grid_ratio[i]
+			d.ParentGridRatio[i]
 		d.Dy[i] = d.Dy[parentID] /
-			d.Parent_grid_ratio[i]
-		d.Nx[i] = d.E_we[i] - 1
-		d.Ny[i] = d.E_sn[i] - 1
+			d.ParentGridRatio[i]
+		d.Nx[i] = d.EWE[i] - 1
+		d.Ny[i] = d.ESN[i] - 1
 	}
 }
 
@@ -463,19 +467,19 @@ func (d *WRFconfigData) parseWRFnamelist(filename string, e *wrfErrCat) {
 			val := strings.Trim(line[i+1:], " ,\n")
 			switch name {
 			case "max_dom":
-				e.compare(d.Max_dom, namelistInt(val), name)
+				e.compare(d.MaxDom, namelistInt(val), name)
 			case "parent_id":
-				e.compare(d.Parent_id, namelistIntList(val), name)
+				e.compare(d.ParentID, namelistIntList(val), name)
 			case "parent_grid_ratio":
-				e.compare(d.Parent_grid_ratio, namelistFloatList(val), name)
+				e.compare(d.ParentGridRatio, namelistFloatList(val), name)
 			case "i_parent_start":
-				e.compare(d.I_parent_start, namelistIntList(val), name)
+				e.compare(d.IParentStart, namelistIntList(val), name)
 			case "j_parent_start":
-				e.compare(d.J_parent_start, namelistIntList(val), name)
+				e.compare(d.JParentStart, namelistIntList(val), name)
 			case "e_we":
-				e.compare(d.E_we, namelistIntList(val), name)
+				e.compare(d.EWE, namelistIntList(val), name)
 			case "e_sn":
-				e.compare(d.E_sn, namelistIntList(val), name)
+				e.compare(d.ESN, namelistIntList(val), name)
 			case "dx":
 				e.compare(d.Dx0, namelistFloatList(val)[0], name)
 			case "dy":
@@ -483,7 +487,7 @@ func (d *WRFconfigData) parseWRFnamelist(filename string, e *wrfErrCat) {
 			case "frames_per_auxinput5":
 				// Interval will be 60 minutes regardless of input file
 				// All domains will have the same number of frames per file
-				d.Frames_per_auxinput5 = namelistIntList(val)
+				d.FramesPerAuxInput5 = namelistIntList(val)
 			case "kemit":
 				d.Kemit = namelistInt(val)
 			case "nocolons":
@@ -600,12 +604,11 @@ func floatcompare(val1, val2 float64) bool {
 func min(val1, val2 int) int {
 	if val1 > val2 {
 		return val2
-	} else {
-		return val1
 	}
+	return val1
 }
 
-// WRF meteorology data holder
+// MetData is a WRF meteorology data holder.
 type MetData struct {
 	wrfout       []*cdf.File
 	fid          []*os.File
@@ -658,54 +661,60 @@ func (w *wrfFiles) NewMetData(date time.Time, timeIndex int) *MetData {
 	return m
 }
 
+// Close Closes the files associated with the receiver.
 func (m *MetData) Close() {
 	for _, f := range m.fid {
 		f.Close()
 	}
 }
 
-// Plume rise calculation, ASME (1973), as described in Sienfeld and Pandis,
+// PlumeRise calculation, ASME (1973), as described in Sienfeld and Pandis,
 // ``Atmospheric Chemistry and Physics - From Air Pollution to Climate Change
 // Uses meteorology from WRF output from a previous run.
-func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int) {
+// It returns the layer index of the plume.
+func (w *WRFOutputter) PlumeRise(point PointSource, sp *SpatialProcessor, gi int) (int, error) {
 	if w.files.config.Kemit == 1 {
-		return
+		return 0, nil
 	}
-	if !point.inGrid[gridIndex] {
-		return
+	srg, _, inGrid, err := point.Spatialize(sp, gi)
+	if err != nil {
+		return -1, err
+	}
+	if !inGrid {
+		return 0, nil
 	}
 
-	gi := gridIndex
-	index := point.GridSrgs[gi].IndexNd(point.GridSrgs[gi].Nonzero()[0])
+	index := srg.IndexNd(srg.Nonzero()[0])
 	j, i := index[0], index[1]
 
 	// deal with points that are inside one grid but not inside the others
-	if j >= w.tp.grids[gi].Nx || i >= w.tp.grids[gi].Ny || j < 0 || i < 0 {
-		return
+	if j >= w.files.grids[gi].Nx || i >= w.files.grids[gi].Ny || j < 0 || i < 0 {
+		return 0, nil
 	}
-	stackHeight := math.Max(0, point.STKHGT*feetToMeters) // m
+	pointData := point.PointData()
+	stackHeight := math.Max(0, pointData.StackHeight.Value()) // m
 	// Find K level of stack
-	kStak := 0
-	for w.met.LayerHeights[gi][j][i][kStak+1] < float32(stackHeight) {
-		if kStak > w.met.Kemit {
+	var stackLayer int
+	for w.met.LayerHeights[gi][j][i][stackLayer+1] < float32(stackHeight) {
+		if stackLayer > w.met.Kemit {
 			msg := "stack height > top of emissions file"
 			panic(msg)
 		}
-		kStak++
+		stackLayer++
 	}
 
 	// Make sure all parameters are reasonable values
-	airTemp := float64(w.met.Temp[gi][j][i][kStak])                    // K
-	windSpd := math.Max(float64(w.met.Uspd[gi][j][i][kStak]), 1.)      // m/s, small numbers cause problems
-	stackVel := math.Max(0., math.Min(point.STKVEL*feetToMeters, 40.)) // m/s
-	stackDiam := math.Max(0, point.STKDIAM*feetToMeters)               // m
-	stackTemp := math.Max((point.STKTEMP-32)/1.8+273.15, airTemp+10.)  // K
+	airTemp := float64(w.met.Temp[gi][j][i][stackLayer])                     // K
+	windSpd := math.Max(float64(w.met.Uspd[gi][j][i][stackLayer]), 1.)       // m/s, small numbers cause problems
+	stackVel := math.Max(0., math.Min(pointData.StackVelocity.Value(), 40.)) // m/s
+	stackDiam := math.Max(0, pointData.StackDiameter.Value())                // m
+	stackTemp := math.Max(pointData.StackTemp.Value(), airTemp+10.)          // K
 
 	////////////////////////////////////////////////////////////////////////////
 	// Plume rise calculation, ASME (1973), as described in Sienfeld and Pandis,
 	// ``Atmospheric Chemistry and Physics - From Air Pollution to Climate Change
 
-	deltaH := 0. // Plume rise, (m).
+	var deltaH float64 // Plume rise, (m).
 	var calcType string
 	if (stackTemp-airTemp) < 50. &&
 		stackVel > windSpd && stackVel > 10. {
@@ -720,11 +729,11 @@ func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int
 		F := g * (stackTemp - airTemp) / stackTemp * stackVel *
 			math.Pow(stackDiam/2, 2)
 
-		if w.met.Sclass[gi][j][i][kStak] == "S" { // stable conditions
+		if w.met.Sclass[gi][j][i][stackLayer] == "S" { // stable conditions
 			calcType = "Stable"
 
 			deltaH = 29. * math.Pow(
-				F/float64(w.met.S1[gi][j][i][kStak]), 0.333333333) /
+				F/float64(w.met.S1[gi][j][i][stackLayer]), 0.333333333) /
 				math.Pow(windSpd, 0.333333333)
 
 		} else { // unstable conditions
@@ -749,14 +758,15 @@ func (w *WRFOutputter) PlumeRise(gridIndex int, point *ParsedRecord) (kPlume int
 
 	plumeHeight := stackHeight + deltaH
 
+	var layer int
 	// Find K level of plume
-	for kPlume = 0; w.met.LayerHeights[gi][j][i][kPlume+1] < float32(plumeHeight); kPlume++ {
-		if kPlume >= w.met.Kemit-1 {
-			kPlume = w.met.Kemit - 2
+	for layer = 0; w.met.LayerHeights[gi][j][i][layer+1] < float32(plumeHeight); layer++ {
+		if layer >= w.met.Kemit-1 {
+			layer = w.met.Kemit - 2
 			break
 		}
 	}
-	return
+	return layer, err
 }
 
 // Layer heights above ground level. For more information, refer to
@@ -785,9 +795,9 @@ func (m *MetData) layerHeights() {
 			for i := 0; i < nx; i++ {
 				m.LayerHeights[fi][j][i] = make([]float32, nlay)
 				for k := 0; k < nlay; k++ {
-					kIndex := indexTo1d([]int{k, j, i}, []int{nlay, ny, nx})
+					index := indexTo1d([]int{k, j, i}, []int{nlay, ny, nx})
 					zeroIndex := indexTo1d([]int{0, j, i}, []int{nlay, ny, nx})
-					m.LayerHeights[fi][j][i][k] = (PH[kIndex] + PHB[kIndex] -
+					m.LayerHeights[fi][j][i][k] = (PH[index] + PHB[index] -
 						PH[zeroIndex] - PHB[zeroIndex]) / g // m
 				}
 			}
@@ -878,11 +888,11 @@ func (m *MetData) temp() {
 					index := indexTo1d([]int{k, j, i}, []int{nlay, ny, nx})
 
 					// potential temperature gradient
-					dtheta_dz := float32(0.)
+					dThetaDz := float32(0.)
 					if k > 0 {
 						indexbelow := indexTo1d([]int{k - 1, j, i},
 							[]int{nlay, ny, nx})
-						dtheta_dz = (T[index] - T[indexbelow]) /
+						dThetaDz = (T[index] - T[indexbelow]) /
 							(m.LayerHeights[fi][j][i][k] -
 								m.LayerHeights[fi][j][i][k-1]) // K/m
 					}
@@ -896,11 +906,11 @@ func (m *MetData) temp() {
 						pressureCorrection // K
 
 					// Stability parameter
-					m.S1[fi][j][i][k] = dtheta_dz / m.Temp[fi][j][i][k] *
+					m.S1[fi][j][i][k] = dThetaDz / m.Temp[fi][j][i][k] *
 						pressureCorrection
 
 					// Stability class
-					if dtheta_dz < 0.005 {
+					if dThetaDz < 0.005 {
 						m.Sclass[fi][j][i][k] = "U"
 					} else {
 						m.Sclass[fi][j][i][k] = "S"
