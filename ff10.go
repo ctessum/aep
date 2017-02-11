@@ -41,7 +41,7 @@ func ff10Periods(year string) ([12]*monthPeriod, error) {
 	for i, p := range []Period{Jan, Feb, Mar, Apr, May, Jun, Jul,
 		Aug, Sep, Oct, Nov, Dec} {
 
-		begin, end, err := periodToTimeInterval(p, year)
+		begin, end, err := p.TimeInterval(year)
 		if err != nil {
 			return [12]*monthPeriod{}, err
 		}
@@ -62,7 +62,7 @@ func (f *InventoryFile) readff10(inputConverter func(float64) *unit.Unit,
 		return err
 	}
 
-	annualBegin, annualEnd, err := periodToTimeInterval(Annual, year)
+	annualBegin, annualEnd, err := Annual.TimeInterval(year)
 	if err != nil {
 		return err
 	}

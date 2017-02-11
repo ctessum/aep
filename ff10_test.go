@@ -11,7 +11,7 @@ import (
 )
 
 func TestFF10Point(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -119,7 +119,7 @@ func TestFF10Point(t *testing.T) {
 }
 
 func TestFF10DailyPoint(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -207,12 +207,15 @@ NOX: 2005-01-31 00:00:00 +0000 UTC -- 2005-02-01 00:00:00 +0000 UTC: 0 kg s^-1`
 func TestFF10DailyPointBlankRecord(t *testing.T) {
 	rec := []string{"US", "36091", "", "7819511", "3429213", "58898412", "18074414", "10500206", "NOX", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""}
 
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
 
 	periods, err := ff10Periods("2005")
+	if err != nil {
+		t.Error(err)
+	}
 
 	_, err = NewFF10DailyPoint(rec, start, end, periods, badunit.Ton)
 	if err != nil {
@@ -221,7 +224,7 @@ func TestFF10DailyPointBlankRecord(t *testing.T) {
 }
 
 func TestFF10Nonpoint(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}

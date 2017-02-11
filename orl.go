@@ -13,7 +13,7 @@ func (f *InventoryFile) readHeaderORL(inputConverter func(float64) *unit.Unit) e
 	if err != nil {
 		return err
 	}
-	begin, end, err := periodToTimeInterval(f.Period, year)
+	begin, end, err := f.Period.TimeInterval(year)
 	if err != nil {
 		return err
 	}

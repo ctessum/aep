@@ -22,16 +22,21 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
+
+	"bitbucket.org/ctessum/sparse"
+
+	"github.com/ctessum/unit"
 )
 
+// MatchCode finds code in matchmap.
 // For cases where a specific code needs to be matched with a more
 // general code. For instance, if code is "10101" and matchmap is
 // {"10102":"xxx","10100":"yyyy"}, "10100" will be returned as the
 // closest match to the input code. "10102" will never be returned,
 // even if the "10100" item didn't exist. Returns an error if there
 // is no match.
-func MatchCode(code string, matchmap map[string]interface{}) (
-	matchedCode string, matchVal interface{}, err error) {
+func MatchCode(code string, matchmap map[string]interface{}) (matchedCode string, matchVal interface{}, err error) {
 	var ok bool
 	l := len(code)
 	for i := l - 1; i >= -1; i-- {
@@ -44,9 +49,9 @@ func MatchCode(code string, matchmap map[string]interface{}) (
 	err = fmt.Errorf("No matching code for %v", code)
 	return
 }
-func MatchCodeDouble(code1, code2 string,
-	matchmap map[string]map[string]interface{}) (
-	matchedCode1, matchedCode2 string, matchVal interface{}, err error) {
+
+// MatchCodeDouble finds code1 and code2 in matchmap.
+func MatchCodeDouble(code1, code2 string, matchmap map[string]map[string]interface{}) (matchedCode1, matchedCode2 string, matchVal interface{}, err error) {
 	l1 := len(code1)
 	l2 := len(code2)
 	for i := l1 - 1; i >= -1; i-- {
@@ -66,6 +71,7 @@ func MatchCodeDouble(code1, code2 string,
 	return
 }
 
+// IsStringInArray returns whether s is a member of a.
 func IsStringInArray(a []string, s string) bool {
 	for _, val := range a {
 		if val == s {
@@ -80,8 +86,10 @@ func absBias(a, b float64) (o float64) {
 	return
 }
 
+// Country represents a country where emissions occur.
 type Country int
 
+// These are the currently supported countries.
 const (
 	USA               Country = 0
 	Canada                    = 1
@@ -158,5 +166,67 @@ func countryFromName(name string) (Country, error) {
 	default:
 		return Unknown, fmt.Errorf("Unkown country '%s'", name)
 	}
+}
 
+// EmissionsTotal returns the total combined emissions in recs.
+func EmissionsTotal(recs []Record) map[Pollutant]*unit.Unit {
+	o := make(map[Pollutant]*unit.Unit)
+	for _, r := range recs {
+		t := r.Totals()
+		for p, e := range t {
+			if o[p] == nil {
+				o[p] = e.Clone()
+			} else {
+				o[p].Add(e)
+			}
+		}
+	}
+	return o
+}
+
+// EmissionsGriddedAtTime returns the sum of the emissions in recs at
+// the given time.
+func EmissionsGriddedAtTime(recs []Record, t time.Time, o Outputter, sp *SpatialProcessor, tp *TemporalProcessor, partialMatch bool) (map[Pollutant][]*sparse.SparseArray, error) {
+	out := make(map[Pollutant][]*sparse.SparseArray)
+
+	for _, r := range recs {
+		emis, err := EmisAtTime(r, t, tp, partialMatch)
+		if err != nil {
+			return nil, err
+		}
+		for gi := range sp.Grids {
+			// Get the vertical layer index.
+			var k int
+			switch r.(type) {
+			case PointSource:
+				k, err = o.PlumeRise(r.(PointSource), sp, gi)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// Get the spatial surrogate.
+			srg, _, inGrid, err := r.Spatialize(sp, gi)
+			if err != nil {
+				return nil, err
+			}
+			if !inGrid {
+				continue
+			}
+			for pol, val := range emis {
+				if _, ok := out[pol]; !ok {
+					// Initialize arrays for this pollutant
+					out[pol] = make([]*sparse.SparseArray, len(sp.Grids))
+					for i, grid := range sp.Grids {
+						out[pol][i] = sparse.ZerosSparse(o.Layers(), grid.Ny, grid.Nx)
+					}
+				}
+				for srgi, srgVal := range srg.Elements {
+					indices := srg.IndexNd(srgi)
+					out[pol][gi].AddVal(val.Value()*srgVal, k, indices[0], indices[1])
+				}
+			}
+		}
+	}
+	return out, nil
 }

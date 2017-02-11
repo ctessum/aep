@@ -20,27 +20,15 @@ package aep
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
-	"io/ioutil"
-	"log"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
-	"path/filepath"
-	"runtime/debug"
 	"sort"
 	"strings"
-	"sync"
 	"text/tabwriter"
 
-	"bitbucket.org/ctessum/cdf"
-	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/unit"
-	"github.com/gonum/floats"
 )
 
 // Status holds information on the progress or status of a job.
@@ -60,116 +48,6 @@ type statuses []Status
 func (s statuses) Len() int           { return len(s) }
 func (s statuses) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s statuses) Less(i, j int) bool { return s[i].Name < s[j].Name }
-
-// Write a message to standard error.
-func (c *Context) Log(msg interface{}, DebugLevel int) {
-	if DebugLevel <= c.DebugLevel {
-		log.Print(msg)
-	}
-	return
-}
-
-// Handle an error occuring within a function to allow the function
-// to fail without killing the whole program.
-func (c *Context) ErrorRecover() {
-	if err := recover(); err != nil {
-		if c.DebugLevel > 0 {
-			panic(err)
-		}
-		if !c.ErrorFlag {
-			c.ErrorReport(err) // Handle error
-			c.ErrorFlag = true
-		}
-		c.msgchan <- c.Sector + " failed!"
-	}
-}
-
-// Same as ErrorRecover, but also close a channel
-func (c *Context) ErrorRecoverCloseChan(recordChan chan *ParsedRecord) {
-	if err := recover(); err != nil {
-		if c.DebugLevel > 0 {
-			panic(err)
-		}
-		if !c.ErrorFlag {
-			c.ErrorReport(err) // Handle error
-			c.ErrorFlag = true
-		}
-		//Status.Lock.Lock()
-		//Status.Lock.Unlock()
-		c.msgchan <- c.Sector + " failed!"
-		close(recordChan)
-	}
-}
-
-// The ErrCat type and methods collect errors while the program is running
-// and then print them later so that all errors can be seen and fixed at once,
-// instead of just the first one.
-type ErrCat struct {
-	str string
-}
-
-func (e *ErrCat) statOS(path string, varname string) {
-	_, err := os.Stat(path)
-	if path == "" {
-		err = fmt.Errorf("The path to the required file %v is missing"+
-			" from the configuration file.", varname)
-	}
-	e.Add(err)
-	return
-}
-
-func (e *ErrCat) Add(err error) {
-	if err != nil && strings.Index(e.str, err.Error()) == -1 {
-		e.str += err.Error() + "\n"
-		//if DebugLevel >= 3 {
-		e.str += "Stack trace:\n"
-		e.str += fmt.Sprintf("%s\n", debug.Stack())
-		//}
-	}
-	return
-}
-
-func (e *ErrCat) Report() {
-	if e.str != "" {
-		fmt.Println("The following errors were found:\n" + e.str)
-		os.Exit(1)
-	}
-	return
-}
-
-func (c *Context) ErrorReport(errmesg interface{}) {
-	err := "--------------------------\nERROR REPORT\n"
-	err += "Sector: " + c.Sector + "\n"
-	err += "Error message: "
-	err += fmt.Sprintf("%v", errmesg) + "\n"
-	err += "Stack trace:\n"
-	err += fmt.Sprintf("%s\n", debug.Stack())
-	err += "--------------------------\n"
-	fmt.Print(err)
-	//Status.Lock.Lock()
-	//Status.Lock.Unlock()
-	return
-}
-
-var (
-	reportMx sync.Mutex
-	Report   = new(ReportHolder)
-)
-
-func init() {
-	Report.SectorResults = make(map[string]map[string]*Results)
-	// track status of all of the running sectors
-	// Start server for html report (go to localhost:6060 in web browser to view report)
-	// Here, we run the report server in the background while the rest of the program is running.
-}
-
-type ReportHolder struct {
-	Config          *Context
-	SectorResults   map[string]map[string]*Results // map[sector][period]Results
-	ReportOnly      bool                           // whether main program is running at the same time
-	GridNames       []string                       // names of the grids
-	TemporalResults *TemporalReport
-}
 
 // An InventoryReport report holds information about raw inventory data.
 type InventoryReport struct {
@@ -195,8 +73,6 @@ func (ir *InventoryReport) DroppedTotalsTable() Table {
 	return ir.table(getDroppedTotals)
 }
 
-// table returns a table presenting the emissions in this
-// report. It takes a function which returns the requested data for each file.
 func (ir *InventoryReport) table(df func(*InventoryFile) map[Pollutant]*unit.Unit) Table {
 	t := make([][]string, len(ir.Files)+1)
 
@@ -264,122 +140,6 @@ func (t Table) Tabbed(w io.Writer) (n int, err error) {
 	return
 }
 
-type Results struct {
-	SpeciationResults *SpecTotals
-	SpatialResults    *SpatialTotals
-}
-
-type StatusHolder struct {
-	Sectors           map[string]string
-	Surrogates        map[string]string
-	ErrorMessages     string
-	HTMLerrorMessages template.HTML
-	SrgProgress       float64
-	Lock              sync.Mutex
-}
-
-func NewStatus() *StatusHolder {
-	out := new(StatusHolder)
-	out.Sectors = make(map[string]string)
-	out.Surrogates = make(map[string]string)
-	return out
-}
-
-func (s *StatusHolder) GetSrgStatus(srg, srgfile string) string {
-	s.Lock.Lock()
-	defer s.Lock.Unlock()
-	if status, ok := s.Surrogates[srg]; ok && status == "Generating" {
-		return "Generating"
-	} else if status, ok := s.Surrogates[srg]; ok &&
-		status == "Waiting to generate" {
-		return "Waiting to generate"
-	} else if status, ok := s.Surrogates[srg]; ok && status == "Ready" {
-		return "Ready"
-	} else if status, ok := s.Surrogates[srg]; ok && status == "Failed!" {
-		err := fmt.Errorf("Surrogate generation has previously failed for %v.\n",
-			srg)
-		panic(err)
-	} else if _, ok := s.Surrogates[srg]; !ok {
-		if _, err := os.Stat(srgfile); err == nil {
-			//Status.Lock.Lock()
-			//Status.Lock.Unlock()
-			return "Ready"
-		} else {
-			return "Empty"
-		}
-	} else {
-		panic("Unknown status: " + s.Surrogates[srg])
-	}
-}
-
-// Prepare maps of emissions for each species and domain in NetCDF format.
-// (http://www.unidata.ucar.edu/software/netcdf/).
-func (c *Context) ResultMaps(totals *SpatialTotals,
-	TotalGrid map[*GridDef]map[Pollutant]*sparse.SparseArray,
-) {
-
-	dir := filepath.Join(c.outputDir, "maps")
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	for grid, d1 := range TotalGrid {
-		filename := filepath.Join(dir, fmt.Sprintf("%v_%v_%v.nc",
-			c.SimulationName, c.Sector, grid.Name))
-		h := cdf.NewHeader([]string{"y", "x"}, []int{grid.Ny, grid.Nx})
-		h.AddAttribute("", "TITLE", "Anthropogenic emissions created "+
-			"by AEP version "+Version+" ("+Website+")")
-		//h.AddAttribute("", "CEN_LAT", []float64{c.wrfData.Ref_lat})
-		//h.AddAttribute("", "CEN_LOC", []float64{c.wrfData.Ref_lon})
-		//h.AddAttribute("", "TRUELAT1", []float64{c.wrfData.Truelat1})
-		//h.AddAttribute("", "TRUELAT2", []float64{c.wrfData.Truelat2})
-		//h.AddAttribute("", "STAND_LON", []float64{c.wrfData.Stand_lon})
-		//h.AddAttribute("", "MAP_PROJ", c.wrfData.Map_proj)
-		h.AddAttribute("", "Northernmost_Northing", []float64{grid.Y0 +
-			float64(grid.Ny)*grid.Dy})
-		h.AddAttribute("", "Southernmost_Northing", []float64{grid.Y0})
-		h.AddAttribute("", "Easternmost_Easting", []float64{grid.X0 +
-			float64(grid.Nx)*grid.Dx})
-		h.AddAttribute("", "Westernmost_Easting", []float64{grid.X0})
-		for pol, _ := range d1 {
-			if d, ok := totals.InsideDomainTotals[grid.Name][pol]; ok {
-				h.AddVariable(pol.String(), []string{"y", "x"}, []float32{0.})
-				h.AddAttribute(pol.String(), "units", d.Units)
-			}
-		}
-		if len(h.Variables()) > 0 {
-			h.Define()
-			errs := h.Check()
-			for _, err := range errs {
-				if err != nil {
-					panic(err)
-				}
-			}
-			f, err := os.Create(filename)
-			if err != nil {
-				panic(err)
-			}
-			ff, err := cdf.Create(f, h)
-			if err != nil {
-				panic(err)
-			}
-			for pol, data := range d1 {
-				if data.Sum() != 0. {
-					r := ff.Writer(pol.String(), []int{0, 0}, []int{grid.Ny, grid.Nx})
-					if _, err = r.Write(data.ToDense32()); err != nil {
-						panic(err)
-					}
-				}
-			}
-			err = cdf.UpdateNumRecs(f)
-			if err != nil {
-				panic(err)
-			}
-			f.Close()
-		}
-	}
-}
-
 // SCCDescription reads a SMOKE sccdesc file, which gives descriptions
 // for each SCC code. The returned data is in the form map[SCC]description.
 func SCCDescription(r io.Reader) (map[string]string, error) {
@@ -388,7 +148,7 @@ func SCCDescription(r io.Reader) (map[string]string, error) {
 	for {
 		record, err := buf.ReadString('\n')
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err == io.EOF {
 				break
 			} else {
 				return sccDesc, fmt.Errorf("In SCCdescription: %s; record: %s", err, record)
@@ -425,21 +185,20 @@ func SCCDescription(r io.Reader) (map[string]string, error) {
 	return sccDesc, nil
 }
 
-// Read SIC description file, which gives descriptions for each SIC code.
-func (c *Context) SICdesc() (map[string]string, error) {
+// SICDesc reads an SIC description file, which gives descriptions for each SIC code.
+func (c *Context) SICDesc() (map[string]string, error) {
 	sicDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(c.SicDesc)
 	if err != nil {
 		return sicDesc, errors.New("SICdesc: " + err.Error() + "\nFile= " + c.SicDesc + "\nRecord= " + record)
-	} else {
-		defer fid.Close()
 	}
+	defer fid.Close()
 	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err == io.EOF {
 				err = nil
 				break
 			} else {
@@ -454,16 +213,15 @@ func (c *Context) SICdesc() (map[string]string, error) {
 	return sicDesc, err
 }
 
-// Read NAICS description file, which gives descriptions for each NAICS code.
-func (c *Context) NAICSdesc() (map[string]string, error) {
+// NAICSDesc reads a NAICS description file, which gives descriptions for each NAICS code.
+func (c *Context) NAICSDesc() (map[string]string, error) {
 	naicsDesc := make(map[string]string)
 	var record string
 	fid, err := os.Open(c.NaicsDesc)
 	if err != nil {
 		return naicsDesc, errors.New("NAICSdesc: " + err.Error() + "\nFile= " + c.NaicsDesc + "\nRecord= " + record)
-	} else {
-		defer fid.Close()
 	}
+	defer fid.Close()
 	buf := bufio.NewReader(fid)
 	for {
 		record, err = buf.ReadString('\n')
@@ -487,6 +245,7 @@ func (c *Context) NAICSdesc() (map[string]string, error) {
 func cleanDescription(d string) string {
 	return "\"" + strings.Replace(strings.Trim(d, "\n"), "\"", "", -1) + "\""
 }
+<<<<<<< HEAD
 
 // HTML report server
 

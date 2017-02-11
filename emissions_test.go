@@ -66,7 +66,14 @@ func TestEmissions(t *testing.T) {
 		t.Errorf("period4: want empty map but have %v", havePeriod4)
 	}
 
-	droppedTotals := e.DropPols(map[string]*PolHolder{"testpol": &PolHolder{}})
+	droppedTotals := e.DropPols(Speciation{"testpol": struct {
+		SpecType  SpeciationType
+		SpecNames struct {
+			Names []string
+			Group bool
+		}
+		SpecProf map[string]float64
+	}{}})
 	newTotals := e.Totals()
 	wantDroppedTotals := map[Pollutant]*unit.Unit{
 		Pollutant{Name: "testpol2"}: unit.New(3.1536e+07, unit.Kilogram),
@@ -128,7 +135,14 @@ func TestDropTotals(t *testing.T) {
 	e.Add(begin, end, "testpol", "", rate)
 	e.Add(begin, end, "testpol2", "", rate)
 
-	polsToKeep := map[string]*PolHolder{"testpol2": &PolHolder{}}
+	polsToKeep := Speciation{"testpol2": struct {
+		SpecType  SpeciationType
+		SpecNames struct {
+			Names []string
+			Group bool
+		}
+		SpecProf map[string]float64
+	}{}}
 
 	droppedPols := e.DropPols(polsToKeep)
 

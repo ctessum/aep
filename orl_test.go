@@ -11,7 +11,7 @@ import (
 )
 
 func TestORLPoint(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -79,7 +79,7 @@ func TestORLPoint(t *testing.T) {
 }
 
 func TestORLNonpoint(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -130,7 +130,7 @@ func TestORLNonpoint(t *testing.T) {
 }
 
 func TestORLNonroad(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -173,7 +173,7 @@ func TestORLNonroad(t *testing.T) {
 }
 
 func TestORLMobile(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}

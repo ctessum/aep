@@ -20,10 +20,12 @@ package aep
 
 import "time"
 
+// Outputter specifies a form for variables that can be used to
+// output spatiotemporal emissions data.
 type Outputter interface {
-	Output(tp *TemporalProcessor, startTime, endTime time.Time, timeStep time.Duration)
-	PlumeRise(gridIndex int, r *ParsedRecord) (kPlume int)
-	Kemit() int
+	Output(recs []Record, sp *SpatialProcessor, tp *TemporalProcessor, partialMatch bool, startTime, endTime time.Time, timeStep time.Duration) error
+	PlumeRise(point PointSource, sp *SpatialProcessor, gi int) (int, error)
+	Layers() int
 }
 
 type outputTimer struct {

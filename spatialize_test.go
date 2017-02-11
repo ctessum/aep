@@ -61,8 +61,8 @@ func TestReadSrgSpec(t *testing.T) {
 		testResult += fmt.Sprintf("&{Region:%s Name:%s Code:%s DATASHAPEFILE:%s "+
 			"DATAATTRIBUTE:%s WEIGHTSHAPEFILE:%s Details:%s "+
 			"BackupSurrogateNames:%v WeightColumns:%v MergeNames:%v MergeMultipliers:%v}\n",
-			srgSpec.Region, srgSpec.Name, srgSpec.Code, srgSpec.DATASHAPEFILE,
-			srgSpec.DATAATTRIBUTE, srgSpec.WEIGHTSHAPEFILE,
+			srgSpec.Region, srgSpec.Name, srgSpec.Code, strings.Replace(srgSpec.DATASHAPEFILE, "\\", "/", -1),
+			srgSpec.DATAATTRIBUTE, strings.Replace(srgSpec.WEIGHTSHAPEFILE, "\\", "/", -1),
 			srgSpec.Details, srgSpec.BackupSurrogateNames, srgSpec.WeightColumns,
 			srgSpec.MergeNames, srgSpec.MergeMultipliers)
 		if srgSpec.FilterFunction != nil {
@@ -147,6 +147,9 @@ func TestNewGridRegular(t *testing.T) {
 }
 
 func TestCreateSurrogates(t *testing.T) {
+	if testing.Short() {
+		return
+	}
 	inputSR, err := proj.Parse("+proj=longlat")
 	if err != nil {
 		t.Error(err)
@@ -262,6 +265,9 @@ func TestSpatializeRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	grid, err := createGrid()
+	if err != nil {
+		t.Fatal(err)
+	}
 	sp := NewSpatialProcessor(srgSpecs, []*GridDef{grid}, gridRef, inputSR, true)
 	//sp.DiskCachePath = "testcache"
 
@@ -317,6 +323,9 @@ func TestSpatializeRecord(t *testing.T) {
 					Emissions:       *emis,
 				},
 			} {
+				if i == 0 && testing.Short() {
+					continue // Skip surrogate creation for polygon record.
+				}
 
 				emis, _, err := GriddedEmissions(rec, begin, end, sp, 0)
 				if err != nil {

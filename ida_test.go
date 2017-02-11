@@ -11,7 +11,7 @@ import (
 )
 
 func TestIDAPoint(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestIDAPoint(t *testing.T) {
 }
 
 func TestIDAArea(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -200,7 +200,7 @@ func TestIDAArea(t *testing.T) {
 }
 
 func TestIDAMobile(t *testing.T) {
-	start, end, err := periodToTimeInterval(Annual, "2005")
+	start, end, err := Annual.TimeInterval("2005")
 	if err != nil {
 		t.Fatal(err)
 	}

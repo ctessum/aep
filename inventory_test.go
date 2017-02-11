@@ -1355,7 +1355,7 @@ country_cd,region_cd,tribal_code,facility_id,unit_id,rel_point_id,process_id,agy
 }
 
 func TestPeriodToTime(t *testing.T) {
-	start, end, err := periodToTimeInterval(Feb, "2005")
+	start, end, err := Feb.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -1368,7 +1368,7 @@ func TestPeriodToTime(t *testing.T) {
 		t.Errorf("want %s; got %s", endWant, end)
 	}
 
-	start, end, err = periodToTimeInterval(Dec, "2005")
+	start, end, err = Dec.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -1381,7 +1381,7 @@ func TestPeriodToTime(t *testing.T) {
 		t.Errorf("want %s; got %s", endWant, end)
 	}
 
-	start, end, err = periodToTimeInterval(Annual, "2005")
+	start, end, err = Annual.TimeInterval("2005")
 	if err != nil {
 		t.Error(err)
 	}
@@ -1394,7 +1394,7 @@ func TestPeriodToTime(t *testing.T) {
 		t.Errorf("want %s; got %s", endWant, end)
 	}
 
-	start, end, err = periodToTimeInterval(Annual, "0001")
+	start, end, err = Annual.TimeInterval("0001")
 	if err != nil {
 		t.Error(err)
 	}
