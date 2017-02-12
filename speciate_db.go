@@ -244,9 +244,12 @@ func species(f io.Reader) (map[string]map[string]float64, error) {
 			}
 			return nil, fmt.Errorf("reading SPECIATE table line %d: %v", iLine, err)
 		}
-		weight, err := strconv.ParseFloat(line[iWeight], 64)
-		if err != nil {
-			return nil, fmt.Errorf("reading SPECIATE table line %d column %d: %v", iLine, iWeight, err)
+		var weight float64
+		if line[iWeight] != "" {
+			weight, err = strconv.ParseFloat(line[iWeight], 64)
+			if err != nil {
+				return nil, fmt.Errorf("reading SPECIATE table line %d column %d: %v", iLine, iWeight, err)
+			}
 		}
 		code := line[iCode]
 		species := line[iSpecies]

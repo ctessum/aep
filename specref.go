@@ -115,7 +115,7 @@ func (sp *SpecRef) comboCode(SCC string, pol Pollutant, start, end time.Time, c 
 	if err != nil {
 		_, _, codes, err = MatchCodeDouble(pol.Name, countryFIPS, periodCodes)
 		if err != nil {
-			str := fmt.Sprintf("aep: invalid combo partial match combination country+FIPS %s and pollutant '%s'", pol.String(), countryFIPS)
+			str := fmt.Sprintf("aep: invalid combo partial match combination country+FIPS %s and pollutant '%s'", countryFIPS, pol.String())
 			if pol.Prefix != "" {
 				str += fmt.Sprintf(" (or '%s')", pol.Name)
 			}
