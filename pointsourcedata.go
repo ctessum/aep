@@ -164,3 +164,12 @@ func (r *PointSourceData) setStackParams(height, diam, temp, flow, vel string) e
 func (r *PointSourceData) PointData() *PointSourceData {
 	return r
 }
+
+// GroundLevel returns true if the receiver emissions are
+// at ground level and false if they are elevated.
+func (r *PointSourceData) GroundLevel() bool {
+	if r.StackHeight.Value() == 0 && r.StackVelocity.Value() == 0 {
+		return true
+	}
+	return false
+}
