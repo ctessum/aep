@@ -43,7 +43,7 @@ func EmisAtTime(r Record, t time.Time, tp *TemporalProcessor, partialMatch bool)
 		pointData := rp.PointData()
 		id := [2]string{pointData.ORISFacilityCode, pointData.ORISBoilerID}
 		_, ok := tp.cemSum[id]
-		if rp.UseCEM() && ok {
+		if tp.useCEM && ok {
 			return emisAtTimeCEM(rp, t, tp, partialMatch)
 		}
 	}
@@ -128,8 +128,12 @@ type TemporalProcessor struct {
 	weekendTpro map[string][]float64 // map[code]vals
 	temporalRef map[string]map[string]interface{}
 	holidays    map[string]string
-	cemArray    map[[2]string]map[string]*cemData // map[id,boiler][time]data
-	cemSum      map[[2]string]*cemSum             // map[id,boiler]data
+
+	// useCEM specifies whether continuous emissions monitoring data
+	// should be used for temporal allocation.
+	useCEM   bool
+	cemArray map[[2]string]map[string]*cemData // map[id,boiler][time]data
+	cemSum   map[[2]string]*cemSum             // map[id,boiler]data
 
 	// TimeZones hold the time zone code that each FIPS code
 	// belongs to.
@@ -149,6 +153,7 @@ func (c *Context) NewTemporalProcessor(holidays, tref, tpro io.Reader, cem []io.
 	if err := tp.getTemporalPro(tpro); err != nil {
 		return nil, err
 	}
+	tp.useCEM = useCEM
 	if useCEM {
 		if err := tp.getCEMdata(cem); err != nil {
 			return nil, err

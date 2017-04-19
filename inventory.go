@@ -89,10 +89,6 @@ type PointSource interface {
 
 	// PointData returns the data specific to point sources.
 	PointData() *PointSourceData
-
-	// UseCEM specifies whether continuous emissions monitoring data
-	// should be used for temporal allocation.
-	UseCEM() bool
 }
 
 // EconomicRecord is any record that contains economic information.
