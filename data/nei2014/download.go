@@ -1,0 +1,216 @@
+//+build ignore
+
+package main
+
+import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	ftp "github.com/remogatto/ftpget"
+)
+
+var dir string
+
+func init() {
+	flag.StringVar(&dir, "dir", "", "the directory to download the files to")
+}
+
+func main() {
+	// This is the list of files to download.
+	files := []string{
+		"ftp.epa.gov/EmisInventory/2014platform/v1/README_2014v1_nata_package.txt",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/ge_dat_for_2014fa_nata_gridding.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/ge_dat_for_2014fa_nata_other.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/ge_dat_for_2014fa_nata_speciation.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/ge_dat_for_2014fa_nata_temporal.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/ocean_chlorine.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/ancillary_data/volcanic_mercury.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.eia.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.epa_shipping_ports.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.extended_idle.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.golf_courses.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.hpdi_og.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.nlcd.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.ntad.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.tiger_rail.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.usfs_timber.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.usgs_mines.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/cty_pophu2k_revised.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/pr_shape.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/us_tracts_shape.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/usvi_shape.tar.gz",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/Spatial_Allocator_SrgTools_2014Platform.30Sep2016.tar",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_biogenics.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_cem.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_nonpoint.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_nonroad_part1.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_nonroad_part2.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_nonroad_part3.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_nonroad_part4.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_onroad.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_oth_part1.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_oth_part2.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_point.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/2014emissions/2014fa_nata_cb6cmaq_14j_inputs_ptfire.zip",
+		"ftp.epa.gov/EmisInventory/2014/flat_files/SmokeFlatFile_ONROAD_20160910.csv.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.misc.tar.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.fema.tar.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.census_full.tar.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.tiger.tar.zip",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.dbf",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.shp",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.shx",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.sbn",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.sbx",
+		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.prj",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.offshore.tar.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part1.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part2.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part3.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.mexico.tar.zip",
+	}
+
+	flag.Parse()
+	if dir == "" {
+		log.Fatal("Please specify the download location as an argument (e.g. --dir=$HOME).")
+	}
+
+	for _, file := range files {
+		log.Printf("downloading %s", file)
+		b := new(bytes.Buffer)
+		err := ftp.Get(file, b)
+		if err != nil {
+			log.Fatal(err)
+		}
+		switch filepath.Ext(file) {
+		case ".zip":
+			if filepath.Ext(strings.Trim(file, ".zip")) == ".tar" {
+				unTarZip(dir, b)
+			} else {
+				unZip(dir, b)
+			}
+		case ".gz":
+			unTarGZ(dir, b)
+		case ".tar":
+			unTar(dir, b)
+		default:
+			saveFile(dir, file, b)
+		}
+	}
+}
+
+func saveFile(dir, filename string, b *bytes.Buffer) {
+	saveLoc := filepath.Join(dir, filepath.Base(filename))
+	dst, err := os.Create(saveLoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = io.Copy(dst, b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dst.Close()
+}
+
+func unTarGZ(dir string, file *bytes.Buffer) {
+	rGZ, err := gzip.NewReader(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	unTar(dir, rGZ)
+}
+
+func unTar(dir string, file io.Reader) {
+	r := tar.NewReader(file)
+
+	for {
+		header, err := r.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+		saveLoc := filepath.Join(dir, header.Name)
+
+		err = os.MkdirAll(filepath.Dir(saveLoc), os.ModePerm)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+		case tar.TypeReg, tar.TypeRegA:
+			fmt.Println("saving ", saveLoc)
+			dst, err := os.Create(saveLoc)
+			if err != nil {
+				log.Fatal(err)
+			}
+			_, err = io.Copy(dst, r)
+			if err != nil {
+				log.Fatal(err)
+			}
+			dst.Close()
+		default:
+			log.Fatalf("unsupported type %c in file %s", header.Typeflag, header.Name)
+		}
+	}
+}
+
+func unZip(dir string, file *bytes.Buffer) {
+	r, err := zip.NewReader(bytes.NewReader(file.Bytes()), int64(file.Len()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, zf := range r.File {
+		saveLoc := filepath.Join(dir, zf.Name)
+
+		err = os.MkdirAll(filepath.Dir(saveLoc), os.ModePerm)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if filepath.Ext(saveLoc) == "" {
+			continue
+		}
+		fmt.Println("saving ", saveLoc)
+		dst, err := os.Create(saveLoc)
+		if err != nil {
+			log.Fatal(err)
+		}
+		src, err := zf.Open()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = io.Copy(dst, src)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dst.Close()
+		src.Close()
+	}
+}
+
+func unTarZip(dir string, file *bytes.Buffer) {
+	r, err := zip.NewReader(bytes.NewReader(file.Bytes()), int64(file.Len()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, zf := range r.File {
+		r, err := zf.Open()
+		if err != nil {
+			log.Fatal(err)
+		}
+		unTar(dir, r)
+	}
+}

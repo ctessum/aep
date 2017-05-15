@@ -30,6 +30,10 @@ wget ftp://ftp.epa.gov/EmisInventory/2011v6/v2platform/2011emissions/2011eh_v6_1
 unzip 2011eh_v6_11g_inputs_onroad.zip
 rm 2011eh_v6_11g_inputs_onroad.zip
 
+wget ftp://ftp.epa.gov/EmisInventory/2011v6/v2platform/2011emissions/onroad/2011eh_onroad_SMOKE_MOVES_MOVES2014_no_speciated_pm.zip
+unzip 2011eh_onroad_SMOKE_MOVES_MOVES2014_no_speciated_pm.zip
+rm 2011eh_onroad_SMOKE_MOVES_MOVES2014_no_speciated_pm.zip
+
 # ancilliary data
 
 wget ftp://ftp.epa.gov/EmisInventory/2011v6/v2platform/ancillary_data/ge_dat_for_2011v2_other.zip
@@ -197,7 +201,7 @@ wget ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/us_oil.dbf
 wget ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/us_oil.shp
 wget ftp://ftp.epa.gov/EmisInventory/emiss_shp2003/us/us_oil.shx
 mv us_oil* emiss_shp2010
-# 
+#
 # organize shapefiles
 #
 mv ihs emiss_shp2010
@@ -207,5 +211,3 @@ mv ntad_ipcd emiss_shp2010
 mv offshore emiss_shp2010
 mv tiger emiss_shp2010
 mv cty_pophu2k_revised.* emiss_shp2010/
-
-

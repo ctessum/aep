@@ -620,8 +620,14 @@ func ReadGridRef(f io.Reader) (*GridRef, error) {
 				// fuzzy matching instead of just adding 2 zeros.
 				SCC = "00" + SCC
 			}
-			country := getCountryFromID(splitLine[0][0:1])
-			FIPS := splitLine[0][1:]
+			var country Country
+			FIPS := splitLine[0]
+			if len(FIPS) == 6 {
+				country = getCountryFromID(FIPS[0:1])
+				FIPS = FIPS[1:]
+			} else {
+				country = Country(0)
+			}
 			srg := strings.Trim(splitLine[2], "\"\n ")
 
 			if _, ok := gr[country]; !ok {
