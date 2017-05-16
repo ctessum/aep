@@ -72,7 +72,6 @@ func main() {
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.sbn",
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.sbx",
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.prj",
-		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.offshore.tar.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part1.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part2.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part3.zip",
