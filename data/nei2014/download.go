@@ -47,6 +47,7 @@ func main() {
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.usfs_timber.tar.gz",
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/2014shapefiles.usgs_mines.tar.gz",
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/cty_pophu2k_revised.zip",
+		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/mexico_shapefiles.tar.gz",
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/pr_shape.tar.gz",
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/us_tracts_shape.tar.gz",
 		"ftp.epa.gov/EmisInventory/2014platform/v1/spatial_surrogates/shapefiles/usvi_shape.tar.gz",
@@ -75,7 +76,6 @@ func main() {
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part1.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part2.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part3.zip",
-		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.mexico.tar.zip",
 	}
 
 	// copyFiles specifies files that should be copied to other files.
