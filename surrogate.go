@@ -23,12 +23,10 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"bitbucket.org/ctessum/sparse"
 	"github.com/ctessum/geom"
@@ -643,25 +641,7 @@ func intersection(g geom.Geom, poly geom.Polygonal) geom.Geom {
 			return nil
 		}
 	case geom.Polygonal:
-		t := time.NewTicker(20 * 60 * time.Second) // Try to catch infinite loop errors
-		go func() {
-			<-t.C
-			f, err := os.Create("g.txt")
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(f, "%#v\n", g)
-			f.Close()
-			f, err = os.Create("poly.txt")
-			if err != nil {
-				panic(err)
-			}
-			fmt.Fprintf(f, "%#v\n", poly)
-			f.Close()
-			panic("infinite loop?")
-		}()
 		intersection = g.(geom.Polygonal).Intersection(poly)
-		t.Stop()
 	case geom.Linear:
 		var err error
 		intersection, err = op.Construct(g,

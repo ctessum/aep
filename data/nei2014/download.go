@@ -78,6 +78,30 @@ func main() {
 		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.mexico.tar.zip",
 	}
 
+	// copyFiles specifies files that should be copied to other files.
+	// The reason for this is that some shapefiles do not come with .prj files,
+	// so we copy matching ones from other shapefiles.
+	var copyFiles = map[string][]string{ // Lambert projections
+		"Canada_2010_surrogate_v1/NAESI/SHAPEFILE/gisnodat.prj": []string{
+			"Canada_2010_surrogate_v1/NAESI/SHAPEFILE/naesi_dat.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/da2006_pop_labour.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/naesi_fert.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/naesi_livestk.prj",
+		},
+		"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/pr2001ca_regions_simplify.prj": []string{ // lat-lon projections
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/lowmedjet_ll.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/CANRAIL.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/chboisv8S0_.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/marine.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/merge123_10km.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/paved4.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/treesa.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/ua2001.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved4.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved5.prj",
+		},
+	}
+
 	flag.Parse()
 	if dir == "" {
 		log.Fatal("Please specify the download location as an argument (e.g. --dir=$HOME).")
@@ -105,6 +129,37 @@ func main() {
 			saveFile(dir, file, b)
 		}
 	}
+	for src, dsts := range copyFiles {
+		fullSrc := filepath.Join(dir, src)
+		for _, dst := range dsts {
+			fullDst := filepath.Join(dir, dst)
+			if err := copyFile(fullSrc, fullDst); err != nil {
+				log.Fatalf("copying file %s to %s: %v", fullSrc, fullDst, err)
+			}
+		}
+	}
+}
+
+// copyFile copies the file src to file
+// dst. The file will be created if it does not already exist. If the
+// destination file exists, all it's contents will be replaced by the contents
+// of the source file.
+func copyFile(src, dst string) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		return
+	}
+	err = out.Sync()
+	out.Close()
+	return
 }
 
 func saveFile(dir, filename string, b *bytes.Buffer) {
