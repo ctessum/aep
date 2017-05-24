@@ -440,7 +440,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 						} else {
 							v, err = strconv.ParseFloat(data[name], 64)
 							if err != nil {
-								return srgData, fmt.Errorf("aep.getSrgData: %v", err)
+								return srgData, fmt.Errorf("aep.getSrgData: shapefile %s column %s, %v", srg.WEIGHTSHAPEFILE, name, err)
 							}
 						}
 						weightval += v * srg.WeightFactors[i]
