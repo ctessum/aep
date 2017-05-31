@@ -434,7 +434,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 					for i, name := range srg.WeightColumns {
 						var v float64
 						vstring := data[name]
-						if vstring == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" || vstring == "****************" {
+						if strings.Contains(vstring, "\x00\x00\x00\x00\x00\x00") || strings.Contains(vstring, "***") {
 							// null value
 							v = 0.
 						} else {
