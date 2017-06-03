@@ -434,13 +434,13 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 					for i, name := range srg.WeightColumns {
 						var v float64
 						vstring := data[name]
-						if vstring == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" || vstring == "****************" {
+						if strings.Contains(vstring, "\x00\x00\x00\x00\x00\x00") || strings.Contains(vstring, "***") {
 							// null value
 							v = 0.
 						} else {
 							v, err = strconv.ParseFloat(data[name], 64)
 							if err != nil {
-								return srgData, fmt.Errorf("aep.getSrgData: %v", err)
+								return srgData, fmt.Errorf("aep.getSrgData: shapefile %s column %s, %v", srg.WEIGHTSHAPEFILE, name, err)
 							}
 						}
 						weightval += v * srg.WeightFactors[i]
