@@ -102,6 +102,7 @@ USA,Airport Areas,711,cb_2014_us_county_500k_Poly,GEOID,airport-area,AREA,,,,Air
 USA,Port Areas,801,cb_2014_us_county_500k_Poly,GEOID,Ports_2014NEI,Area_sqmi,,,,Navigable Waterway Miles,NLCD Water,,Area of Port Locations,
 USA,Gulf Shipping Lanes,803,ShippingLanes_2014NEI,FIPS,GulfofMexico_SupportVessels_Density_WRF,Fraction,,,,Offshore Shipping Area,Navigable Waterway Miles,NLCD Water,Area of near shore to offshore shipping lanes,
 USA,Offshore Shipping Area,805,ShippingLanes_2014NEI,FIPS,ShippingLanes_2014NEI,Area_sqmi,,,,,,,NEI shipping surrogate of near shore to international waters boundary,
+USA,Offshore Shipping NEI2014 Activity,9806,ShippingLanes_2014NEI,FIPS,ShippingLanes_2014NEI,ActivityKW,,,,Offshore Shipping Area,Navigable Waterway Miles,NLCD Water,NEI shipping surrogate of near shore to international waters boundary weighted by activity from the NEI2014,
 USA,Offshore Shipping NEI2014 Activity,806,ShippingLanes_2014NEI,FIPS,ShippingLanes_2014NEI,ActivityKW,,,,Offshore Shipping Area,Navigable Waterway Miles,NLCD Water,NEI shipping surrogate of near shore to international waters boundary weighted by activity from the NEI2014,
 USA,Navigable Waterway Miles,807,cb_2014_us_county_500k_Poly,GEOID,NTAD_2014_Waterway,LENGTH,,,,NLCD Water,,,NTAD line shapefile of navigable waterways,
 USA,Ports NEI2014 Activity,820,cb_2014_us_county_500k_Poly,GEOID,Ports_2014NEI,ACTIVITYKW,,,,Port Areas,Navigable Waterway Miles,NLCD Water,Port areas weighted by activity from NEI2014,
