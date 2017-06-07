@@ -67,6 +67,7 @@ func main() {
 		"ftp.epa.gov/EmisInventory/2014/flat_files/SmokeFlatFile_ONROAD_20160910.csv.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.misc.tar.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.fema.tar.zip",
+		"ftp.epa.gov/EmisInventory/2011v6/v1platform/spatial_surrogates/shapefiles/2010shapefiles.offshore.tar.zip",
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.dbf",
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.shp",
 		"ftp.epa.gov/EmisInventory/emiss_shp2003/us/airport-area.shx",
