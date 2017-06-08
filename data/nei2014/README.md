@@ -7,3 +7,13 @@ This repository includes a script—```download.go```—that downloads the data 
 This repository also includes the additional file `surrogate_specification_2014.csv`. This file is combined and edited version of surrogate specification files that can be downloaded from the FTP site which has been edited to replace missing shapefiles with existing replacements and combine US, Canada, and Mexico surrogates in one place. Improvements to this file or advice regarding the locations of the missing files are welcome.
 
 Finally, this directory in includes a configuration file—```cstref_2014.toml```—that specifies how the files can be used to processed the 2014 NEI. The configuration file assumes that a ```$nei2014Dir``` environment variable has been set to the directory where the data files were downloaded to (```/path/to/download``` in the example above).
+
+## Required manual changes
+
+After running the ```download.go``` script, some additional changes need to be made manually:
+
+* The following line should be added to ```ge_dat/gridding/mgref_onroad_us_2014platform_03oct2016_nf_v2.txt```:
+```
+000000;2201610080;222
+```
+* Delete the line starting with ```COUNTRY_CD``` from ```SmokeFlatFile_ONROAD_20160910.csv```.

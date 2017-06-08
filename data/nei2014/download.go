@@ -100,6 +100,7 @@ func main() {
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/ua2001.prj",
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved4.prj",
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved5.prj",
+			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/pr2001ca_regions_bc_waste.prj",
 		},
 	}
 
