@@ -15,5 +15,6 @@ After running the ```download.go``` script, some additional changes need to be m
 * The following line should be added to ```ge_dat/gridding/mgref_onroad_us_2014platform_03oct2016_nf_v2.txt```:
 ```
 000000;2201610080;222
+000000;2202420080;222
 ```
 * Delete the line starting with ```COUNTRY_CD``` from ```SmokeFlatFile_ONROAD_20160910.csv```.
