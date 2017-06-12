@@ -336,10 +336,10 @@ func (srg *SrgSpec) getInputData(gridData *GridDef, tol float64) (map[string]geo
 		if intersects {
 			inputID := fields[srg.DATAATTRIBUTE]
 			// Extend existing polygon if one already exists for this InputID
-			if _, ok := inputData[inputID]; !ok {
+			if inputG, ok := inputData[inputID]; !ok {
 				inputData[inputID] = ggeom
 			} else {
-				inputData[inputID] = ggeom.Union(inputData[inputID])
+				inputData[inputID] = append(inputG.(geom.Polygon), ggeom.(geom.Polygon)...)
 			}
 		}
 	}
