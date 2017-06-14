@@ -196,7 +196,7 @@ CA,UNPAVED ROADS,9942,pr2001ca_regions_simplify,PRUID,unpaved4,NONE,,,,,,,Non pa
 CA,Commercial Marine Vessels,9945,lowmedjet_ll,CLASS,marine,SO2,,,,,,,Commercial Marine Vessels,
 CA,Construction and mining,9946,pr2001ca_regions_simplify,PRUID,,,,,0.5*Mining except oil and gas+0.5*Total Land Development,,,,Combination of mining and construction,
 CA,Forest,9948,pr2001ca_regions_simplify,PRUID,treesa,NONE,,,,,,,Forest,
-CA,Combination of Forest and Dwelling,9950,pr2001ca_regions_simplify,PRUID,,,,,0.50*Forest+0.50*Combination of Dwelling,,,,Combination 50pct forest and 50pct dwelling,
+CA,Combination of Forest and Dwelling,9950,pr2001ca_regions_simplify,PRUID,,,,,0.50*Forest+0.50*total dwelling,,,,Combination 50pct forest and 50pct dwelling,
 CA,UNPAVED_ROADS_AND_TRAILS,9955,pr2001ca_regions_simplify,PRUID,unpaved5,NONE,,,,,,,Non paved roads and trails,
 CA,TOTBEEF,9960,pr2001ca_regions_simplify,PRUID,naesi_livestk,TOTBEEF,,,,,,,TOTBEEF,
 CA,TOTPOUL,9970,pr2001ca_regions_simplify,PRUID,naesi_livestk,TOTPOULT,,,,,,,TOTPOUL,
