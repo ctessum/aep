@@ -225,3 +225,4 @@ MEX,MEX Personal Repair (COM3),42,REP_CRUCES,ID_MUN,REP_CRUCES,545_1999,,,,Popul
 MEX,Airports Area,44,REP_CRUCES,ID_MUN,mexico_air,VALUE,,,,,,,,
 MEX,MEX Marine Ports,46,REP_CRUCES,ID_MUN,mexico_ports,VALUE,,,,,,,,
 MEX,Brick Kilns - Mexico,48,REP_CRUCES,ID_MUN,BOSQUE_LAD,LAD_2000,,,,,,,Economic census 2000,
+MEX,Border Crossings,50,REP_CRUCES,ID_MUN,hwybdrx,NONE,,,,MEX Total Road Miles,,,,

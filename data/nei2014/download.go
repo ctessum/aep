@@ -101,6 +101,7 @@ func main() {
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved4.prj",
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/unpaved5.prj",
 			"Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/pr2001ca_regions_bc_waste.prj",
+			"mexico/hwybdrx.prj", // This one doesn't look quite right but I'm not sure what it should be.
 		},
 	}
 
