@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2012-2014 Regents of the University of Minnesota.
+Copyright (C) 2012-2014 the AEP authors.
 This file is part of AEP.
 
 AEP is free software: you can redistribute it and/or modify

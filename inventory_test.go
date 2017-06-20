@@ -1,3 +1,20 @@
+/*
+Copyright © 2017 the AEP authors.
+This file is part of AEP.
+
+AEP is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+AEP is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with AEP.  If not, see <http://www.gnu.org/licenses/>.*/
+
 package aep
 
 import (
@@ -667,8 +684,8 @@ func TestInventory(t *testing.T) {
 #EXPORT_VERSION_NAME=update stack diameter at 1 stack
 #EXPORT_VERSION_NUMBER=1
 #REV_HISTORY 03/03/2008 Rich Mason.    What:  old stack diameter was 777.55, new one, calc from flowrate & velocity indicated old value had truncation issue    Why:  stack diameter error
- 2  102001001       1              1                         INDUSTRIA NAVAL DE CALIFORNIA S.A. DE C.31499900          29.81.8044141.  37.08449 14.50131                    0                                                     342931.863611-116.6108          4.94   0.01353425                    0.0                                                                0.07  1.917808E-4                    0.0            9.78   0.02679452                    0.0            9.42   0.02580822                    0.0            0.07  1.917808E-4                    0.0          7750.4     21.23397                    0.0   
- 2  102001002       1              1                         CEMEX MEXICO S.A. DE C.V. PLANTA ENSENAD30500600          74.03.2808175.  418.8144 49.54068                    0                                                     324131.863611-116.6108                                                                                                                 22.61    0.0619452                    0.0           10.66   0.02920548                    0.0            7.18   0.01967123                    0.0          268.62    0.7359452                    0.0                                                       
+ 2  102001001       1              1                         INDUSTRIA NAVAL DE CALIFORNIA S.A. DE C.31499900          29.81.8044141.  37.08449 14.50131                    0                                                     342931.863611-116.6108          4.94   0.01353425                    0.0                                                                0.07  1.917808E-4                    0.0            9.78   0.02679452                    0.0            9.42   0.02580822                    0.0            0.07  1.917808E-4                    0.0          7750.4     21.23397                    0.0
+ 2  102001002       1              1                         CEMEX MEXICO S.A. DE C.V. PLANTA ENSENAD30500600          74.03.2808175.  418.8144 49.54068                    0                                                     324131.863611-116.6108                                                                                                                 22.61    0.0619452                    0.0           10.66   0.02920548                    0.0            7.18   0.01967123                    0.0          268.62    0.7359452                    0.0
 `,
 		},
 		testData{
@@ -689,8 +706,8 @@ func TestInventory(t *testing.T) {
 #EXPORT_DATE=Mon Apr 26 15:46:59 EDT 2010
 #EXPORT_VERSION_NAME=Initial Version
 #EXPORT_VERSION_NUMBER=0
- 1  1311211         1              1                         PASTEURIZADORA AGUASCALIENTES S.A DE C.V302030            58.43.2964205.  392.4562  45.9856                    0                                                     202321.814615 -102.286       1.64068  0.004495013                    0.0                                                            8.861478   0.02427802                    0.0        1.053148  0.002885337                    0.0       0.6859682  0.001879365                    0.0        32.89054   0.09011105                    0.0       0.3592432  9.842279E-4                    0.0   
- 1  1311212         1              1                         Evaporadora Mexicana, S.A. de C.V.      302030            58.43.2964205.  392.4562  45.9856                    0                                                     202321.814615 -102.286      5.199711   0.01424578                    0.0                                                            48.74904     0.133559                    0.0        28.47313   0.07800858                    0.0        20.56207   0.05633444                    0.0        616.7692     1.689778                    0.0        1.080706  0.002960838                    0.0   
+ 1  1311211         1              1                         PASTEURIZADORA AGUASCALIENTES S.A DE C.V302030            58.43.2964205.  392.4562  45.9856                    0                                                     202321.814615 -102.286       1.64068  0.004495013                    0.0                                                            8.861478   0.02427802                    0.0        1.053148  0.002885337                    0.0       0.6859682  0.001879365                    0.0        32.89054   0.09011105                    0.0       0.3592432  9.842279E-4                    0.0
+ 1  1311212         1              1                         Evaporadora Mexicana, S.A. de C.V.      302030            58.43.2964205.  392.4562  45.9856                    0                                                     202321.814615 -102.286      5.199711   0.01424578                    0.0                                                            48.74904     0.133559                    0.0        28.47313   0.07800858                    0.0        20.56207   0.05633444                    0.0        616.7692     1.689778                    0.0        1.080706  0.002960838                    0.0
 `,
 		},
 		testData{
@@ -830,8 +847,8 @@ func TestInventory(t *testing.T) {
 #EXPORT_DATE=Fri Jan 07 15:07:30 EST 2011
 #EXPORT_VERSION_NAME=Initial Version
 #EXPORT_VERSION_NUMBER=0
- 2  121020040004.157395360.01139012                                  0.0       0.0                           19.95549770.05467259                           0.831479070.00227802                           0.19955498 5.4672E-4                           4.961953160.01359439                           0.16629581  4.556E-4                           
- 2  12102005000 12.2804450.03364505                                  0.0       0.0                            115.436180.31626349                           78.59968560.21534159                           51.18119040.14022243                           1426.263423.90757107                           0.687704920.00188412                           
+ 2  121020040004.157395360.01139012                                  0.0       0.0                           19.95549770.05467259                           0.831479070.00227802                           0.19955498 5.4672E-4                           4.961953160.01359439                           0.16629581  4.556E-4
+ 2  12102005000 12.2804450.03364505                                  0.0       0.0                            115.436180.31626349                           78.59968560.21534159                           51.18119040.14022243                           1426.263423.90757107                           0.687704920.00188412
 `,
 		},
 		testData{
