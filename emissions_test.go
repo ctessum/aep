@@ -18,6 +18,7 @@ along with AEP.  If not, see <http://www.gnu.org/licenses/>.*/
 package aep
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -185,4 +186,30 @@ func TestDropTotals(t *testing.T) {
 	if !reflect.DeepEqual(e, eWant) {
 		t.Errorf("e have %#v, want %#v", e, eWant)
 	}
+
+	const scale = 0.5
+	eScaledWant := &Emissions{
+		e: []*emissionsPeriod{
+			&emissionsPeriod{
+				begin:     begin,
+				end:       end,
+				rate:      rate.Value() * scale,
+				Pollutant: Pollutant{Name: "testpol2"},
+			},
+		},
+		units: map[Pollutant]unit.Dimensions{Pollutant{Name: "testpol2", Prefix: ""}: unit.Dimensions{6: -1, 4: 1}},
+	}
+	err := e.Scale(func(p Pollutant) (float64, error) {
+		if p.Name == "testpol2" {
+			return scale, nil
+		}
+		return 0, fmt.Errorf("invalid pollutant %v", p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(e, eScaledWant) {
+		t.Errorf("e scaled: have %#v, want %#v", e, eScaledWant)
+	}
+
 }

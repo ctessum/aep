@@ -256,3 +256,16 @@ func (e *Emissions) combine(e2 Emissions) {
 		}
 	}
 }
+
+// Scale scales the emissions in the receiver according to f, which
+// is a function that gives emissions multipliers by Pollutant.
+func (e *Emissions) Scale(f func(Pollutant) (float64, error)) error {
+	for _, ee := range e.e {
+		s, err := f(ee.Pollutant)
+		if err != nil {
+			return err
+		}
+		ee.rate *= s
+	}
+	return nil
+}
