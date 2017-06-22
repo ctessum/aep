@@ -115,6 +115,19 @@ func (c *SpatialConfig) SpatializeTotal(recs ...aep.Record) (map[aep.Pollutant][
 	return emis, units, nil
 }
 
+// SpatialProcessor returns the spatial processor associated with the
+// receiver.
+func (c *SpatialConfig) SpatialProcessor() (*aep.SpatialProcessor, error) {
+	var err error
+	c.loadOnce.Do(func() {
+		c.sp, err = c.setupSpatialProcessor()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c.sp, nil
+}
+
 // setupSpatialProcessor reads in the necessary information to initialize
 // a processor for spatializing emissions, and then does so.
 func (c *SpatialConfig) setupSpatialProcessor() (*aep.SpatialProcessor, error) {
