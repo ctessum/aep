@@ -70,6 +70,10 @@ type SpatialConfig struct {
 	// GridCells specifies the geometry of the spatial grid.
 	GridCells []geom.Polygonal
 
+	// GridName specifies a name for the grid which is used in the names
+	// of intermediate and output files.
+	GridName string
+
 	loadOnce sync.Once
 	sp       *aep.SpatialProcessor
 }
@@ -177,7 +181,7 @@ func (c *SpatialConfig) setupSpatialProcessor() (*aep.SpatialProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	grid, err := aep.NewGridIrregular("", c.GridCells, outSR, outSR)
+	grid, err := aep.NewGridIrregular(c.GridName, c.GridCells, outSR, outSR)
 	if err != nil {
 		return nil, err
 	}
