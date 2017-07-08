@@ -42,7 +42,7 @@ type GridDef struct {
 	X0, Y0        float64
 	Cells         []*GridCell
 	SR            *proj.SR
-	Extent        geom.Polygonal
+	Extent        geom.Polygon
 	IrregularGrid bool // whether the grid is a regular grid
 	rtree         *rtree.Rtree
 }
@@ -127,14 +127,11 @@ func NewGridIrregular(Name string, g []geom.Polygonal, inputSR, outputSR *proj.S
 		cell.Row = i
 		grid.Cells[i] = cell
 
-		if grid.Extent == nil {
-			grid.Extent = cell.Polygonal
-		} else {
-			grid.Extent = grid.Extent.Union(cell.Polygonal)
+		for _, p := range cell.Polygonal.Polygons() {
+			grid.Extent = append(grid.Extent, p...)
 		}
 		grid.rtree.Insert(cell)
 	}
-	grid.Extent = grid.Extent.Simplify(1.e-8).(geom.Polygonal)
 	return
 }
 
