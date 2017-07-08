@@ -46,7 +46,7 @@ func loadExcelFile(fileName string) (*xlsx.File, error) {
 			filename := req.(string)
 			f, err := xlsx.OpenFile(filename)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("aeputil: opening xlsx file: %v", err)
 			}
 			return f, nil
 		}, runtime.GOMAXPROCS(-1), requestcache.Memory(1000))
@@ -100,7 +100,7 @@ func textColumnFromExcel(fileName, sheet string, column, startRow, endRow int) (
 	}
 	s, ok := f.Sheet[sheet]
 	if !ok {
-		return nil, fmt.Errorf("bea: reading text column from Excel; no sheet %s", sheet)
+		return nil, fmt.Errorf("aeputil: reading text column from Excel; no sheet %s", sheet)
 	}
 
 	o := make([]string, endRow-startRow)
