@@ -126,6 +126,9 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 	}
 	rows := make(map[item]int)
 	for i := range stateFIPS {
+		if len(sccTier1[i]) == 1 {
+			sccTier1[i] = "0" + sccTier1[i]
+		}
 		rows[item{stateFIPS: stateFIPS[i], sccTier1: sccTier1[i], pol: pols[i]}] = i
 	}
 
@@ -198,6 +201,9 @@ func sccToTier1(f io.Reader) (map[string]string, error) {
 			return nil, fmt.Errorf("aeputil.sccToTier1: invalid SCC code %s", scc)
 		}
 		tier1 := line[16]
+		if len(tier1) == 1 {
+			tier1 = "0" + tier1
+		}
 		out[scc] = tier1
 	}
 	return out, nil
