@@ -401,7 +401,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 			// Determine whether this feature should be kept according to
 			// the filter function.
 			keepFeature = false
-			featureVal = fmt.Sprintf("%v", data[srg.FilterFunction.Column])
+			featureVal = strings.TrimSpace(fmt.Sprintf("%v", data[srg.FilterFunction.Column]))
 			for _, filterVal := range srg.FilterFunction.Values {
 				switch srg.FilterFunction.EqualNotEqual {
 				case "NotEqual":
