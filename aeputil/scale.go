@@ -142,7 +142,8 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 		key := item{stateFIPS: stateFIPS, sccTier1: tier1, pol: scalingPol(pol)}
 		row, ok := rows[key]
 		if !ok {
-			return math.NaN(), fmt.Errorf("aeputil.ScaleNEIStateTrends: no scaling factor for key %+v", key)
+			fmt.Printf("aeputil.ScaleNEIStateTrends: no scaling factor for key %+v\n", key)
+			return 1, nil
 		}
 		scale := scaleData.At(row, 0)
 		return scale, nil
