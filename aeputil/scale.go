@@ -172,10 +172,14 @@ func yearStringsToYears(yearStrings []string) ([]int, error) {
 // scalingPol returns the scaling factor pollutant name that
 // corresponds to the input
 func scalingPol(pol aep.Pollutant) string {
-	if pol.Name == "PM2_5" {
+	switch pol.Name {
+	case "PM2_5", "PM25-PRI":
 		return "PM25"
+	case "XYL", "UNR", "TOL", "TERP", "PAR", "OLE", "NVOL", "MEOH", "ISOP", "IOLE", "FORM", "ETOH", "ETHA", "ETH":
+		return "VOC"
+	default:
+		return pol.Name
 	}
-	return pol.Name
 }
 
 // sccToTier1 reads in a crosswalk between SCC codes and the tier 1
