@@ -20,6 +20,7 @@ package aep
 
 import (
 	"bufio"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -144,43 +145,29 @@ func (t Table) Tabbed(w io.Writer) (n int, err error) {
 // for each SCC code. The returned data is in the form map[SCC]description.
 func SCCDescription(r io.Reader) (map[string]string, error) {
 	sccDesc := make(map[string]string)
-	buf := bufio.NewReader(r)
-	for {
-		record, err := buf.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
+	d := csv.NewReader(r)
+	d.Comment = '#'
+	lines, err := d.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range lines {
+		scc := line[0]
+		if len(scc) < 10 {
+			if len(scc) == 8 {
+				scc = "00" + scc
+			} else if len(scc) == 9 {
+				scc = scc + "0"
 			} else {
-				return sccDesc, fmt.Errorf("In SCCdescription: %s; record: %s", err, record)
+				return nil, fmt.Errorf("invalid scc %s", scc)
 			}
 		}
+		desc := line[1]
 		// Get rid of comments at end of line.
-		if i := strings.Index(record, "!"); i != -1 {
-			record = record[0:i]
+		if i := strings.Index(desc, "!"); i != -1 {
+			desc = desc[0:i]
 		}
-		if record[0] != '#' {
-			splitLine := strings.Split(record, ",")
-			SCC := strings.Trim(splitLine[0], "\"")
-			// Add zeros to 8 digit SCCs so that all SCCs are 10 digits
-			// If SCC is less than 8 digits, add 2 zeros to the front and the rest to
-			// the end.
-			if len(SCC) == 8 {
-				SCC = "00" + SCC
-			} else if len(SCC) == 7 {
-				SCC = "00" + SCC + "0"
-			} else if len(SCC) == 6 {
-				SCC = "00" + SCC + "00"
-			} else if len(SCC) == 5 {
-				SCC = "00" + SCC + "000"
-			} else if len(SCC) == 4 {
-				SCC = "00" + SCC + "0000"
-			} else if len(SCC) == 3 {
-				SCC = "00" + SCC + "00000"
-			} else if len(SCC) == 2 {
-				SCC = "00" + SCC + "000000"
-			}
-			sccDesc[SCC] = cleanDescription(splitLine[1])
-		}
+		sccDesc[scc] = desc
 	}
 	return sccDesc, nil
 }
