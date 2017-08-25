@@ -213,3 +213,30 @@ func TestDropTotals(t *testing.T) {
 	}
 
 }
+
+func TestEmissions_Clone(t *testing.T) {
+	e := new(Emissions)
+	begin, _ := time.Parse("Jan 2006", "Jan 2005")
+	end, _ := time.Parse("Jan 2006", "Jan 2006")
+	rate := unit.New(1, map[unit.Dimension]int{unit.MassDim: 1, unit.TimeDim: -1})
+	e.Add(begin, end, "testpol", "", rate)
+
+	e2 := e.Clone()
+	scaleFunc := func(Pollutant) (float64, error) { return 0.5, nil }
+	if err := e2.Scale(scaleFunc); err != nil {
+		t.Fatal(err)
+	}
+
+	eWant := map[Pollutant]*unit.Unit{
+		Pollutant{Name: "testpol", Prefix: ""}: unit.New(3.1536e+07, unit.Dimensions{4: 1}),
+	}
+	if !reflect.DeepEqual(e.Totals(), eWant) {
+		t.Errorf("e = %v, want %v", e.Totals(), eWant)
+	}
+	e2Want := map[Pollutant]*unit.Unit{
+		Pollutant{Name: "testpol", Prefix: ""}: unit.New(3.1536e+07/2, unit.Dimensions{4: 1}),
+	}
+	if !reflect.DeepEqual(e2.Totals(), e2Want) {
+		t.Errorf("e2 = %v, want %v", e2.Totals(), e2Want)
+	}
+}

@@ -71,6 +71,22 @@ func (e Emissions) String() string {
 	return s
 }
 
+// Clone returns a copy of the receiver.
+func (e *Emissions) Clone() *Emissions {
+	o := Emissions{
+		e:     make([]*emissionsPeriod, len(e.e)),
+		units: make(map[Pollutant]unit.Dimensions),
+	}
+	for i, p := range e.e {
+		p2 := *p
+		o.e[i] = &p2
+	}
+	for p, d := range e.units {
+		o.units[p] = d
+	}
+	return &o
+}
+
 // Add adds emissions beginning and ending at times begin and end, respectively,
 // of pollutant 'pollutant' with prefix 'polPrefix' (e.g., BRK, TIR, etc),
 // and of total amount 'amount'. Emissions are expected to be in units of g/s.
