@@ -46,3 +46,5 @@ After running the ```download.go``` script, some additional changes need to be m
 000000;2202000062;239
 ```
 * Delete the line starting with ```COUNTRY_CD``` from ```SmokeFlatFile_ONROAD_20160910.csv```.
+
+* Delete the leading "1" from each record in the ```PRUID``` attribute column of the shapefile ```/home/chris/data/2014_nei_data/Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/pr2001ca_regions_simplify.shp```. So ```159000``` should become ```59000```.
