@@ -48,3 +48,6 @@ After running the ```download.go``` script, some additional changes need to be m
 * Delete the line starting with ```COUNTRY_CD``` from ```SmokeFlatFile_ONROAD_20160910.csv```.
 
 * Delete the leading "1" from each record in the ```PRUID``` attribute column of the shapefile ```/home/chris/data/2014_nei_data/Canada_2010_surrogate_v1/Non_NAESI/SHAPEFILE/pr2001ca_regions_simplify.shp```. So ```159000``` should become ```59000```.
+
+
+* The Canadian census division file that comes with the data (```Canada_2010_surrogate_v1/NAESI/SHAPEFILE/gisnodat.shp```) is unnecessarily large (making it unnecessarily difficult to create surrogates) and the ID codes have the same problem as listed above. To fix this, the download script will download an alternative shapefile: ```lcd_000b16a_e.shp```. Before this shapefile can be used however, you need to add an additional attribute column called ```FIPS``` that consists of the first two characters of the attribute ```CDUID```, then a zero, then the final two characters of ```CDUID```. In QGIS, this can be done in the "field calculator" with the expression: ```concat(substr(CDUID,1,2),'0',substr(CDUID,3,2))```.

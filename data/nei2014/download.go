@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +95,7 @@ func main() {
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part1.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part2.zip",
 		"ftp.epa.gov/EmisInventory/2011v6/v2platform/spatial_surrogates/CANADA2010_shapefiles_part3.zip",
+		"http://www12.statcan.gc.ca/census-recensement/2011/geo/bound-limit/files-fichiers/2016/lcd_000b16a_e.zip", // Canadian census divisions
 	}
 
 	// copyFiles specifies files that should be copied to other files.
@@ -130,9 +132,21 @@ func main() {
 	for _, file := range files {
 		log.Printf("downloading %s", file)
 		b := new(bytes.Buffer)
-		err := ftp.Get(file, b)
-		if err != nil {
-			log.Fatal(err)
+		if strings.Contains(file, "http://") {
+			resp, err := http.Get(file)
+			if err != nil {
+				log.Fatal(err)
+			}
+			_, err = io.Copy(b, resp.Body)
+			if err != nil {
+				log.Fatal(err)
+			}
+			resp.Body.Close()
+		} else {
+			err := ftp.Get(file, b)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 		switch filepath.Ext(file) {
 		case ".zip":
