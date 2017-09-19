@@ -82,9 +82,10 @@ func getDroppedTotals(f *InventoryFile) map[Pollutant]*unit.Unit {
 // readHeader extracts header information from the file and sets up a function
 // for reading the records from the file.
 func (f *InventoryFile) readHeader(inputConverter func(float64) *unit.Unit) error {
-	buf := bufio.NewReader(f.ReadSeeker)
-	firstRec, err := buf.ReadString('\n')
-	if err != nil {
+	buf := bufio.NewScanner(f.ReadSeeker)
+	buf.Scan()
+	firstRec := buf.Text()
+	if err := buf.Err(); err != nil {
 		return err
 	}
 
@@ -114,13 +115,16 @@ func (f *InventoryFile) readHeader(inputConverter func(float64) *unit.Unit) erro
 
 func (f *InventoryFile) readHeaderGeneral() (year string, country Country, err error) {
 	f.ReadSeeker.Seek(0, 0)
-	buf := bufio.NewReader(f.ReadSeeker)
+	buf := bufio.NewScanner(f.ReadSeeker)
 	var record string
-	for {
-		record, err = buf.ReadString(endLineRune)
-		if err != nil {
+	for buf.Scan() {
+		record = buf.Text()
+		if err = buf.Err(); err != nil {
 			err = fmt.Errorf("aep.InventoryFile.readHeaderGeneral: in file %s: %v", f.Name, err)
 			return
+		}
+		if len(record) > 0 && record[0] != commentRune {
+			break
 		}
 		if len(record) > 8 && record[1:8] == "COUNTRY" {
 			country, err = countryFromName(strings.Trim(record[8:], "\n ="))
@@ -132,27 +136,7 @@ func (f *InventoryFile) readHeaderGeneral() (year string, country Country, err e
 		if len(record) > 5 && record[1:5] == "YEAR" {
 			year = trimString(strings.Trim(record[5:], "\n =\t"))
 		}
-		var end bool
-		end, err = endofHeader(buf)
-		if err != nil {
-			err = fmt.Errorf("aep.InventoryFile.readHeaderGeneral: in file %s: %v", f.Name, err)
-			return
-		}
-		if end {
-			break
-		}
 	}
 	f.ReadSeeker.Seek(0, 0)
 	return
-}
-
-func endofHeader(buf *bufio.Reader) (bool, error) {
-	nextChar, err := buf.Peek(1)
-	if err != nil {
-		return true, err
-	}
-	if string(nextChar) == commentString {
-		return false, nil
-	}
-	return true, nil
 }

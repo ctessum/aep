@@ -34,10 +34,8 @@ import (
 )
 
 const (
-	nullVal       = "-9"
-	commentRune   = '#'
-	commentString = "#"
-	endLineRune   = '\n'
+	nullVal     = "-9"
+	commentRune = '#'
 )
 
 // A Record holds data from a parsed emissions inventory record. Two types

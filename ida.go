@@ -20,6 +20,7 @@ package aep
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -66,47 +67,39 @@ func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) e
 		return err
 	}
 
-	buf := bufio.NewReader(f.ReadSeeker)
+	buf := bufio.NewScanner(f.ReadSeeker)
 
 	// get pollutant IDs
 	var polids []string
-	for {
-		record, err2 := buf.ReadString('\n')
-		if err2 != nil {
-			return fmt.Errorf("aep: in file %s: %v", f.Name, err2)
-		}
-		if len(record) > 6 && record[1:6] == "POLID" && len(polids) == 0 {
-			polids = strings.Split(strings.Trim(record[6:], " \n\r"), " ")
-		}
-		if len(record) > 5 && record[1:5] == "DATA" && len(polids) == 0 {
-			polids = strings.Split(strings.Trim(record[5:], " \n\r"), " ")
-		}
-		end, err3 := endofHeader(buf)
-		if err3 != nil {
-			return err3
-		}
-		if end {
+	var record string
+	for buf.Scan() {
+		record = buf.Text()
+		if len(record) > 0 && record[0] != commentRune {
 			break
 		}
+		if len(record) > 6 && record[1:6] == "POLID" && len(polids) == 0 {
+			polids = strings.Split(strings.TrimSpace(record[6:]), " ")
+		}
+		if len(record) > 5 && record[1:5] == "DATA" && len(polids) == 0 {
+			polids = strings.Split(strings.TrimSpace(record[5:]), " ")
+		}
+	}
+	if err = buf.Err(); err != nil {
+		return fmt.Errorf("aep: in file %s: %v", f.Name, err)
 	}
 
 	if len(polids) >= 10 {
 		// If there are more than 10 pollutants, there are situations where
 		// it can be ambiguous about which file type we are dealing with based
 		// on the line length.
-		return fmt.Errorf("aep: in file %s: too many pollutants (must be less than 10)",
-			f.Name)
+		return fmt.Errorf("aep: in file %s: too many pollutants (must be less than 10)", f.Name)
 	}
-
-	firstDataRec, err := buf.ReadString(endLineRune) // Read the first data record.
-	if err != nil {
+	if err = buf.Err(); err != nil {
 		return fmt.Errorf("aep: in file %s: %v", f.Name, err)
 	}
-	firstDataRec = strings.Trim(firstDataRec, "\n")
 
-	var recFunc func(string, []string, Country, time.Time, time.Time,
-		func(float64) *unit.Unit) (Record, error)
-	switch len(firstDataRec) {
+	var recFunc func(string, []string, Country, time.Time, time.Time, func(float64) *unit.Unit) (Record, error)
+	switch len(record) {
 	case 249 + 52*len(polids): // Point record
 		recFunc = NewIDAPoint
 	case 15 + 47*len(polids): // Area record
@@ -114,8 +107,7 @@ func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) e
 	case 25 + 20*len(polids): // Mobile record
 		recFunc = NewIDAMobile
 	default:
-		return fmt.Errorf("in aep.readHeaderIDA: unsupported line length %d"+
-			" with %d pollutants", len(firstDataRec), len(polids))
+		return fmt.Errorf("in aep.readHeaderIDA: unsupported line length %d with %d pollutants", len(record), len(polids))
 	}
 
 	// rewind the file
@@ -123,24 +115,25 @@ func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) e
 	if err != nil {
 		return err
 	}
-	buf = bufio.NewReader(f.ReadSeeker)
+	buf = bufio.NewScanner(f.ReadSeeker)
 
 	f.parseLine = func() (Record, error) {
 		var line string
 		var err error
-		for { // loop until we find a non-commented line.
-			line, err = buf.ReadString(endLineRune)
-			line = strings.Trim(line, "\n")
-			if err != nil {
-				return nil, err
-			}
+		for buf.Scan() { // loop until we find a non-commented line.
+			line = buf.Text()
 			if line[0] != commentRune {
 				break
 			}
 		}
+		if err = buf.Err(); err != nil {
+			return nil, err
+		}
+		if len(line) == 0 {
+			return nil, io.EOF
+		}
 		return recFunc(line, polids, country, begin, end, inputConverter)
 	}
-
 	return nil
 }
 
