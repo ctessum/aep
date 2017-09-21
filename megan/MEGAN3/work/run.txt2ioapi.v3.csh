@@ -8,7 +8,7 @@ foreach scen ( J0 J4 )
 
 setenv PROMPTFLAG N
 setenv PROG   txt2ioapi
-setenv EXEDIR /disk8/MEGAN3/source_code/delivery/for_xiaoyan/MEGAN3/bin
+setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
 setenv EXEC   $EXEDIR/$PROG
 setenv GRIDDESC $cwd/GRIDDESC
 setenv GDNAM3D tceq_$dom

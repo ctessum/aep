@@ -51,7 +51,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       CHARACTER*30     SEGMENT( MXTCOL )     ! Input line fields
 
       INTEGER, PARAMETER :: NFLD  = MXTCOL-3 ! Number of output variables
-      INTEGER,         XREF(NFLD)
+      INTEGER         XREF(NFLD)
       INTEGER       :: NSTEP = NFLD
       INTEGER, PARAMETER :: NVARS = NFLD        ! Number of output variables
 

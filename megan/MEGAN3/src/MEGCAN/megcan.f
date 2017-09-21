@@ -449,11 +449,24 @@
         WRITE(MESG,1020) 'Found LAI current period for YYYYJJJ : ',
      &                    IDATE,LAIc_I
         CALL M3MESG( MESG )
-        WRITE(MESG,'I0.2') LAIc_I
+        WRITE(MESG,'(I0.2)') LAIc_I
         IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIc)) THEN
           MESG = 'Error reading LAI'
           CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
         ENDIF
+        
+        
+        print*,'LAT=',LAT
+        print*,'LONG=',LONG       
+        print*,'LAIc=',LAIc
+        print*,'TEMP=',TEMP
+        print*,'PPFD=',PPFD       
+        print*,'WIND=',WIND
+        print*,'PRES=',PRES
+        print*,'QV=',QV       
+        print*,'CTF=',CTF
+        
+        
 
           WRITE(MESG,1030) 'Entering CANOPY: ',IDATE,ITIME
           CALL M3MESG( MESG )
@@ -563,6 +576,8 @@
 !... Write met data to file
         WRITE(MESG,1030) 'Writing met data at ',T,IDATE,ITIME
         CALL M3MESG( MESG )
+        
+        print*,'SunleafTK=',SunleafTK
 
 ! #1
         IF ( .NOT. WRITE3(CANMET,VNAME3D(1),IDATE,ITIME,

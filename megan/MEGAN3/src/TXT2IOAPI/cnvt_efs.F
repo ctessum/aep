@@ -52,7 +52,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       CHARACTER*30     SEGMENT( MXTCOL )     ! Input line fields
 
       INTEGER, PARAMETER :: NFLD  = MXTCOL-2 ! Number of output variables
-      INTEGER,         XREF(NFLD)
+      INTEGER         XREF(NFLD)
       INTEGER       :: NSTEP = NFLD
       INTEGER, PARAMETER :: NVARS = NFLD         ! Number of output variables
       INTEGER, PARAMETER :: NEF = NFLD      ! Number of EF
@@ -106,7 +106,7 @@ C.........  LOCAL VARIABLES and their descriptions:
 
             DO S = 1 , NEF
                XREF( S ) = S
-               WRITE(MESG,'I0.2') S
+               WRITE(MESG,'(I0.2)') S
                PRINT*,'READ EF'//TRIM(MESG)
             ENDDO
 

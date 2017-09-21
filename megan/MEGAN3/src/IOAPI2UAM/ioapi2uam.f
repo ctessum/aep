@@ -162,7 +162,7 @@ c
       etime = REAL(CTIME/10000) + REAL(TIME2SEC(MOD(CTIME,10000)))/3600.
 
       write(*,'(/,A)')'Output period (start date/time & end date/time):'
-      write(*,'(2(i,f))') ibdate,btime,iedate,etime
+      write(*,'(2(I0,F16.8))') ibdate,btime,iedate,etime
 
       nstep = RLENG / TSTEP3D
       xorg  = XORIG3D
@@ -296,7 +296,7 @@ ccc        write(*,'(a,2i)')'Reading ',CDATE,CTIME
      &          REAL(TIME2SEC(MOD(JTIME,10000)))/3600.
 
         write(MUNIT) ibdate,btime,iedate,etime
-        write(*,'(a,2(i,f))')'Writing ',ibdate,btime,iedate,etime
+        write(*,'(a,2(I0,F16.8))')'Writing ',ibdate,btime,iedate,etime
 
         do l = 1, nspec
           write(MUNIT) iseg,(mspec(n,l),n=1,10),

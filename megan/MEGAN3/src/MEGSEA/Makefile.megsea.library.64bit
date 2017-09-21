@@ -1,0 +1,67 @@
+SHELL=/bin/sh
+FC= gfortran
+CC= gcc
+FFLAGS= -O0 -ffixed-line-length-none -Wall -fcheck=bounds -fPIC -g -fbacktrace
+CFLAGS= -O0 -g
+PROGRAM= run_megsea_module
+PROGRAM_C= megsea_module_wrapper
+LIBRARY_STATIC= ../../bin/libmegan.a
+LIBRARY_DYN= libmegan.so
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff 
+INCLUDE = -I/usr/local/include \
+          -I$(CURDIR)
+
+
+OBJS = \
+     checkmem.o \
+     findlai.o \
+     soilnox_fx_noioapi.o \
+     soilnox.o \
+     growseason_noioapi.o \
+	 julday.o \
+	 gregorian.o \
+	 incrementDateTime.o \
+	 megsea_module.o \
+	 $(PROGRAM).o
+
+OBJS_C = $(PROGRAM_C).o
+
+MODULES= *mod.f
+
+#-----------------------------------------------------------------------
+# line to allow file.mod files to be recognised by GNU make
+%.o : %.mod
+#-----------------------------------------------------------------------
+
+.SUFFIXES : .f .f .c .o 
+
+.f.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+	ar -r $(LIBRARY_STATIC) $@ 
+.F.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+	ar -r $(LIBRARY_STATIC) $@ 
+#.c.o:
+#	$(CC) -c $(CFLAGS) $(INCLUDE) $<
+
+#-----------------------------------------------------------------------
+
+all: clean $(PROGRAM)
+
+$(PROGRAM):	$(OBJS)
+	$(FC) $(FFLAGS) $(INCLUDE) -o $(@) $(OBJS) $(LIBS)
+	
+	
+wrapper:
+# create shared library
+	#$(FC) -shared -fPIC -o $(LIBRARY_DYN) megsea_module.o soilnox_fx.o soilnox.o growseason.o
+	$(CC) megsea_module_wrapper.c -c $(CFLAGS) $(INCLUDE)
+	$(CC) $(CFLAGS) $(INCLUDE) -o $(PROGRAM_C) $(OBJS_C) $(LIBS) -L . -lmegan -lm -lgfortran -lioapi
+
+#-----------------------------------------------------------------------
+
+clean:
+	rm -f $(PROGRAM) $(PROGRAM_C).o *.o *.mod *.core
+#-----------------------------------------------------------------------
+
+

@@ -1,12 +1,9 @@
 SHELL=/bin/sh
-FC= pgf90
-FFLAGS= -O -Mvect=sse -Mextend -Msecond_underscore -Mlfs -Bstatic_pgi
-
+FC= gfortran
+FFLAGS= -O0 -ffixed-line-length-none
 PROGRAM= mgn2mech
-LIBS =   -L/models/CMAQ/lib64/ioapi-3.1/Linux2_x86_64pg -lioapi \
-         -L/models/CMAQ/lib/netcdf-3.6.0-p1/lib -lnetcdf
-INCLUDE = -I/models/CMAQ/lib64/ioapi-3.1/ioapi/fixed_src \
-          -I/models/CMAQ/lib/netcdf-3.6.0-p1/include \
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INCLUDE = -I/usr/local/include \
           -I$(CURDIR)/INCLDIR
 
 OBJS = \

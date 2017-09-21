@@ -6,7 +6,7 @@ setenv PROMPTFLAG N
 
 # Program directory
 setenv PROG   mgn2mech
-setenv EXEDIR /disk8/MEGAN3/source_code/delivery/for_xiaoyan/MEGAN3/bin
+setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
 setenv EXE    $EXEDIR/$PROG
 
 # Input map data directory
@@ -30,7 +30,7 @@ foreach mech ( CB6X )
 foreach dom ( 36 12)
 foreach scen ( J4 J0 )
 set JD = 2013145
-while ($JD <= 2013198)
+while ($JD <= 2013145)
 ########################################################################
 # Set up time and date to process
 setenv SDATE $JD        #start date

@@ -53,7 +53,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       CHARACTER*30     SEGMENT( MXTCOL )     ! Input line fields
 
       INTEGER, PARAMETER :: NFLD  = MXTCOL-1 ! Number of output variables
-      INTEGER,         XREF(NFLD)
+      INTEGER         XREF(NFLD)
       INTEGER       :: NSTEP = NFLD
       INTEGER, PARAMETER :: NVARS = NFLD         ! Number of output variables
       INTEGER, PARAMETER :: NEF = NFLD      ! Number of EF
@@ -107,7 +107,7 @@ C.........  LOCAL VARIABLES and their descriptions:
 
             DO S = 1 , NEF
                XREF( S ) = S
-               WRITE(MESG,'I0.2') S
+               WRITE(MESG,'(I0.2)') S
                PRINT*,'READ LDF'//TRIM(MESG)
             ENDDO
 
@@ -135,7 +135,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       NVARS3D = NVARS
 !... Set VNAME3D and UNITS3D
       DO N = 1,NEF
-        WRITE(MESG,'I0.2') N
+        WRITE(MESG,'(I0.2)') N
         VNAME3D( N ) = 'LDF'//TRIM(MESG)
         !VNAME3D( N ) = 'LDF_'//TRIM(MGN_SPC(N))
         UNITS3D( N ) = 'nondimension'

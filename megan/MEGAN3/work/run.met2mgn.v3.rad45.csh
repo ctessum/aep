@@ -66,13 +66,14 @@ setenv GDNAM3D tceq_${dom}km
 source ./setcase.csh
 
 setenv PROG met2mgn
-setenv EXE /disk8/MEGAN3/source_code/MEGAN3/src/MET2MGN_rad45/$PROG.rad45
+setenv EXE /home/Paul-Antoine/src/MEGAN3/src/MET2MGN_rad45/$PROG.rad45
 
 
 set logdir = logdir/$PROG
 if ( ! -e $logdir) mkdir -p $logdir
 
-set INPPATH     = /s9/disk43/aqrp_bvoc/camx/inputs/mcip_v4.2/aqrp_bvoc_${dom}km
+set INPPATH     = /home/Paul-Antoine/src/MEGAN3/inputs/mcip_v4.2/aqrp_bvoc_${dom}km
+#/s9/disk43/aqrp_bvoc/camx/inputs/mcip_v4.2/aqrp_bvoc_${dom}km
 set OUTPATH     = $MGNINP/MGNMET
 if (! -e $OUTPATH) mkdir $OUTPATH
 

@@ -1,0 +1,65 @@
+netcdf CT3_tceq_12km.single {
+dimensions:
+	TSTEP = UNLIMITED ; // (6 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 1 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float CTS(TSTEP, LAY, ROW, COL) ;
+		CTS:long_name = "CTS             " ;
+		CTS:units = "nondimension    " ;
+		CTS:var_desc = "" ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017255 ;
+		:CTIME = 182954 ;
+		:WDATE = 2017255 ;
+		:WTIME = 182954 ;
+		:SDATE = -635 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 1 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 0 ;
+		:VGTOP = 0.f ;
+		:VGLVLS = 0.f, 0.f ;
+		:GDNAM = "tceq_12km       " ;
+		:UPNAM = "CNVT_CANTYP     " ;
+		:VAR-LIST = "CTS             " ;
+		:FILEDESC = "Converted from MEGAN input text file:                                           /home/Paul-Antoine/src/MEGAN3/Input/MAP/CT3.tceq_12km.csv                       " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  0, 0,
+  0, 10000,
+  0, 20000,
+  0, 30000,
+  0, 40000,
+  0, 50000 ;
+
+ CTS =
+  0, 21.6363, 30.5448, 34.4223, 33.8522, 36.0447 ;
+}

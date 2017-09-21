@@ -52,7 +52,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       CHARACTER*30     SEGMENT( MXTCOL )     ! Input line fields
 
       INTEGER, PARAMETER :: NFLD  = MXTCOL-3 ! Number of output variables
-      INTEGER,         XREF(NFLD)
+      INTEGER         XREF(NFLD)
       INTEGER       :: NSTEP = NFLD
       INTEGER, PARAMETER :: NVARS = NFLD        ! Number of output variables
       INTEGER, PARAMETER :: NLAI = NFLD - 2     ! Number of LAI
@@ -115,7 +115,7 @@ C.........  LOCAL VARIABLES and their descriptions:
                   N = INDEX1(TRIM( MESG ),N_MGN_LAI ,MGN_LAI)
                   XREF( S+2 ) = S+2
                ELSE
-                  STOP MESG//' is not valid'
+                  STOP !MESG//' is not valid'
                ENDIF
                PRINT*,'READ ',MGN_LAI(N)
             ENDDO
@@ -139,7 +139,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       NVARS3D = NVARS
 !... Set VNAME3D and UNITS3D
       DO N = 1,NLAI
-        WRITE(MESG,'I0.2') N
+        WRITE(MESG,'(I0.2)') N
         VNAME3D( N ) = 'LAI'//TRIM(MESG)
         UNITS3D( N ) = 'nondimension'
       ENDDO
@@ -165,7 +165,7 @@ C.........  LOCAL VARIABLES and their descriptions:
       DO S = 1, NLAI
          PRINT*,'Min value for '//MGN_LAI(S)//':',MINVAL(IBUFF(:,:,S+2))
          PRINT*,'Max value for '//MGN_LAI(S)//':',MAXVAL(IBUFF(:,:,S+2))
-         IF ( .NOT. WRITE3(LAIS46,VNAME3D(S),IDATE,ITIME,
+         IF ( .NOT. WRITE3(LAIS46,VNAME3D(S),IDATE,ITIME, 
      &                                              IBUFF(:,:,S+2))) THEN
             MESG = 'Error writing to  file "'//TRIM(LAIS46)//'"'
             CALL M3EXIT(PROGNAME,0,0,MESG,2)

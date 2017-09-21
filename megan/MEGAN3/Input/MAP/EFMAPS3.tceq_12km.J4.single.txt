@@ -1,0 +1,212 @@
+netcdf EFMAPS3.tceq_12km.J4 {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 20 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float EF_ISOP(TSTEP, LAY, ROW, COL) ;
+		EF_ISOP:long_name = "EF_ISOP         " ;
+		EF_ISOP:units = "nanomol/m^2/s   " ;
+		EF_ISOP:var_desc = "" ;
+	float EF_MBO(TSTEP, LAY, ROW, COL) ;
+		EF_MBO:long_name = "EF_MBO          " ;
+		EF_MBO:units = "nanomol/m^2/s   " ;
+		EF_MBO:var_desc = "" ;
+	float EF_MT_PINE(TSTEP, LAY, ROW, COL) ;
+		EF_MT_PINE:long_name = "EF_MT_PINE      " ;
+		EF_MT_PINE:units = "nanomol/m^2/s   " ;
+		EF_MT_PINE:var_desc = "" ;
+	float EF_MT_ACYC(TSTEP, LAY, ROW, COL) ;
+		EF_MT_ACYC:long_name = "EF_MT_ACYC      " ;
+		EF_MT_ACYC:units = "nanomol/m^2/s   " ;
+		EF_MT_ACYC:var_desc = "" ;
+	float EF_MT_CAMP(TSTEP, LAY, ROW, COL) ;
+		EF_MT_CAMP:long_name = "EF_MT_CAMP      " ;
+		EF_MT_CAMP:units = "nanomol/m^2/s   " ;
+		EF_MT_CAMP:var_desc = "" ;
+	float EF_MT_SABI(TSTEP, LAY, ROW, COL) ;
+		EF_MT_SABI:long_name = "EF_MT_SABI      " ;
+		EF_MT_SABI:units = "nanomol/m^2/s   " ;
+		EF_MT_SABI:var_desc = "" ;
+	float EF_MT_AROM(TSTEP, LAY, ROW, COL) ;
+		EF_MT_AROM:long_name = "EF_MT_AROM      " ;
+		EF_MT_AROM:units = "nanomol/m^2/s   " ;
+		EF_MT_AROM:var_desc = "" ;
+	float EF_MT_OXY(TSTEP, LAY, ROW, COL) ;
+		EF_MT_OXY:long_name = "EF_MT_OXY       " ;
+		EF_MT_OXY:units = "nanomol/m^2/s   " ;
+		EF_MT_OXY:var_desc = "" ;
+	float EF_SQT_HR(TSTEP, LAY, ROW, COL) ;
+		EF_SQT_HR:long_name = "EF_SQT_HR       " ;
+		EF_SQT_HR:units = "nanomol/m^2/s   " ;
+		EF_SQT_HR:var_desc = "" ;
+	float EF_SQT_LR(TSTEP, LAY, ROW, COL) ;
+		EF_SQT_LR:long_name = "EF_SQT_LR       " ;
+		EF_SQT_LR:units = "nanomol/m^2/s   " ;
+		EF_SQT_LR:var_desc = "" ;
+	float EF_MEOH(TSTEP, LAY, ROW, COL) ;
+		EF_MEOH:long_name = "EF_MEOH         " ;
+		EF_MEOH:units = "nanomol/m^2/s   " ;
+		EF_MEOH:var_desc = "" ;
+	float EF_ACTO(TSTEP, LAY, ROW, COL) ;
+		EF_ACTO:long_name = "EF_ACTO         " ;
+		EF_ACTO:units = "nanomol/m^2/s   " ;
+		EF_ACTO:var_desc = "" ;
+	float EF_ETOH(TSTEP, LAY, ROW, COL) ;
+		EF_ETOH:long_name = "EF_ETOH         " ;
+		EF_ETOH:units = "nanomol/m^2/s   " ;
+		EF_ETOH:var_desc = "" ;
+	float EF_ACID(TSTEP, LAY, ROW, COL) ;
+		EF_ACID:long_name = "EF_ACID         " ;
+		EF_ACID:units = "nanomol/m^2/s   " ;
+		EF_ACID:var_desc = "" ;
+	float EF_LVOC(TSTEP, LAY, ROW, COL) ;
+		EF_LVOC:long_name = "EF_LVOC         " ;
+		EF_LVOC:units = "nanomol/m^2/s   " ;
+		EF_LVOC:var_desc = "" ;
+	float EF_OXPROD(TSTEP, LAY, ROW, COL) ;
+		EF_OXPROD:long_name = "EF_OXPROD       " ;
+		EF_OXPROD:units = "nanomol/m^2/s   " ;
+		EF_OXPROD:var_desc = "" ;
+	float EF_STRESS(TSTEP, LAY, ROW, COL) ;
+		EF_STRESS:long_name = "EF_STRESS       " ;
+		EF_STRESS:units = "nanomol/m^2/s   " ;
+		EF_STRESS:var_desc = "" ;
+	float EF_OTHER(TSTEP, LAY, ROW, COL) ;
+		EF_OTHER:long_name = "EF_OTHER        " ;
+		EF_OTHER:units = "nanomol/m^2/s   " ;
+		EF_OTHER:var_desc = "" ;
+	float EF_CO(TSTEP, LAY, ROW, COL) ;
+		EF_CO:long_name = "EF_CO           " ;
+		EF_CO:units = "nanomol/m^2/s   " ;
+		EF_CO:var_desc = "" ;
+	float EF_NO(TSTEP, LAY, ROW, COL) ;
+		EF_NO:long_name = "EF_NO           " ;
+		EF_NO:units = "nanomol/m^2/s   " ;
+		EF_NO:var_desc = "" ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017255 ;
+		:CTIME = 182954 ;
+		:WDATE = 2017255 ;
+		:WTIME = 182954 ;
+		:SDATE = -635 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 20 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 0 ;
+		:VGTOP = 0.f ;
+		:VGLVLS = 0.f, 0.f ;
+		:GDNAM = "tceq_12km       " ;
+		:UPNAM = "CNVT_EFS        " ;
+		:VAR-LIST = "EF_ISOP         EF_MBO          EF_MT_PINE      EF_MT_ACYC      EF_MT_CAMP      EF_MT_SABI      EF_MT_AROM      EF_MT_OXY       EF_SQT_HR       EF_SQT_LR       EF_MEOH         EF_ACTO         EF_ETOH         EF_ACID         EF_LVOC         EF_OXPROD       EF_STRESS       EF_OTHER        EF_CO           EF_NO           " ;
+		:FILEDESC = "Converted from MEGAN input text file:                                           /home/Paul-Antoine/src/MEGAN3/Input/MAP/grid_EF.tceq_12km.J4.csv                " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0 ;
+
+ EF_ISOP =
+  8.769534;
+
+ EF_MBO =
+  0.0224195;
+
+ EF_MT_PINE =
+  0.3402439;
+
+ EF_MT_ACYC =
+  0.01646902;
+
+ EF_MT_CAMP =
+  0.007909732;
+
+ EF_MT_SABI =
+  0.008048705;
+
+ EF_MT_AROM =
+  0.00181239;
+
+ EF_MT_OXY =
+  0.0019196;
+
+ EF_SQT_HR =
+  0.00901152;
+
+ EF_SQT_LR =
+  0.0150626;
+
+ EF_MEOH =
+  1.03454;
+
+ EF_ACTO =
+  0.143244;
+
+ EF_ETOH =
+  0.2013025;
+
+ EF_ACID =
+  0.060192;
+
+ EF_LVOC =
+  0.3470387;
+
+ EF_OXPROD =
+  0.02525556;
+
+ EF_STRESS =
+  0.03697741;
+
+ EF_OTHER =
+  0.00553815;
+
+ EF_CO =
+  0.7958;
+
+ EF_NO =
+  1.06345e-05;
+}

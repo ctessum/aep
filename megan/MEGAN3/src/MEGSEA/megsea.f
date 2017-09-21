@@ -365,7 +365,8 @@
         CFNOG = 0.
         GAMNO = 0.
 
-        IF ( .NOT. READ3(MGNMET,'TEMP2',  ALLAYS3,IDATE,ITIME,TEMP)) THEN
+        IF ( .NOT. READ3(MGNMET,'TEMP2',  ALLAYS3,IDATE,ITIME,TEMP))
+     &  THEN
           MESG = 'Error reading temperature'
           CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
         ENDIF
@@ -379,7 +380,7 @@
 !...  Read CANTYP
       DO I_CT = 1, MXCT
          IF ( .NOT. READ3(CANTYP,'CTS',1,0,(I_CT-1)*10000,
-     &                                               CTF(I_CT,:,:))) THEN
+     &        CTF(I_CT,:,:))) THEN
             MESG = 'Error reading CTS'
             CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
          ENDIF
@@ -392,8 +393,9 @@
      &  IDATE,LAIc_I
         CALL M3MESG( MESG )
 
-        WRITE(MESG,'I0.2') LAIc_I
-        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIc)) THEN
+        WRITE(MESG,'(I0.2)') LAIc_I
+        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIc)) 
+     &  THEN
           MESG = 'Error reading LAI at current time step'
           CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
         ENDIF

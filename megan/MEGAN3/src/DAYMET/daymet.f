@@ -246,7 +246,7 @@
         IDATE = SDATE; ITIME = STIME
         CALL NEXTIME ( IDATE, ITIME, (I-1)*240000 )
         
-        WRITE(MESG,"I0.3") I
+        WRITE(MESG,"(I0.3)") I
         MGNMET = 'MGNMET'//TRIM(MESG)
 
 !...    Open files

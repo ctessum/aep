@@ -58,7 +58,7 @@ c      real, allocatable::  precip_adjfac(:,:)
 
       real,    external :: PRECIPFACT
       integer, external :: PULSETYPE
-
+      logical lfirst
 
 c-----get variables from output file
       nx = ncols3d 
@@ -164,13 +164,15 @@ c-------Target start time already reached
 c
 c---First day (only one MCIP file to read in)
 c
-            if (.not.read3(METCRO2Dnam1,'RC',1,r_jdate,r_jtime,rc)) then
+            if (.not.read3(METCRO2Dnam1,'RC',1,r_jdate,r_jtime,rc)) 
+     &       then
               call m3err( 'readmcip', r_jdate, r_jtime,
-     &             'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
+     &        'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
             endif
-            if (.not.read3(METCRO2Dnam1,'RN',1,r_jdate,r_jtime,rn)) then
+            if (.not.read3(METCRO2Dnam1,'RN',1,r_jdate,r_jtime,rn)) 
+     &      then
               call m3err( 'readmcip', r_jdate, r_jtime,
-     &             'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
+     &        'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
             endif
           else 
 c
@@ -178,11 +180,11 @@ c---Past first day (read in second MCIP file)
 c
             if (.not.read3(METCRO2Dnam2,'RC',1,r_jdate,r_jtime,rc)) then
               call m3err( 'readmcip', r_jdate, r_jtime,
-     &             'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
+     &        'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
             endif
             if (.not.read3(METCRO2Dnam2,'RN',1,r_jdate,r_jtime,rn)) then
               call m3err( 'readmcip', r_jdate, r_jtime,
-     &             'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
+     &        'Could not read RC from '//METCRO2Dnam1//' file', .TRUE.)
             endif
           endif
 
@@ -190,13 +192,13 @@ c-------Before target start time
         else
           if (.not.read3(METCRO2Dnam1,'RC',1,r_jdate,r_jtime,rc)) then
 c            call m3err( 'readmcip', r_jdate, r_jtime,
-c     &           'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
+c     &      'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
              MESG = 'Could not read RC from '//METCRO2Dnam1//' file'
              call m3warn('readmcip', r_jdate, r_jtime, MESG)
           endif
           if (.not.read3(METCRO2Dnam1,'RN',1,r_jdate,r_jtime,rn)) then
 c           call m3err( 'readmcip', r_jdate, r_jtime,
-c     &           'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
+c     &     'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
              MESG = 'Could not read RN from '//METCRO2Dnam1//' file'
              call m3warn('readmcip', r_jdate, r_jtime, MESG)
           endif
@@ -222,7 +224,7 @@ c     &           'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
         if (.not.read3(METCRO2Dnam1,TMCIP,1,jdate,jtime,
      &         reftemp)) then
            call m3err( 'readmcip', jdate, jtime,
-     &          'Could not read '//METCRO2Dnam1//' file', .TRUE.)
+     &     'Could not read '//METCRO2Dnam1//' file', .TRUE.)
         endif
 
         if (ifsoil) then 
@@ -238,7 +240,8 @@ c     &           'Could not read RC at '//METCRO2Dnam1//' file', .TRUE.)
               ifsoil = .false.
           endif
 
-          if (.not.read3(METCRO2Dnam1,'SLTYP',1,jdate,jtime,soiltyp)) then
+          if (.not.read3(METCRO2Dnam1,'SLTYP',1,jdate,jtime,soiltyp)) 
+     &    then
               MESG = 'Could not read SLTYP from '//METCRO2Dnam1//' file'
               call m3mesg(MESG)
               ifsoil = .false.
@@ -304,7 +307,8 @@ c
               ifsoil = .false.
           endif
 
-          if (.not.read3(METCRO2Dnam2,'SLTYP',1,jdate,jtime,soiltyp)) then
+          if (.not.read3(METCRO2Dnam2,'SLTYP',1,jdate,jtime,soiltyp)) 
+     &    then
               MESG = 'Could not read SLTYP from '//METCRO2Dnam1//' file'
               call m3mesg(MESG)
               ifsoil = .false.
@@ -539,7 +543,8 @@ c
      &             'Could not write '//ONAME//' file', .TRUE.)
         endif
 
-        if(.not.write3(ONAME,vname3d(nvars3d-3),jdate,jtime,windspd)) then
+        if(.not.write3(ONAME,vname3d(nvars3d-3),jdate,jtime,windspd)) 
+     &  then
               call m3err( 'readmcip', jdate, jtime,
      &             'Could not write '//ONAME//' file', .TRUE.)
         endif

@@ -1,0 +1,92 @@
+netcdf DAYMET.tceq_12km {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 5 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float D_TEMP(TSTEP, LAY, ROW, COL) ;
+		D_TEMP:long_name = "D_TEMP          " ;
+		D_TEMP:units = "K               " ;
+		D_TEMP:var_desc = "Daily average temperature (K)                                                   " ;
+	float D_PPFD(TSTEP, LAY, ROW, COL) ;
+		D_PPFD:long_name = "D_PPFD          " ;
+		D_PPFD:units = "umol/m2.s       " ;
+		D_PPFD:var_desc = "Daily average PPFD (umol/m2.s)                                                  " ;
+	float MaxT(TSTEP, LAY, ROW, COL) ;
+		MaxT:long_name = "MaxT            " ;
+		MaxT:units = "K               " ;
+		MaxT:var_desc = "Daily maximum temperature (K)                                                   " ;
+	float MinT(TSTEP, LAY, ROW, COL) ;
+		MinT:long_name = "MinT            " ;
+		MinT:units = "K               " ;
+		MinT:var_desc = "Daily minimum temperature (K)                                                   " ;
+	float MaxWS(TSTEP, LAY, ROW, COL) ;
+		MaxWS:long_name = "MaxWS           " ;
+		MaxWS:units = "K               " ;
+		MaxWS:var_desc = "Daily maximum wind speed (m/s)                                                  " ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017258 ;
+		:CTIME = 174847 ;
+		:WDATE = 2017258 ;
+		:WTIME = 174847 ;
+		:SDATE = 2013145 ;
+		:STIME = 0 ;
+		:TSTEP = 240000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 5 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 7 ;
+		:VGTOP = 5000.f ;
+		:VGLVLS = 1.f, 0.996f ;
+		:GDNAM = "METCRO_aqrp_bvoc" ;
+		:UPNAM = "DAYMET          " ;
+		:VAR-LIST = "D_TEMP          D_PPFD          MaxT            MinT            MaxWS           " ;
+		:FILEDESC = "Daily meteorology with daily average temperature/PPFD, daily                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0 ;
+
+ D_TEMP =
+  293.5855 ;
+
+ D_PPFD =
+  739.8692 ;
+
+ MaxT =
+  299.7025;
+
+ MinT =
+  287.4598;
+
+ MaxWS =
+  6.027919;
+}

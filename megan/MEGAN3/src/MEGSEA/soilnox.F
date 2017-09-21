@@ -85,9 +85,9 @@ C***********************************************************************
         IMPLICIT NONE
         
 C.........  INCLUDES
-        INCLUDE 'PARMS3.EXT'      ! I/O API constants
-        INCLUDE 'FDESC3.EXT'      ! I/O API file description data structure
-        INCLUDE 'IODECL3.EXT'     ! I/O API function declarations
+        !INCLUDE 'PARMS3.EXT'      ! I/O API constants
+        !INCLUDE 'FDESC3.EXT'      ! I/O API file description data structure
+        !INCLUDE 'IODECL3.EXT'     ! I/O API function declarations
 
 C.........  ARGUMENTS and their descriptions
         INTEGER, INTENT (IN)  :: JDATE   !  current simulation date (YYYYDDD)
@@ -146,14 +146,14 @@ C.......  Check max and min bounds for temperature
           IF (TAIR < 200.0) THEN
              WRITE( MESG, 94010 ) 'TAIR=', TAIR,
      &              'out of range at (C,R)=', C, R
-             CALL M3EXIT( PROGNAME, JDATE, JTIME, MESG, 2 )
+!             CALL M3EXIT( PROGNAME, JDATE, JTIME, MESG, 2 )
           END IF
 
           IF (TAIR > 315.0 ) THEN
               WRITE( MESG, 94020 ) 'TAIR=', TAIR,
      &               'out of range at (C,R)=', C, R,
      &               ' resetting to 315K'
-              CALL M3WARN( PROGNAME, JDATE, JTIME, MESG )
+!              CALL M3WARN( PROGNAME, JDATE, JTIME, MESG )
               TAIR = 315.0
           END IF
 

@@ -20,12 +20,13 @@ echo "Removing *.o"
 #rm $MGNSRC/MET2MGN_rad45/*.o
 rm $MGNSRC/TXT2IOAPI/*.o
 #rm $MGNSRC/DAYMET/*.o
-#rm $MGNSRC/MEGCAN/*.o
-#rm $MGNSRC/MEGSEA/*.o
+rm $MGNSRC/MEGCAN/*.o
+rm $MGNSRC/MEGSEA/*.o
 rm $MGNSRC/MEGVEA/*.o
 rm $MGNSRC/MGN2MECH/*.o
 rm $MGNSRC/IOAPI2UAM/*.o
 
+rm $MGNSRC/../bin/*.a
 
 echo "Make all programs"
 #cd $MGNSRC/MET2MGN
@@ -40,17 +41,25 @@ make
 #cd $MGNSRC/DAYMET
 #ln -sf Makefile.daymet.$argv makefile
 #make
-#cd $MGNSRC/MEGCAN
-#ln -sf Makefile.megcan.$argv makefile
-#make
-#cd $MGNSRC/MEGSEA
-#ln -sf Makefile.megsea.$argv makefile
-#make
+cd $MGNSRC/MEGCAN
+ln -sf Makefile.megcan.$argv makefile
+make
+ln -sf Makefile.megcan.library.$argv makefile
+make
+cd $MGNSRC/MEGSEA
+ln -sf Makefile.megsea.$argv makefile
+make
+ln -sf Makefile.megsea.library.$argv makefile
+make all
 cd $MGNSRC/MEGVEA
 ln -sf Makefile.megvea.$argv makefile
 make
+ln -sf Makefile.megvea.library.$argv makefile
+make
 cd $MGNSRC/MGN2MECH
 ln -sf Makefile.mgn2mech.$argv makefile
+make
+ln -sf Makefile.mgn2mech.library.$argv makefile
 make
 #cd $MGNSRC/IOAPI2UAM
 #ln -sf Makefile.ioapi2uam.$argv makefile
@@ -79,16 +88,32 @@ if (! -e $MGNEXE/megcan ) then
   ln -sf $MGNSRC/MEGCAN/megcan $MGNEXE/megcan
 endif
 
+if (! -e $MGNEXE/run_megcan_module ) then
+  ln -sf $MGNSRC/MEGCAN/run_megcan_module $MGNEXE/run_megcan_module
+endif
+
 if (! -e $MGNEXE/megsea ) then
   ln -sf $MGNSRC/MEGSEA/megsea $MGNEXE/megsea
+endif
+
+if (! -e $MGNEXE/run_megsea_module ) then
+  ln -sf $MGNSRC/MEGSEA/run_megsea_module $MGNEXE/run_megsea_module
 endif
 
 if (! -e $MGNEXE/megvea ) then
   ln -sf $MGNSRC/MEGVEA/megvea $MGNEXE/megvea
 endif
 
+if (! -e $MGNEXE/run_megvea_module ) then
+  ln -sf $MGNSRC/MEGVEA/run_megvea_module $MGNEXE/run_megvea_module
+endif
+
 if (! -e $MGNEXE/mgn2mech ) then
   ln -sf $MGNSRC/MGN2MECH/mgn2mech $MGNEXE/mgn2mech
+endif
+
+if (! -e $MGNEXE/run_mgn2mech_module ) then
+  ln -sf $MGNSRC/MGN2MECH/run_mgn2mech_module $MGNEXE/run_mgn2mech_module
 endif
 
 if (! -e $MGNEXE/ioapi2uam) then

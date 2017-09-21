@@ -1,10 +1,9 @@
 SHELL = /bin/sh
-FC = pgf90
-FFLAGS = -O2 -Mdalign -Mnoframe -byteswapio -Mlfs -Bstatic_pgi
+FC = gfortran
+FFLAGS = -O2 -ffixed-line-length-none #-Mdalign -Mnoframe -byteswapio -Mlfs -Bstatic_pgi
 PROGRAM = ioapi2uam
-LIBS = -L/models/CMAQ/lib64/ioapi_3/Linux2_x86_64pg -lioapi \
-       -L/models/CMAQ/lib64/netcdf-3.6.0-p1/lib -lnetcdf
-INCLUDE = -I/models/CMAQ/lib64/ioapi_3/ioapi/fixed_src
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INCLUDE = -I/usr/local/include \
 
 RAW = $(PROGRAM).o
 

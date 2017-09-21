@@ -27,7 +27,7 @@
 ## Directory setups
 
 # Program directory
-setenv EXEDIR /disk8/MEGAN3/source_code/delivery/for_xiaoyan/MEGAN3/bin
+setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
 
 # Input directory
 setenv INPDIR ../Output

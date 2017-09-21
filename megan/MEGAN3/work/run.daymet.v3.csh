@@ -9,7 +9,7 @@ setenv PROMPTFLAG N
 
 # Program directory
 setenv PROG daymet
-setenv EXEDIR /disk8/MEGAN3/source_code/delivery/for_xiaoyan/MEGAN3/bin
+setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
 setenv EXE    $EXEDIR/$PROG
 
 # Input MCIP met directory
@@ -30,7 +30,7 @@ setenv GDNAM3D tceq_${dom}km
 setenv EPISDATE 2013145	# 2013/05/25        #Episode start date
 setenv STIME 0		    #start time
 setenv RLENG 240000	    # time step of meteorology files
-setenv NDAYS 54	            # number of meteorology files
+setenv NDAYS 1 #54	            # number of meteorology files
 
 # loop over episode
 set i = 1

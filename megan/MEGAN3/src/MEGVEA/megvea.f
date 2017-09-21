@@ -579,14 +579,16 @@
      &  IDATE,LAIc_I
         CALL M3MESG( MESG )
 
-        WRITE(MESG,'I0.2') LAIc_I
-        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIc)) THEN
+        WRITE(MESG,'(I0.2)') LAIc_I
+        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIc)) 
+     &  THEN
           MESG = 'Error reading LAI at current time step'
           CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
         ENDIF
 
-        WRITE(MESG,'I0.2') LAIp_I
-        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIp)) THEN
+        WRITE(MESG,'(I0.2)') LAIp_I
+        IF ( .NOT. READ3(LAIS46,'LAI'//TRIM(MESG),ALLAYS3,0,0,LAIp)) 
+     &  THEN
           MESG = 'Error reading LAI at previous time step'
           CALL M3EXIT(PROGNAME,IDATE,ITIME,MESG,2)
         ENDIF
@@ -642,10 +644,10 @@
         IF ( S .EQ. 3 .OR. S .EQ. 4 .OR. S .EQ. 5 .OR. S .EQ. 6 .OR.
      &                   S .EQ. 9 .OR. S .EQ. 10 ) THEN
 ! Read LDF from LDFILE for MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, SQT_HR,SQT_LR
-          WRITE(MESG,'A') 'Reading LDF from LDFILE for '//VNAME3D(S)
+          WRITE(MESG,'(A)') 'Reading LDF from LDFILE for '//VNAME3D(S)
           CALL M3MESG(MESG)
-          WRITE(MESG,'A') VNAME3D(S)
-          WRITE(MESG,'I0.2') S
+          WRITE(MESG,'(A)') VNAME3D(S)
+          WRITE(MESG,'(I0.2)') S
           IF ( .NOT. READ3(LDFILE,'LDF'//TRIM(MESG),
      &                                     ALLAYS3,0,0,LDFMAP)) THEN
             MESG = 'Error reading LDF for'//VNAME3D(S)

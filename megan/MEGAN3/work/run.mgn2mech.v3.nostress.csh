@@ -6,7 +6,7 @@ setenv PROMPTFLAG N
 
 # Program directory
 setenv PROG   mgn2mech
-setenv EXEDIR /disk8/MEGAN3/source_code/MEGAN3/src/MGN2MECH
+setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
 setenv EXE    $EXEDIR/$PROG
 
 # Input map data directory

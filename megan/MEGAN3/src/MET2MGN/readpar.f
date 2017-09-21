@@ -12,7 +12,7 @@ cccccccccccccccccccccccccccccccccccccc
       include 'PARMS3.EXT'
       include 'FDESC3.EXT' 
 
-      parameter   nlat=61,nlon=121
+      integer, parameter ::  nlat=61,nlon=121
       integer     year,jday,day,month,idate,hour,irec
       integer     lrec,outhr,lat,lon,nx,ny
       integer     num_MCIP,nf,IOS,daynum,istat,idx
