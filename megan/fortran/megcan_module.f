@@ -178,11 +178,11 @@
 !      INTEGER :: MXCT, MXLAI
 
 ! output
-      REAL :: SunleafTK  ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf temperature [K]
-      REAL :: ShadeleafTK( MXREC, NCOLS, NROWS, Layers ) ! Shade leaf temperature [K]
-      REAL :: SunPPFD    ( MXREC, NCOLS, NROWS, Layers )     ! PPFD on a sun leaf [umol/m2.s]
-      REAL :: ShadePPFD  ( MXREC, NCOLS, NROWS, Layers )   ! PPFD on a shade leaf [(umol/m2.s]
-      REAL :: SunFrac    ( MXREC, NCOLS, NROWS, Layers )     ! fraction of sun leaves
+      REAL :: SunleafTK  ( NCOLS, NROWS, Layers , MXREC)   ! Sun leaf temperature [K]
+      REAL :: ShadeleafTK( NCOLS, NROWS, Layers , MXREC) ! Shade leaf temperature [K]
+      REAL :: SunPPFD    ( NCOLS, NROWS, Layers , MXREC)     ! PPFD on a sun leaf [umol/m2.s]
+      REAL :: ShadePPFD  ( NCOLS, NROWS, Layers , MXREC)   ! PPFD on a shade leaf [(umol/m2.s]
+      REAL :: SunFrac    ( NCOLS, NROWS, Layers , MXREC)     ! fraction of sun leaves
 
 ! local variables and their descriptions:
 
@@ -236,11 +236,11 @@
 
           DO I=1, NCOLS
            DO J=1, NROWS
-            SunleafTK(T,I,J,:)   = TEMP(T,I,J)
-            ShadeleafTK(T,I,J,:) = TEMP(T,I,J)
-            SunPPFD(T,I,J,:)     = PPFD(T,I,J)
-            ShadePPFD(T,I,J,:)   = PPFD(T,I,J)
-            SunFrac(T,I,J,:)     = 1.0
+            SunleafTK(I,J,:,T)   = TEMP(T,I,J)
+            ShadeleafTK(I,J,:,T) = TEMP(T,I,J)
+            SunPPFD(I,J,:,T)     = PPFD(T,I,J)
+            ShadePPFD(I,J,:,T)   = PPFD(T,I,J)
+            SunFrac(I,J,:,T)     = 1.0
             TotalCT           = 0.0
             DO I_CT = 1,NRTYP   !canopy types
               TotalCT = TotalCT + CTF(I_CT,I,J) * 0.01
@@ -309,22 +309,22 @@
      &                                0.01*CTF(I_CT,I,J)*sun_frac(:)
                 ENDIF
               ENDDO  ! ENDDO I_CT
-              SunleafTK(T,I,J,:)   = sun_tk_total(:)/TotalCT
-              ShadeleafTK(T,I,J,:) = shade_tk_total(:)/TotalCT
-              SunPPFD(T,I,J,:)     = sun_ppfd_total(:)/TotalCT
-              ShadePPFD(T,I,J,:)   = shade_ppfd_total(:)/TotalCT
-              SunFrac(T,I,J,:)     = sun_frac_total(:)/TotalCT
+              SunleafTK(I,J,:,T)   = sun_tk_total(:)/TotalCT
+              ShadeleafTK(I,J,:,T) = shade_tk_total(:)/TotalCT
+              SunPPFD(I,J,:,T)     = sun_ppfd_total(:)/TotalCT
+              ShadePPFD(I,J,:,T)   = shade_ppfd_total(:)/TotalCT
+              SunFrac(I,J,:,T)     = sun_frac_total(:)/TotalCT
 
             ELSEIF( TotalCT .LT. 0.0) THEN
 !              CALL M3ERR(PROGNAME,IDATE,ITIME,
 !     &              'TotalCT is less than 0.0',.TRUE.)
             ELSE
             ! total CT is zero
-            SunleafTK(T,I,J,:)   = TEMP(T,I,J)
-            ShadeleafTK(T,I,J,:) = TEMP(T,I,J)
-            SunPPFD(T,I,J,:)     = PPFD(T,I,J)
-            ShadePPFD(T,I,J,:)   = PPFD(T,I,J)
-            SunFrac(T,I,J,:)     = 1
+            SunleafTK(I,J,:,T)   = TEMP(T,I,J)
+            ShadeleafTK(I,J,:,T) = TEMP(T,I,J)
+            SunPPFD(I,J,:,T)     = PPFD(T,I,J)
+            ShadePPFD(I,J,:,T)   = PPFD(T,I,J)
+            SunFrac(I,J,:,T)     = 1
 
             ENDIF
 

@@ -416,7 +416,10 @@ C***********************************************************************
         !print*,'mech_mwt=',mech_mwt
         !print*,'g2tonne=',g2tonne
         !print*,'spca_mwt=',spca_mwt
+        !print*,'outer1=',outer
         !endif
+        
+        outer(t,:,:,:) = 0.
 
         IF ( CONVERSION ) THEN
           ! lumping to MECHANISM species
@@ -465,6 +468,8 @@ C***********************************************************************
         ENDIF
         CALL IncrementDateTime(jdate,jtime,tstep)
       ENDDO ! End time loop 
+      
+      !print*,'outer2=',outer
 
 !... Exit and close file
 !      CALL M3EXIT(PROGNAME,0,0,' ',0)
@@ -517,7 +522,11 @@ C***********************************************************************
       
       SUBROUTINE RUN_MGN2MECH_C(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP,
      &                  NVAR, CONVERSION, TONPHR, C_MECHANISM, MECHANISM_len,
-     &                  garea, inper, EF, GAMNO, ISOP, TERP, PAR, XYL, OLE, 
+     &                  garea, ISOP_in, MBO_in, MT_PINE_in, MT_ACYC_in, 
+     &                  MT_CAMP_in, MT_SABI_in, MT_AROM_in, MT_OXY_in, SQT_HR_in, 
+     &                  SQT_LR_in, MEOH_in, ACTO_in, ETOH_in, ACID_in, LVOC_in, 
+     &                  OXPROD_in, STRESS_in, OTHER_in, CO_in, NO_in, EF, GAMNO, 
+     &                  ISOP, TERP, PAR, XYL, OLE, 
      &                  NR, MEOH, CH4, NH3, NO, ALD2, ETOH, FORM, ALDX, TOL, 
      &                  IOLE, CO, ETHA, ETH, ETHY, PRPA, BENZ, ACET, KET, 
      &                  AACD, FACD, HCN, ISPD, N2O, SESQ, TRS, CH3BR, CH3CL, 
@@ -525,8 +534,10 @@ C***********************************************************************
      &                  BIND(C,name='run_mgn2mech_c')
       USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_FLOAT, C_BOOL, C_CHAR
       USE MGN2MECH
+      
+      INCLUDE 'SPC_NOCONVER.EXT'
            
-      INTEGER,PARAMETER :: N_MGN_SPC  = 20 ! from 'SPC_NOCONVER.EXT'
+      !INTEGER,PARAMETER :: N_MGN_SPC  = 20 ! from 'SPC_NOCONVER.EXT'
       
       ! input parameters
       integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NVAR    
@@ -537,7 +548,26 @@ C***********************************************************************
       CHARACTER*16 :: MECHANISM 
 
       ! input arrays
-      real(c_float), intent(in)  :: inper(MXREC, N_MGN_SPC, ncols, nrows)
+      real(c_float), intent(in)  :: ISOP_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MBO_in     (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_PINE_in (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_ACYC_in (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_CAMP_in (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_SABI_in (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_AROM_in (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MT_OXY_in  (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: SQT_HR_in  (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: SQT_LR_in  (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: MEOH_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: ACTO_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: ETOH_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: ACID_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: LVOC_in    (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: OXPROD_in  (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: STRESS_in  (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: OTHER_in   (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: CO_in      (MXREC, ncols, nrows)
+      real(c_float), intent(in)  :: NO_in      (MXREC, ncols, nrows) 
       real(c_float), intent(in)  :: EF(N_MGN_SPC, ncols, nrows)
       real(c_float), intent(in)  :: GAMNO(MXREC, ncols, nrows)
 
@@ -582,9 +612,12 @@ C***********************************************************************
       real(c_float), intent(out)  :: SQT  (MXREC, ncols, nrows)
       real(c_float), intent(out)  :: TOLA (MXREC, ncols, nrows)
 
-      ! temporary arrays
+      ! temporary variables
+      real(c_float), allocatable  :: inper(:, :, :, :)
       real(c_float), allocatable  :: outer(:, :, :, :)
+      integer :: t, v
       
+      ALLOCATE(inper(MXREC, N_MGN_SPC, ncols, nrows))
       ALLOCATE(outer(MXREC, NVAR, ncols, nrows))
       
       ! copy C string into Fortran string
@@ -595,11 +628,47 @@ C***********************************************************************
       
       !print*,'SDATE=',SDATE
       !print*,'C_MECHANISM=',C_MECHANISM
-      !print*,'MECHANISM=',MECHANISM
+      !print*,'SDATE=',SDATE
+      !print*,'STIME=',STIME
+      !print*,'MXREC=',MXREC
+      !print*,'NCOLS=',NCOLS
+      !print*,'NROWS=',NROWS
+      !print*,'TSTEP=',TSTEP
+      !print*,'NVAR=',NVAR
+      !print*,'CONVERSION=',CONVERSION
+      !print*,'TONPHR=',TONPHR
+      !print*,'garea=',garea
+      !print*,'inper=',inper
+      !print*,'EF=',EF
+      !print*,'GAMNO=',GAMNO
+      
+      ! Fill inper array      
+       inper(:,1,:,:) = ISOP_in
+       inper(:,2,:,:) = MBO_in
+       inper(:,3,:,:) = MT_PINE_in
+       inper(:,4,:,:) = MT_ACYC_in
+       inper(:,5,:,:) = MT_CAMP_in
+       inper(:,6,:,:) = MT_SABI_in
+       inper(:,7,:,:) = MT_AROM_in
+       inper(:,8,:,:) = MT_OXY_in 
+       inper(:,9,:,:) = SQT_HR_in 
+       inper(:,10,:,:) = SQT_LR_in 
+       inper(:,11,:,:) = MEOH_in
+       inper(:,12,:,:) = ACTO_in
+       inper(:,13,:,:) = ETOH_in
+       inper(:,14,:,:) = ACID_in
+       inper(:,15,:,:) = LVOC_in
+       inper(:,16,:,:) = OXPROD_in 
+       inper(:,17,:,:) = STRESS_in 
+       inper(:,18,:,:) = OTHER_in
+       inper(:,19,:,:) = CO_in
+       inper(:,20,:,:) = NO_in
       
       CALL RUN_MGN2MECH(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP,
      &               NVAR, logical(CONVERSION, 4), logical(TONPHR, 4), 
      &               MECHANISM, garea, inper, EF, GAMNO, outer)
+     
+      !print*,'outer=',outer
      
       ISOP = outer(:, 1, :, :) 
       TERP = outer(:, 2, :, :) 
@@ -642,5 +711,6 @@ C***********************************************************************
       TOLA = outer(:, 39, :, :) 
      
       DEALLOCATE(outer)
+      DEALLOCATE(inper)
       
       END SUBROUTINE RUN_MGN2MECH_C

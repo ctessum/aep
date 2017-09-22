@@ -1,4 +1,4 @@
-package main
+package megan
 
 import (
 	"C"
@@ -30,7 +30,7 @@ func approximately_equal(a float64, b float64, epsilon float64) bool {
 	return math.Abs(a - b) <= math.Abs(val) * epsilon
 }
 
-func arrays_approximately_equal(a []C.float, b []C.float, epsilon float64, variable string) bool {
+func arrays_approximately_equal(a []float64, b []float64, epsilon float64, variable string) bool {
     if a == nil && b == nil { 
         return true; 
     }
@@ -44,26 +44,26 @@ func arrays_approximately_equal(a []C.float, b []C.float, epsilon float64, varia
     }
 	res := true
     for i := range a {
-		if !approximately_equal(float64(a[i]), float64(b[i]), epsilon) {
-			fmt.Printf(variable + " - %v != %v (eps=%v)\n", float64(a[i]), float64(b[i]), epsilon)
+		if !approximately_equal(a[i], b[i], epsilon) {
+			fmt.Printf(variable + " - %v != %v (eps=%v)\n", a[i], b[i], epsilon)
 			res = false
 		}
     }
     return res
 }
 
-func string_to_float(str []string) []C.float {
-	var res []C.float
-	res = make([]C.float, len(str))
+func string_to_float(str []string) []float64 {
+	var res []float64
+	res = make([]float64, len(str))
 	for i := range str {
 		if v, err := strconv.ParseFloat(str[i], 64); err == nil {
-			res[i] = C.float(v)
+			res[i] = v
 		}
 	}
 	return res
 }
 
-func parse_netcdf_file(variable, file string) []C.float {
+func parse_netcdf_file(variable, file string) []float64 {
 	// Use ncdump to extract data from NETCDF file
 	cmd := "ncdump -v " + variable + " " + file
 	res := run_command(cmd)

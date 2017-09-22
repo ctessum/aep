@@ -7,7 +7,7 @@ setenv PROMPTFLAG N
 
 # Program directory
 setenv PROG   megvea
-setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
+setenv EXEDIR ${PWD}/../bin
 setenv EXE    $EXEDIR/$PROG
 
 # Input map data directory
@@ -77,13 +77,13 @@ endif
 setenv LAIS46 $INPDIR/LAI3_$GDNAM3D.single.nc
 
 # CANMET
-setenv CANMET $MGNINT/CANMET.$GDNAM3D.${SDATE}.single.nc
+setenv CANMET $MGNINT/CANMET.$GDNAM3D.${SDATE}.single.baseline.nc
 
 # DailyMET
 setenv DailyMET $MGNINT/DAYMET.$GDNAM3D.single.nc
 
 # MEGSEA output
-setenv SMFILE $MGNINT/MGNSEA.$GDNAM3D.${SDATE}.single.nc
+setenv SMFILE $MGNINT/MGNSEA.$GDNAM3D.${SDATE}.single.baseline.nc
 
 # AQFILE (required if GAMAQ_YN is set to Y)
 setenv AQFILE $INPDIR/W126_$GDNAM3D.single.nc

@@ -271,14 +271,16 @@
       
       END MODULE MEGSEA
       
-      SUBROUTINE RUN_MEGSEA_C(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NRTYP,
+      SUBROUTINE RUN_MEGSEA_C(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP,
      &                      TEMP, PRECADJ, CTF, LAIc, LAT, SOILM, SOILT, RSTYP,
      &                      LSOIL, GAMNO, GAMSM) BIND(C,name='run_megsea_c')
       USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_BOOL, C_FLOAT
       USE MEGSEA
       
+      INCLUDE 'MEGSEA.EXT'
+      
       ! input parameters
-      integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NRTYP
+      integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP
       logical(c_bool), intent(in)  :: LSOIL
 
       ! input arrays

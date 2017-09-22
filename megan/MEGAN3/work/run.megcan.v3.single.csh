@@ -6,7 +6,7 @@ setenv PROMPTFLAG N
 
 # Program directory
 setenv PROG   megcan
-setenv EXEDIR /home/Paul-Antoine/src/MEGAN3/bin
+setenv EXEDIR ${PWD}/../bin
 setenv EXE    $EXEDIR/$PROG
 
 # Input map data directory

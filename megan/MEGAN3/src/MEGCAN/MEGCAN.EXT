@@ -10,7 +10,7 @@ C				Some of these are used in this file
 C  Alex Guenther   01/28/2017 - Created this file
 C=======================================================================
 
-      INTEGER,PARAMETER :: Layers =1	      ! Number of layers in canopy model
+      INTEGER,PARAMETER :: Layers =5	      ! Number of layers in canopy model
       REAL,PARAMETER ::                     
      &     ConvertWm2toUmolm2s = 4.766,       ! Convert radiation from [W/m2] to [umol/m2/s1]
      &     SolarConstant       = 1367,        ! Solar constant [W/m2]
