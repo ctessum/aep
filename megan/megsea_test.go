@@ -38,6 +38,10 @@ func TestMegseaAgainstStandalone(t *testing.T) {
 }
  
 func run_go_megsea() (output Megsea_output, err error) {
+	start_date := 2013145
+	start_time := 0
+	time_increment := 10000
+	use_PX_version_of_MCIP := true
 	temperature := []float64{297.0823, 297.7277, 296.1826, 294.3032, 292.3727, 291.442, 292.1451, 293.1522, 296.5544, 300.8124, 300.7801, 298.4268, 297.1981, 297.1527, 296.9184, 297.636, 301.0106, 303.6024, 301.8526, 301.2423, 300.1718, 299.744, 300.7241, 301.8956, 301.7262}	
 	soil_moisture := []float64{0.09508198, 0.09217762, 0.09338263, 0.1172753, 0.1491531, 0.1688348, 0.1636439, 0.1466109, 0.1253012, 0.122324, 0.1337502, 0.1340503, 0.164309, 0.1921154, 0.1945109, 0.1770736, 0.1356585, 0.1313382, 0.1664971, 0.1913277, 0.2086558, 0.2300829, 0.2300689, 0.2078186, 0.2377395}	
 	soil_temperature := []float64{303.537, 303.9827, 302.1665, 300.2706, 298.6183, 297.6171, 298.619, 299.5035, 301.3833, 307.6646, 309.4813, 305.3076, 305.4087, 305.0209, 304.9799, 307.18, 310.0703, 312.6512, 310.1442, 309.9953, 308.3934, 309.0668, 309.3318, 311.3359, 308.7086}			
@@ -47,7 +51,7 @@ func run_go_megsea() (output Megsea_output, err error) {
 	soil_type := []float64{6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}
 	canopy_type_factor := []float64{0, 21.6363, 30.5448, 34.4223, 33.8522, 36.0447}
 	
-	return SoilMoistureAndNOEmissionActivityFactors(2013145, 0, 10000, true, temperature, soil_moisture, soil_temperature, precip_adjustment, lai, lattitude, soil_type, canopy_type_factor)
+	return SoilMoistureAndNOEmissionActivityFactors(start_date, start_time, time_increment, use_PX_version_of_MCIP, temperature, soil_moisture, soil_temperature, precip_adjustment, lai, lattitude, soil_type, canopy_type_factor)
 }
 
 func run_standalone_megsea() Megsea_output {

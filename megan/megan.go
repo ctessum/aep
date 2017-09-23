@@ -9,7 +9,7 @@ package megan
 #cgo LDFLAGS: -L ./fortran -lmegan -lm -lgfortran
 
 void run_megsea_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, float* TEMP, float* PRECADJ, float* CTF, float* LAIc, float* LAT, float* SOILM, float* SOILT, float* RSTYP, _Bool* LSOIL, float* GAMNO, float* GAMSM);
-void run_megcan_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NRTYP, int* Layers, float* LAT, float* LONG, float* LAIc, float* TEMP, float* PPFD, float* WIND, float* PRES, float* QV, float* CTF, float* SunleafTK, float* ShadeleafTK, float* SunPPFD, float* ShadePPFD, float* SunFrac);
+void run_megcan_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* Layers, float* LAT, float* LONG, float* LAIc, float* TEMP, float* PPFD, float* WIND, float* PRES, float* QV, float* CTF, float* SunleafTK, float* ShadeleafTK, float* SunPPFD, float* ShadePPFD, float* SunFrac);
 void run_megvea_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NEMIS, int* Layers, int* N_MaxT, int* N_MinT, int* N_MaxWS, _Bool* GAMBD_YN, _Bool* GAMAQ_YN, _Bool* GAMCO2_YN, _Bool* GAMHW_YN, _Bool* GAMHT_YN, _Bool* GAMLT_YN, _Bool* GAMSM_YN, float* GAMSM, float* AQI, float* LDFMAP, float* LAIp, float* LAIc, float* SunT, float* ShaT, float* SunP, float* ShaP, float* SunF, float* Max_temp, float* Max_wind, float* Min_temp, float* D_TEMP, float* D_PPFD, float* ISOP, float* MBO, float* MT_PINE, float* MT_ACYC, float* MT_CAMP, float* MT_SABI, float* MT_AROM, float* MT_OXY, float* SQT_HR, float* SQT_LR, float* MEOH, float* ACTO, float* ETOH, float* ACID, float* LVOC, float* OXPROD, float* STRESS, float* OTHER, float* CO, float* NO);
 void run_mgn2mech_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NVAR, _Bool* CONVERSION, _Bool* TONPHR, char* MECHANISM, int* MECHANISM_len, float* garea, float* ISOP_in, float* MBO_in, float* MT_PINE_in, float* MT_ACYC_in, float* MT_CAMP_in, float* MT_SABI_in, float* MT_AROM_in, float* MT_OXY_in, float* SQT_HR_in, float* SQT_LR_in, float* MEOH_in, float* ACTO_in, float* ETOH_in, float* ACID_in, float* LVOC_in, float* OXPROD_in, float* STRESS_in, float* OTHER_in, float* CO_in, float* NO_in, float* EF, float* GAMNO, float* ISOP, float* TERP, float* PAR, float* XYL, float* OLE, float* NR, float* MEOH, float* CH4, float* NH3, float* NO, float* ALD2, float* ETOH, float* FORM, float* ALDX, float* TOL, float* IOLE, float* CO, float* ETHA, float* ETH, float* ETHY, float* PRPA, float* BENZ, float* ACET, float* KET, float* AACD, float* FACD, float* HCN, float* ISPD, float* N2O, float* SESQ, float* TRS, float* CH3BR, float* CH3CL, float* CH3I, float* ISP, float* TRP, float* XYLA, float* SQT, float* TOLA );
 
@@ -18,17 +18,24 @@ import "C"
 import "unsafe"
 import "errors"
 
+/*
+ n = number of time steps (1st dimension)
+*/
 type Megsea_output struct {
-	NOEmissionActivity 		[]float64
-	SoilMoistureActivity	[]float64
+	NOEmissionActivity 		[]float64 // Final NO emission activity
+	SoilMoistureActivity	[]float64 // Soil moisture activity for isoprene
 }
 
+/*
+ n = number of time steps (1st dimension)
+ m = number of canopy layers (2nd dimension)
+*/
 type Megcan_output struct {
-	SunleafTK 	[]float64
-	ShadeleafTK []float64
-	SunPPFD 	[]float64
-	ShadePPFD 	[]float64
-	SunFrac 	[]float64
+	SunleafTK 	[][]float64	// Leaf temperature for sun leaves [K] (weighted by canopy type)
+	ShadeleafTK [][]float64   // Leaf temperature for shade leaves [K] (weighted by canopy type)
+	SunPPFD 	[][]float64   // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
+	ShadePPFD 	[][]float64   // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
+	SunFrac 	[][]float64   // Fraction of sun leaves (weighted by canopy type)
 }
 
 type Megvea_output struct {
@@ -98,8 +105,7 @@ type Mgn2mech_output struct {
  
 
 func CFloat_to_Float64(in []C.float) []float64 {
-	var out []float64
-	out = make([]float64, len(in))
+	out := make([]float64, len(in))
 	for i := range in {
 		out[i] = float64(in[i])
 	}
@@ -107,11 +113,23 @@ func CFloat_to_Float64(in []C.float) []float64 {
 }
 
 func Float64_to_CFloat(in []float64) []C.float {
-	var out []C.float
-	out = make([]C.float, len(in))
+	out := make([]C.float, len(in))
 	for i := range in {
 		out[i] = C.float(in[i])
 	}
+	return out
+}
+
+func Convert1Dto2D_Cfloat(in []C.float, n int, m int) [][]float64 {
+	return Convert1Dto2D(CFloat_to_Float64(in), n, m)
+}
+
+func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
+	out := make([][]float64, n)
+    for i := range out {
+        out[i] = make([]float64, m)
+		copy(out[i], in[i*m : (i+1)*m])
+    }
 	return out
 }
 
@@ -133,10 +151,10 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	time_increment int, // Time increment (HHMMSS)
 	use_PX_version_of_MCIP bool, // true: using PX version of MCIP (cf. soilnox.F)
 	temperature []float64, // Temperautre (K) per timestep
-	soil_moisture []float64, // Soil moisture per timestep
-	soil_temperature []float64, // Soil temperature per timestep
-	precip_adjustment []float64, // Precip adjustment per timestep
-	lai []float64, // LAI per timestep
+	soil_moisture []float64, // Soil moisture (M**3/M**3) per timestep
+	soil_temperature []float64, // Soil temperature (K) per timestep
+	precipitation_adjustment []float64, // Precip adjustment per timestep
+	leaf_area_index []float64, // Leaf area index [m2 per m2 ground area] per timestep
 	lattitude []float64, // Lattitude per timestep
 	soil_type []float64, // Soil type per timestep (between 1 and NRTYP, cf. MEGSEA.EXT)
 	canopy_type_factor []float64, // Canopy type factor
@@ -159,16 +177,15 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	)	
 	
 	// Check that all input slices have the same length
-	if !allEquals([]int{len(temperature), len(soil_moisture), len(soil_temperature), len(precip_adjustment), len(lai), len(lattitude), len(soil_type)}) {
+	if !allEquals([]int{len(temperature), len(soil_moisture), len(soil_temperature), len(precipitation_adjustment), len(leaf_area_index), len(lattitude), len(soil_type)}) {
 		return Megsea_output{}, errors.New("All input slices must have the same length")
-	}
-	
+	}	
 	
 	TEMP := Float64_to_CFloat(temperature)
 	SOILM := Float64_to_CFloat(soil_moisture)	
 	SOILT := Float64_to_CFloat(soil_temperature)	
-	PRECADJ := Float64_to_CFloat(precip_adjustment)	
-	LAIc := Float64_to_CFloat(lai)	
+	PRECADJ := Float64_to_CFloat(precipitation_adjustment)	
+	LAIc := Float64_to_CFloat(leaf_area_index)	
 	LAT := Float64_to_CFloat(lattitude)	
 	RSTYP := Float64_to_CFloat(soil_type)
 	CTF := Float64_to_CFloat(canopy_type_factor)
@@ -186,42 +203,69 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	return Megsea_output{CFloat_to_Float64(GAMNO), CFloat_to_Float64(GAMSM)}, nil
 }
 
-func RunMegcan() Megcan_output {
+/* Computes isoprene soil moisture activity and soil NO emission 
+   activity factor using MCIP output variables.
+*/
+func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
+	start_date int, // Start date (YYYYDDD) 
+	start_time int, // Start time (HHMMSS)
+	time_increment int, // Time increment (HHMMSS)
+	latitude float64, // Latitude
+	longitude float64, // Longitude
+	leaf_area_index []float64, // Leaf area index [m2 per m2 ground area] per timestep
+	temperature []float64, // Temperautre (K) per timestep
+	incoming_photosynthetic_active_radiation []float64, // Incoming photosynthetic active radiation [umol/m2/s1]
+	wind_speed []float64, // Wind speed [m s-1]
+	pressure []float64, // Pressure [Pa]
+	water_vapor_mixing_ratio []float64, // Water vapor mixing ratio [KG/KG] (NOT CERTAIN, TO BE CONFIRMED, QV variable in MEGCAN)
+	canopy_type_factor []float64, // Canopy type factor
+) (output Megcan_output, err error) {
 	var (
-		SDATE C.int = 2013145
-		STIME C.int = 0
-		MXREC C.int = 25
-		NCOLS C.int = 1
-		NROWS C.int = 1
-		TSTEP C.int = 10000
-		NRTYP C.int = 6
-		Layers C.int = 5
-		SIZE int = int(MXREC * NROWS * NCOLS * Layers)
+		// Date and time parameters used to compute the solar angle
+		SDATE C.int = C.int(start_date) 
+		STIME C.int = C.int(start_time) 
+		TSTEP C.int = C.int(time_increment) 
+		
+		// Input/Output dimensions
+		NROWS C.int = 1 // Number of rows (HARDCODED)
+		NCOLS C.int = 1 // Number of columns (HARDCODED)
+		MXREC C.int = C.int(len(temperature)) // Total number of timesteps
+			
+		Layers C.int = 5 // Number of layers in canopy model (HARDCODED, defined in MEGCAN.EXT)
+		
+		// Calculated values
+		output_size int = int(MXREC * NROWS * NCOLS * Layers)
 	)
 	
-	LAT := []C.float{24.9699}
-	LONG := []C.float{-106.4971}
-	LAIc := []C.float{1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165, 1.5165}
-	TEMP := []C.float{297.082306, 297.727692, 296.182587, 294.303192, 292.372711, 291.441986, 292.145111, 293.152191, 296.554413, 300.812408, 300.780090, 298.426788, 297.198090, 297.152710, 296.918396, 297.635986, 301.010590, 303.602386, 301.852600, 301.242310, 300.171814, 299.743988, 300.724091, 301.895599, 301.726196}	
-	PPFD := []C.float{170.3816, 169.4689, 169.6857, 170.1833, 170.7162, 171.3177, 169.3093, 168.2702, 165.8572, 164.0267, 117.4694, 131.7137, 154.3903, 151.1533, 79.20123, 51.97546, 69.20062, 93.79958, 52.06078, 85.48535, 27.98305, 19.00437, 18.71786, 18.64834, 28.50706}	
-	WIND := []C.float{5.094378, 4.802262, 4.926229, 5.486905, 6.240457, 6.69226, 6.650759, 6.507776, 6.637711, 6.326972, 4.112444, 3.278793, 4.672177, 5.296508, 5.2028, 4.718732, 4.439407, 5.261704, 7.043137, 8.519012, 9.130258, 9.083385, 8.90703, 8.649946, 7.982096}
-	PRES := []C.float{82208.09, 82074.07, 79915.18, 77888.27, 75807.18, 74659.62, 74743.4, 74867.3, 77366.51, 80634.96, 80539.65, 78878.96, 77915.15, 77785.88, 77854.4, 79161.82, 82624.84, 84891.8, 84355.8, 84116.77, 84441.45, 84297.27, 85458.9, 86283.28, 85663.48}
-	QV := []C.float{0.007762248, 0.007521978, 0.007424137, 0.007346272, 0.007168575, 0.00690266, 0.006551034, 0.006116394, 0.005739891, 0.00535665, 0.005357311, 0.005891337, 0.006285786, 0.006444469, 0.006613181, 0.006978375, 0.007246723, 0.00755674, 0.008359249, 0.008913932, 0.009405961, 0.009717779, 0.009829475, 0.009771289, 0.009766233}
-	CTF := []C.float{0, 21.6363, 30.5448, 34.4223, 33.8522, 36.0447}
+	// Check that all input slices have the same length
+	if !allEquals([]int{len(leaf_area_index), len(temperature), len(incoming_photosynthetic_active_radiation), len(wind_speed), len(pressure), len(water_vapor_mixing_ratio)}) {
+		return Megcan_output{}, errors.New("All input slices must have the same length")
+	}
 	
+	LAT := Float64_to_CFloat([]float64{latitude})
+	LONG := Float64_to_CFloat([]float64{longitude})
+	LAIc := Float64_to_CFloat(leaf_area_index)
+	TEMP := Float64_to_CFloat(temperature)
+	PPFD := Float64_to_CFloat(incoming_photosynthetic_active_radiation)
+	WIND := Float64_to_CFloat(wind_speed)
+	PRES := Float64_to_CFloat(pressure)
+	QV := Float64_to_CFloat(water_vapor_mixing_ratio)
+	CTF := Float64_to_CFloat(canopy_type_factor)
+	
+	// Multipy incoming photosynthetic active radiation by 4.5 (cf. megcan.f, line 430) --> NEEDED?
 	for i, _ := range PPFD {
         PPFD[i] *= C.float(4.5)
     }
 	
 	var SunleafTK, ShadeleafTK, SunPPFD, ShadePPFD, SunFrac []C.float
-	SunleafTK = make([]C.float, SIZE)
-	ShadeleafTK = make([]C.float, SIZE)
-	SunPPFD = make([]C.float, SIZE)
-	ShadePPFD = make([]C.float, SIZE)
-	SunFrac = make([]C.float, SIZE)
+	SunleafTK = make([]C.float, output_size) 	// Leaf temperature for sun leaves [K] (weighted by canopy type)
+	ShadeleafTK = make([]C.float, output_size) 	// Leaf temperature for shade leaves [K] (weighted by canopy type)
+	SunPPFD = make([]C.float, output_size) 		// PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
+	ShadePPFD = make([]C.float, output_size)	// PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
+	SunFrac = make([]C.float, output_size) 		// Fraction of sun leaves (weighted by canopy type)
 	
 	// Call FORTRAN
-    C.run_megcan_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &NRTYP, &Layers, &LAT[0], &LONG[0], &LAIc[0], &TEMP[0], &PPFD[0], &WIND[0], &PRES[0], &QV[0], &CTF[0], &SunleafTK[0], &ShadeleafTK[0], &SunPPFD[0], &ShadePPFD[0], &SunFrac[0])
+    C.run_megcan_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &Layers, &LAT[0], &LONG[0], &LAIc[0], &TEMP[0], &PPFD[0], &WIND[0], &PRES[0], &QV[0], &CTF[0], &SunleafTK[0], &ShadeleafTK[0], &SunPPFD[0], &ShadePPFD[0], &SunFrac[0])
 	
 	//fmt.Printf("SunleafTK: %v\n", SunleafTK)
 	//fmt.Printf("ShadeleafTK: %v\n", ShadeleafTK)
@@ -229,7 +273,13 @@ func RunMegcan() Megcan_output {
 	//fmt.Printf("ShadePPFD: %v\n", ShadePPFD)
 	//fmt.Printf("SunFrac: %v\n", SunFrac)	
 	
-	return Megcan_output{CFloat_to_Float64(SunleafTK), CFloat_to_Float64(ShadeleafTK), CFloat_to_Float64(SunPPFD), CFloat_to_Float64(ShadePPFD), CFloat_to_Float64(SunFrac)}
+	timestep_count := int(MXREC)
+	canopy_layers := int(Layers)
+	return Megcan_output{Convert1Dto2D_Cfloat(SunleafTK, timestep_count, canopy_layers), 
+						 Convert1Dto2D_Cfloat(ShadeleafTK, timestep_count, canopy_layers), 
+						 Convert1Dto2D_Cfloat(SunPPFD, timestep_count, canopy_layers), 
+						 Convert1Dto2D_Cfloat(ShadePPFD, timestep_count, canopy_layers), 
+						 Convert1Dto2D_Cfloat(SunFrac, timestep_count, canopy_layers)}, nil
 }
 
 func RunMegvea() Megvea_output {

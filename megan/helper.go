@@ -52,6 +52,34 @@ func arrays_approximately_equal(a []float64, b []float64, epsilon float64, varia
     return res
 }
 
+func arrays_approximately_equal_2d(a [][]float64, b [][]float64, epsilon float64, variable string) bool {
+    if a == nil && b == nil { 
+        return true; 
+    }
+    if a == nil || b == nil { 
+		fmt.Printf(variable + " - a or b is nil\n")
+        return false; 
+    }
+    if len(a) != len(b) {
+		fmt.Printf(variable + " - a (%v) and b (%v) have different length\n", len(a), len(b))
+        return false
+    }
+	res := true
+    for i := range a {
+		if len(a[i]) != len(b[i]) {
+			fmt.Printf(variable + " - a[%v] (%v) and b[%v] (%v) have different length\n", i, len(a[i]), i, len(b[i]))
+			return false
+		}
+		for j:= range a[i] {
+			if !approximately_equal(a[i][j], b[i][j], epsilon) {
+				fmt.Printf(variable + " - %v != %v (eps=%v)\n", a[i][j], b[i][j], epsilon)
+				res = false
+			}
+		}	
+    }
+    return res
+}
+
 func string_to_float(str []string) []float64 {
 	var res []float64
 	res = make([]float64, len(str))

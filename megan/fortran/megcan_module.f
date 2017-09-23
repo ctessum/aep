@@ -1165,15 +1165,17 @@
       END FUNCTION  SvdTk
       
       
-      SUBROUTINE RUN_MEGCAN_C(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NRTYP, NLAYERS,
+      SUBROUTINE RUN_MEGCAN_C(SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NLAYERS,
      &                      LAT,LONG,LAIc,TEMP,PPFD,WIND,PRES,QV,CTF,
      &                      SunleafTK,ShadeleafTK,SunPPFD,ShadePPFD,
      &                      SunFrac) BIND(C,name='run_megcan_c')
       USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_FLOAT
       USE MEGCAN
       
+      INCLUDE 'MEGCAN.EXT'
+      
       ! input parameters
-      integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NRTYP
+      integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP
 
       ! input arrays
       real(c_float), intent(in)  :: LAT(MXREC, NCOLS, NROWS)
