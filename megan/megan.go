@@ -16,6 +16,7 @@ void run_mgn2mech_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, 
 */
 import "C"
 import "unsafe"
+import "errors"
 
 type Megsea_output struct {
 	NOEmissionActivity 		[]float64
@@ -114,6 +115,15 @@ func Float64_to_CFloat(in []float64) []C.float {
 	return out
 }
 
+func allEquals(values []int) bool {
+    for i := 1; i < len(values); i++ {
+        if values[i] != values[0] {
+            return false
+        }
+    }
+    return true
+}
+
 /* Computes isoprene soil moisture activity and soil NO emission 
    activity factor using MCIP output variables.
 */
@@ -121,7 +131,6 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	start_date int, // Start date (YYYYDDD) 
 	start_time int, // Start time (HHMMSS)
 	time_increment int, // Time increment (HHMMSS)
-	timestep_count int, // Total number of timesteps
 	use_PX_version_of_MCIP bool, // true: using PX version of MCIP (cf. soilnox.F)
 	temperature []float64, // Temperautre (K) per timestep
 	soil_moisture []float64, // Soil moisture per timestep
@@ -131,7 +140,7 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	lattitude []float64, // Lattitude per timestep
 	soil_type []float64, // Soil type per timestep (between 1 and NRTYP, cf. MEGSEA.EXT)
 	canopy_type_factor []float64, // Canopy type factor
-) Megsea_output {
+) (output Megsea_output, err error) {
 	var (
 		// Date and time parameters used to compute the day of the growing season
 		SDATE C.int = C.int(start_date) 
@@ -141,13 +150,19 @@ func SoilMoistureAndNOEmissionActivityFactors(
 		// Input/Output dimensions
 		NROWS C.int = 1 // Number of rows (HARDCODED)
 		NCOLS C.int = 1 // Number of columns (HARDCODED)
-		MXREC C.int = C.int(timestep_count) 
+		MXREC C.int = C.int(len(temperature)) // Total number of timesteps
 		
 		LSOIL C.bool = C.bool(use_PX_version_of_MCIP) 
 
 		// Calculated values
 		output_size int = int(NROWS * NCOLS * MXREC)
 	)	
+	
+	// Check that all input slices have the same length
+	if !allEquals([]int{len(temperature), len(soil_moisture), len(soil_temperature), len(precip_adjustment), len(lai), len(lattitude), len(soil_type)}) {
+		return Megsea_output{}, errors.New("All input slices must have the same length")
+	}
+	
 	
 	TEMP := Float64_to_CFloat(temperature)
 	SOILM := Float64_to_CFloat(soil_moisture)	
@@ -168,7 +183,7 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	//fmt.Println("GAMNO: %v", GAMNO)
 	//fmt.Println("GAMSM: %v", GAMSM)
 
-	return Megsea_output{CFloat_to_Float64(GAMNO), CFloat_to_Float64(GAMSM)}
+	return Megsea_output{CFloat_to_Float64(GAMNO), CFloat_to_Float64(GAMSM)}, nil
 }
 
 func RunMegcan() Megcan_output {

@@ -44,27 +44,6 @@ func TestMegveaAgainstStandalone(t *testing.T) {
 	go_output := run_go_megvea()
 	standalone_output := run_standalone_megvea()
 	
-	/*t.Log(standalone_output.ISOP)
-	t.Log(standalone_output.MBO)
-	t.Log(standalone_output.MT_PINE)
-	t.Log(standalone_output.MT_ACYC)
-	t.Log(standalone_output.MT_CAMP)
-	t.Log(standalone_output.MT_SABI)
-	t.Log(standalone_output.MT_AROM)
-	t.Log(standalone_output.MT_OXY )
-	t.Log(standalone_output.SQT_HR )
-	t.Log(standalone_output.SQT_LR )
-	t.Log(standalone_output.MEOH )
-	t.Log(standalone_output.ACTO )
-	t.Log(standalone_output.ETOH )
-	t.Log(standalone_output.ACID )
-	t.Log(standalone_output.LVOC )
-	t.Log(standalone_output.OXPROD )
-	t.Log(standalone_output.STRESS )
-	t.Log(standalone_output.OTHER)
-	t.Log(standalone_output.CO )
-	t.Log(standalone_output.NO )*/
-	
 	if !are_megvea_outputs_equal(go_output, standalone_output) {
 		t.Errorf("Go and standalone versions produce different results (epsilon=%v)\n", EPSILON)
 	}

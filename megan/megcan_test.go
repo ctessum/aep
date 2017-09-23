@@ -29,12 +29,6 @@ func TestMegcanAgainstStandalone(t *testing.T) {
 	go_output := run_go_megcan()
 	standalone_output := run_standalone_megcan()
 	
-	/*t.Log(standalone_output.SunleafTK)
-	t.Log(standalone_output.ShadeleafTK)
-	t.Log(standalone_output.SunPPFD)
-	t.Log(standalone_output.ShadePPFD)
-	t.Log(standalone_output.SunFrac)*/
-	
 	if !are_megcan_outputs_equal(go_output, standalone_output) {
 		t.Errorf("Go and standalone versions produce different results (epsilon=%v)\n", EPSILON)
 	}
