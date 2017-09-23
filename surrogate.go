@@ -442,6 +442,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 							if err != nil {
 								return srgData, fmt.Errorf("aep.getSrgData: shapefile %s column %s, %v", srg.WEIGHTSHAPEFILE, name, err)
 							}
+							v = math.Max(v, 0) // Get rid of any negative weights.
 						}
 						weightval += v * srg.WeightFactors[i]
 					}
@@ -483,8 +484,7 @@ func (srg *SrgSpec) getSrgData(gridData *GridDef, tol float64) (*rtree.Rtree, er
 				}
 				if srgH.Weight < 0. || math.IsInf(srgH.Weight, 0) ||
 					math.IsNaN(srgH.Weight) {
-					err = fmt.Errorf("Surrogate weight is %v, which "+
-						"is not acceptable.", srgH.Weight)
+					err = fmt.Errorf("Surrogate weight is %v, which is not acceptable.", srgH.Weight)
 					return srgData, err
 				} else if srgH.Weight != 0. {
 					srgData.Insert(srgH)
