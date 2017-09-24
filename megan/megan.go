@@ -17,13 +17,14 @@ void run_mgn2mech_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, 
 import "C"
 import "unsafe"
 import "errors"
+import "fmt"
 
 /*
  n = number of time steps (1st dimension)
 */
 type Megsea_output struct {
-	NOEmissionActivity 		[]float64 // Final NO emission activity
-	SoilMoistureActivity	[]float64 // Soil moisture activity for isoprene
+	NOEmissionActivity 		[]float64   // Final NO emission activity
+	SoilMoistureActivity	[]float64   // Soil moisture activity for isoprene
 }
 
 /*
@@ -31,7 +32,7 @@ type Megsea_output struct {
  m = number of canopy layers (2nd dimension)
 */
 type Megcan_output struct {
-	SunleafTK 	[][]float64	// Leaf temperature for sun leaves [K] (weighted by canopy type)
+	SunleafTK 	[][]float64	  // Leaf temperature for sun leaves [K] (weighted by canopy type)
 	ShadeleafTK [][]float64   // Leaf temperature for shade leaves [K] (weighted by canopy type)
 	SunPPFD 	[][]float64   // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
 	ShadePPFD 	[][]float64   // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
@@ -39,26 +40,26 @@ type Megcan_output struct {
 }
 
 type Megvea_output struct {
-	ISOP 	[]float64  
-	MBO 	[]float64   
-	MT_PINE []float64
-	MT_ACYC []float64
-	MT_CAMP []float64
-	MT_SABI []float64
-	MT_AROM []float64
-	MT_OXY 	[]float64
-	SQT_HR 	[]float64
-	SQT_LR 	[]float64
-	MEOH 	[]float64  
-	ACTO 	[]float64  
-	ETOH 	[]float64  
-	ACID 	[]float64  
-	LVOC 	[]float64  
-	OXPROD 	[]float64
-	STRESS 	[]float64
-	OTHER 	[]float64 
-	CO 		[]float64    
-	NO 		[]float64    	
+	ISOP 	[]float64  	// isoprene
+	MBO 	[]float64  	// MBO
+	MT_PINE []float64  	// monoterpenes: pines (alpha and beta)
+	MT_ACYC []float64  	// monoterpenes: acyclic, 3 = (e.g., myrcene, ocimenes)
+	MT_CAMP []float64  	// monoterpenes: carene, camphene, others
+	MT_SABI []float64  	// monoterpenes: sabinene, limonene, terpinenes, others
+	MT_AROM []float64  	// C10 aromatic: cymenes, cymenenes
+	MT_OXY 	[]float64  	// C8-C13 oxygenated (e.g., camphor)
+	SQT_HR 	[]float64  	// Highly reactive SQT (e.g., caryophyllene)
+	SQT_LR 	[]float64  	// less reactive SQT  (e.g., longifolene, copaene) and salates
+	MEOH 	[]float64  	// methanol
+	ACTO 	[]float64  	// acetone
+	ETOH 	[]float64  	// acetaldehyde and ethanol
+	ACID 	[]float64  	// organic acids: formic acid, acetic acid, pyruvic acid
+	LVOC 	[]float64  	// C2 to C4 HC (e.g., ethene, ethane)
+	OXPROD 	[]float64  	// oxidation products: aldehydes 
+	STRESS 	[]float64  	// Stress compounds (e.g., linalool)
+	OTHER 	[]float64  	// other VOC (e.g., indole, pentane, methyl bromide)
+	CO 		[]float64  	// carbon monoxide
+	NO 		[]float64  	// Nitric oxide
 }
 
 type Mgn2mech_output struct {
@@ -129,6 +130,20 @@ func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
     for i := range out {
         out[i] = make([]float64, m)
 		copy(out[i], in[i*m : (i+1)*m])
+    }
+	return out
+}
+
+func Convert2Dto1D_Cfloat(in [][]float64, ) []C.float {
+	return Float64_to_CFloat(Convert2Dto1D(in))
+}
+
+func Convert2Dto1D(in [][]float64) []float64 {
+	n := len(in)
+	m := len(in[0])
+	out := make([]float64, n * m)
+    for i := range in {
+		copy(out[i*m : (i+1)*m], in[i])
     }
 	return out
 }
@@ -282,76 +297,125 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
 						 Convert1Dto2D_Cfloat(SunFrac, timestep_count, canopy_layers)}, nil
 }
 
-func RunMegvea() Megvea_output {
+/* Calculate Vegetation emission activity (EA) for each emission
+   class as the product of EA for individual drivers
+*/
+func CalculateVariousEmissionActivityFactors(
+	start_date int, // Start date (YYYYDDD) 
+	start_time int, // Start time (HHMMSS)
+	time_increment int, // Time increment (HHMMSS)
+	use_EA_for_bidirectional_exchange_LAI_response bool, // Use Vegetation Emission Activity algorithm for bidirectional exchange LAI response
+	use_EA_for_response_to_air_pollution bool, // Use Vegetation Emission Activity algorithm for response to air pollution
+	use_EA_for_CO2_response bool, // Use Vegetation Emission Activity algorithm for CO2 response (only applied to isoprene)
+	use_EA_for_response_to_high_wind_storms bool, // Use Vegetation Emission Activity algorithm for response to high wind storms
+	use_EA_for_resposne_to_high_temperature bool, // Use Vegetation Emission Activity algorithm for resposne to high temperature
+	use_EA_for_response_to_low_temperature bool, // Use Vegetation Emission Activity algorithm for response to low temperature
+	use_EA_for_response_to_soil_moisture bool, // Use Vegetation Emission Activity algorithm for response to soil moisture (multiplied with LDF)
+	soil_moisture_activity []float64, // Soil moisture activity for isoprene
+	air_quality_index []float64, // Air quality index (i.e.W126)
+	light_dependent_fraction_map []float64, // Light dependent fraction map
+	previous_time_step_LAI []float64, // Previous time step LAI
+	current_time_step_LAI []float64, // Current time step LAI
+	sunleafTK [][]float64, // Leaf temperature for sun leaves [K] (weighted by canopy type)
+	shadeleafTK [][]float64, // Leaf temperature for shade leaves [K] (weighted by canopy type)
+	sunPPFD [][]float64, // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
+	shadePPFD [][]float64, // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
+	sunFrac [][]float64, // Fraction of sun leaves (weighted by canopy type)
+	max_temperature []float64, // Maximum temperature of previous n days (K)
+	max_wind_speed []float64, // Maximum wind speed of previous n days (m/s)
+	min_temperature []float64, // Minimum temperature of previous n days (K)	
+	daily_average_temperature []float64, // Daily average temperature (K)
+	daily_average_PPFD []float64, // Daily average PPFD (umol/m2.s)
+) (output Megvea_output, err error) {
 	var (
-		SDATE C.int = 2013145
-		STIME C.int = 0
-		MXREC C.int = 25
-		NCOLS C.int = 1
-		NROWS C.int = 1
-		TSTEP C.int = 10000
-		NEMIS C.int = 20
-		Layers C.int = 1
-		N_MaxT C.int = 1
-		N_MinT C.int = 1
-		N_MaxWS C.int = 1
-		GAMBD_YN C.bool = true
-		GAMAQ_YN C.bool = true
-		GAMCO2_YN C.bool = true
-		GAMHW_YN C.bool = true
-		GAMHT_YN C.bool = true
-		GAMLT_YN C.bool = true
-		GAMSM_YN C.bool = true
-		SIZE int = int(MXREC * NCOLS * NROWS)
+		// Date and time parameters used to compute the solar angle
+		SDATE C.int = C.int(start_date) 
+		STIME C.int = C.int(start_time) 
+		TSTEP C.int = C.int(time_increment) 
+		
+		// Input/Output dimensions
+		NROWS C.int = 1 // Number of rows (HARDCODED)
+		NCOLS C.int = 1 // Number of columns (HARDCODED)
+		MXREC C.int = C.int(len(soil_moisture_activity)) // Total number of timesteps
+		
+		NEMIS C.int = 20 // Number of emission classes (HARDCODED, defined in MEGVEA.EXT)
+		
+		Layers C.int = C.int(len(sunleafTK[0])) // Canopy vertical layers, default is 5 (2nd dimension of sunleafTK, shadeleafTK, sunPPFD, shadePPFD, sunFrac)
+		N_MaxT C.int = C.int(len(max_temperature)) // Number of past days for maximum temperature (dimension of max_temperature)
+		N_MinT C.int = C.int(len(min_temperature)) // Number of past days for minimum temperature (dimension of min_temperature)
+		N_MaxWS C.int = C.int(len(max_wind_speed)) // Number of past days for maximum wind speed (dimension of max_wind_speed)
+		
+		GAMBD_YN C.bool = C.bool(use_EA_for_bidirectional_exchange_LAI_response)
+		GAMAQ_YN C.bool = C.bool(use_EA_for_response_to_air_pollution)
+		GAMCO2_YN C.bool = C.bool(use_EA_for_CO2_response)
+		GAMHW_YN C.bool = C.bool(use_EA_for_response_to_high_wind_storms) 
+		GAMHT_YN C.bool = C.bool(use_EA_for_resposne_to_high_temperature)
+		GAMLT_YN C.bool = C.bool(use_EA_for_response_to_low_temperature) 
+		GAMSM_YN C.bool = C.bool(use_EA_for_response_to_soil_moisture)
+
+		// Calculated values
+		output_size int = int(MXREC * NCOLS * NROWS)
 	)
 	
-	GAMSM := []C.float{0,0,0,0,0,0,0,0,0,0,0,0,0,0.427884996,0.487772763,0.0518400222,0,0,0,0.408192724,0.841395199,1,1,0.820465028,1}
-	AQI := []C.float{11.621}
-	LDFMAP := []C.float{1,1,0.4445464,0.8168195,0.3,0.312323,0.6,0.2,0.4630309,0.4,1,0.2,0.8,0.8,0.2,0.2,0.8,0.2,1,0}
-	LAIp := []C.float{1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469,1.6469}
-	LAIc := []C.float{1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165,1.5165}
-	SunT := []C.float{295.134735,298.878723,290.011017,288.210510,286.313507,285.310883,285.782288,286.480377,289.430908,293.125854,292.991791,291.126129,290.263153,298.708862,290.946136,291.447235,294.649658,297.164398,295.892944,295.891693,294.841980,294.545990,295.512268,296.566101,296.393219}
-	ShaT := []C.float{292.377167,293.018463,296.240540,294.385162,292.481384,291.564545,292.256256,293.248566,296.616180,300.831940,300.689026,298.355408,297.210754,291.657776,297.478180,297.859436,301.461639,304.401489,302.153503,301.902435,300.167267,299.641510,300.614044,301.777802,301.712982}
+	// Check that light_dependent_fraction_map has a length equal to NEMIS * NROWS * NCOLS
+	if len(light_dependent_fraction_map) != int(NEMIS * NROWS * NCOLS) {
+		return Megvea_output{}, errors.New(fmt.Sprintf("light_dependent_fraction_map length must be %v", NEMIS * NROWS * NCOLS))
+	}
+	// Check that air_quality_index has a length equal to NROWS * NCOLS
+	if len(air_quality_index) != int(NROWS * NCOLS) {
+		return Megvea_output{}, errors.New(fmt.Sprintf("air_quality_index length must be %v", NROWS * NCOLS))
+	}
+	// Check that all other input slices have the same length MXREC * NROWS * NCOLS
+	if !allEquals([]int{len(soil_moisture_activity), len(previous_time_step_LAI), len(current_time_step_LAI), len(sunleafTK), len(shadeleafTK), len(sunPPFD), len(shadePPFD), len(sunFrac), int(MXREC * NROWS * NCOLS)}) {
+		return Megvea_output{}, errors.New(fmt.Sprintf("The length of the input slices soil_moisture_activity, previous_time_step_LAI, current_time_step_LAI, sunleafTK, shadeleafTK, sunPPFD, shadePPFD and sunFrac must be %v", MXREC * NROWS * NCOLS))
+	}
 	
+	GAMSM := Float64_to_CFloat(soil_moisture_activity)
+	AQI := Float64_to_CFloat(air_quality_index)
+	LDFMAP := Float64_to_CFloat(light_dependent_fraction_map)
+	LAIp := Float64_to_CFloat(previous_time_step_LAI)
+	LAIc := Float64_to_CFloat(current_time_step_LAI)
 	
+	SunT := Convert2Dto1D_Cfloat(sunleafTK)
+	ShaT := Convert2Dto1D_Cfloat(shadeleafTK)
+	SunP := Convert2Dto1D_Cfloat(sunPPFD)
+	ShaP := Convert2Dto1D_Cfloat(shadePPFD)
+	SunF := Convert2Dto1D_Cfloat(sunFrac)
 	
-	SunP := []C.float{534.6226,1169.987,0,0,0,0,0,0,0,0,0,0,0,1360.212,144.8788,99.57848,132.5539,178.8786,101.0769,164.225,54.78764,37.30027,36.69876,36.47827,54.99779}
-	ShaP := []C.float{152.7413,100.3765,0,0,0,0,0,0,0,0,0,0,0,83.73295,144.8788,99.57848,132.5539,178.8786,101.0769,164.225,54.78764,37.30027,36.69876,36.47827,54.99779}
-	SunF := []C.float{0.3760942,0.1114906,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.05476007,0.3350512,0.5015498,0.5927957,0.644033,0.6709146,0.6802174,0.6740549,0.65104,0.6055322,0.5242341,0.3770557}
-	Max_temp := []C.float{299.7025}
-	Max_wind := []C.float{6.027919}
-	Min_temp := []C.float{287.4598}
-	D_TEMP := []C.float{293.5855}
-	D_PPFD := []C.float{739.8692}
+	Max_temp := Float64_to_CFloat(max_temperature)
+	Max_wind := Float64_to_CFloat(max_wind_speed)
+	Min_temp := Float64_to_CFloat(min_temperature)
+	D_TEMP := Float64_to_CFloat(daily_average_temperature)
+	D_PPFD := Float64_to_CFloat(daily_average_PPFD)
 	
 	var ISOP, MBO, MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, MT_AROM, MT_OXY, SQT_HR, SQT_LR, MEOH, ACTO, ETOH, ACID, LVOC, OXPROD, STRESS, OTHER, CO, NO []C.float
-	ISOP = make([]C.float, SIZE)   
-	MBO = make([]C.float, SIZE)    
-	MT_PINE = make([]C.float, SIZE)
-	MT_ACYC = make([]C.float, SIZE)
-	MT_CAMP = make([]C.float, SIZE)
-	MT_SABI = make([]C.float, SIZE)
-	MT_AROM = make([]C.float, SIZE)
-	MT_OXY = make([]C.float, SIZE) 
-	SQT_HR = make([]C.float, SIZE) 
-	SQT_LR = make([]C.float, SIZE) 
-	MEOH = make([]C.float, SIZE)   
-	ACTO = make([]C.float, SIZE)   
-	ETOH = make([]C.float, SIZE)   
-	ACID = make([]C.float, SIZE)   
-	LVOC = make([]C.float, SIZE)   
-	OXPROD = make([]C.float, SIZE) 
-	STRESS = make([]C.float, SIZE) 
-	OTHER = make([]C.float, SIZE)  
-	CO = make([]C.float, SIZE)     
-	NO = make([]C.float, SIZE)     
+	ISOP = make([]C.float, output_size)   
+	MBO = make([]C.float, output_size)    
+	MT_PINE = make([]C.float, output_size)
+	MT_ACYC = make([]C.float, output_size)
+	MT_CAMP = make([]C.float, output_size)
+	MT_SABI = make([]C.float, output_size)
+	MT_AROM = make([]C.float, output_size)
+	MT_OXY = make([]C.float, output_size) 
+	SQT_HR = make([]C.float, output_size) 
+	SQT_LR = make([]C.float, output_size) 
+	MEOH = make([]C.float, output_size)   
+	ACTO = make([]C.float, output_size)   
+	ETOH = make([]C.float, output_size)   
+	ACID = make([]C.float, output_size)   
+	LVOC = make([]C.float, output_size)   
+	OXPROD = make([]C.float, output_size) 
+	STRESS = make([]C.float, output_size) 
+	OTHER = make([]C.float, output_size)  
+	CO = make([]C.float, output_size)     
+	NO = make([]C.float, output_size)     
 	
 	// Call FORTRAN
     C.run_megvea_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &NEMIS, &Layers, &N_MaxT, &N_MinT, &N_MaxWS, &GAMBD_YN, &GAMAQ_YN, &GAMCO2_YN, &GAMHW_YN, &GAMHT_YN, &GAMLT_YN, &GAMSM_YN, &GAMSM[0], &AQI[0], &LDFMAP[0], &LAIp[0], &LAIc[0], &SunT[0], &ShaT[0], &SunP[0], &ShaP[0], &SunF[0], &Max_temp[0], &Max_wind[0], &Min_temp[0], &D_TEMP[0], &D_PPFD[0], &ISOP[0], &MBO[0], &MT_PINE[0], &MT_ACYC[0], &MT_CAMP[0], &MT_SABI[0], &MT_AROM[0], &MT_OXY[0], &SQT_HR[0], &SQT_LR[0], &MEOH[0], &ACTO[0], &ETOH[0], &ACID[0], &LVOC[0], &OXPROD[0], &STRESS[0], &OTHER[0], &CO[0], &NO[0])
 	
 	//fmt.Printf("NON_DIMGARMA: %v\n", NON_DIMGARMA)
 	
-	return Megvea_output{CFloat_to_Float64(ISOP), CFloat_to_Float64(MBO), CFloat_to_Float64(MT_PINE), CFloat_to_Float64(MT_ACYC), CFloat_to_Float64(MT_CAMP), CFloat_to_Float64(MT_SABI), CFloat_to_Float64(MT_AROM), CFloat_to_Float64(MT_OXY), CFloat_to_Float64(SQT_HR), CFloat_to_Float64(SQT_LR), CFloat_to_Float64(MEOH), CFloat_to_Float64(ACTO), CFloat_to_Float64(ETOH), CFloat_to_Float64(ACID), CFloat_to_Float64(LVOC), CFloat_to_Float64(OXPROD), CFloat_to_Float64(STRESS), CFloat_to_Float64(OTHER), CFloat_to_Float64(CO), CFloat_to_Float64(NO)}
+	return Megvea_output{CFloat_to_Float64(ISOP), CFloat_to_Float64(MBO), CFloat_to_Float64(MT_PINE), CFloat_to_Float64(MT_ACYC), CFloat_to_Float64(MT_CAMP), CFloat_to_Float64(MT_SABI), CFloat_to_Float64(MT_AROM), CFloat_to_Float64(MT_OXY), CFloat_to_Float64(SQT_HR), CFloat_to_Float64(SQT_LR), CFloat_to_Float64(MEOH), CFloat_to_Float64(ACTO), CFloat_to_Float64(ETOH), CFloat_to_Float64(ACID), CFloat_to_Float64(LVOC), CFloat_to_Float64(OXPROD), CFloat_to_Float64(STRESS), CFloat_to_Float64(OTHER), CFloat_to_Float64(CO), CFloat_to_Float64(NO)}, nil
 }
 
 func RunMgn2mech() Mgn2mech_output {

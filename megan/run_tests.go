@@ -1,3 +1,3 @@
 package megan
 
-var EPSILON = 1e-6 // precision for floating point comparison of outputs
+var EPSILON = 1e-5 // precision for floating point comparison of outputs

@@ -22,7 +22,7 @@ mkdir -p $LOGDIR
 
 ########################################################################
 
-setenv Layers 1	         # canopy vertical layers, default is 5
+setenv Layers 5	         # canopy vertical layers, default is 5
 
 # User's options to select specific emission activity factors to be applied
 setenv GAMAQ_YN   Y      # [Y/N]: Y applies air quality stress; default is N

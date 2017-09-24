@@ -178,11 +178,11 @@
 !      INTEGER :: MXCT, MXLAI
 
 ! output
-      REAL :: SunleafTK  ( NCOLS, NROWS, Layers , MXREC)   ! Sun leaf temperature [K]
-      REAL :: ShadeleafTK( NCOLS, NROWS, Layers , MXREC) ! Shade leaf temperature [K]
-      REAL :: SunPPFD    ( NCOLS, NROWS, Layers , MXREC)     ! PPFD on a sun leaf [umol/m2.s]
-      REAL :: ShadePPFD  ( NCOLS, NROWS, Layers , MXREC)   ! PPFD on a shade leaf [(umol/m2.s]
-      REAL :: SunFrac    ( NCOLS, NROWS, Layers , MXREC)     ! fraction of sun leaves
+      REAL :: SunleafTK  ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf temperature [K]
+      REAL :: ShadeleafTK( NCOLS, NROWS, Layers, MXREC ) ! Shade leaf temperature [K]
+      REAL :: SunPPFD    ( NCOLS, NROWS, Layers, MXREC )     ! PPFD on a sun leaf [umol/m2.s]
+      REAL :: ShadePPFD  ( NCOLS, NROWS, Layers, MXREC )   ! PPFD on a shade leaf [(umol/m2.s]
+      REAL :: SunFrac    ( NCOLS, NROWS, Layers, MXREC )     ! fraction of sun leaves
 
 ! local variables and their descriptions:
 
@@ -1189,11 +1189,11 @@
       real(c_float), intent(in)  :: CTF( NRTYP, NCOLS, NROWS )
 
       ! output arrays
-      real(c_float), intent(out)  :: SunleafTK(MXREC, NCOLS, NROWS, NLAYERS)
-      real(c_float), intent(out)  :: ShadeleafTK(MXREC, NCOLS, NROWS, NLAYERS)
-      real(c_float), intent(out)  :: SunPPFD(MXREC, NCOLS, NROWS, NLAYERS)
-      real(c_float), intent(out)  :: ShadePPFD(MXREC, NCOLS, NROWS, NLAYERS)
-      real(c_float), intent(out)  :: SunFrac(MXREC, NCOLS, NROWS, NLAYERS)
+      real(c_float), intent(out)  :: SunleafTK(NCOLS, NROWS, NLAYERS, MXREC)
+      real(c_float), intent(out)  :: ShadeleafTK(NCOLS, NROWS, NLAYERS, MXREC)
+      real(c_float), intent(out)  :: SunPPFD(NCOLS, NROWS, NLAYERS, MXREC)
+      real(c_float), intent(out)  :: ShadePPFD(NCOLS, NROWS, NLAYERS, MXREC)
+      real(c_float), intent(out)  :: SunFrac(NCOLS, NROWS, NLAYERS, MXREC)
       
       !print*,'SDATE=',SDATE
       

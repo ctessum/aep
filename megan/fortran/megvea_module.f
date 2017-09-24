@@ -163,11 +163,11 @@
       REAL :: LAIc( MXREC, NCOLS, NROWS )    ! Current time step LAI (input)
 
 !     variable from CANMET
-      REAL :: SunT ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf temperature (K) (input)
-      REAL :: ShaT ( MXREC, NCOLS, NROWS, Layers )   ! Shade leaf temperature (K) (input)
-      REAL :: SunP ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf PPFD (umol/m2.s) (input)
-      REAL :: ShaP ( MXREC, NCOLS, NROWS, Layers )   ! Shade leaf PPFD (umol/m2.s) (input)
-      REAL :: SunF ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf fraction (input)
+      REAL :: SunT ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf temperature (K) (input)
+      REAL :: ShaT ( NCOLS, NROWS, Layers, MXREC )   ! Shade leaf temperature (K) (input)
+      REAL :: SunP ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf PPFD (umol/m2.s) (input)
+      REAL :: ShaP ( NCOLS, NROWS, Layers, MXREC )   ! Shade leaf PPFD (umol/m2.s) (input)
+      REAL :: SunF ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf fraction (input)
 
 !     variable from DailyMET
       REAL :: Max_temp( N_MaxT, NCOLS, NROWS ) ! input
@@ -336,20 +336,26 @@
           VPGWT(K) =1/Layers
           ENDDO
         ENDIF
+        
+        !PRINT*,'SunT(T)=',SunT(:,:,:,T)
+        !PRINT*,'ShaT(T)=',ShaT
+        !PRINT*,'SunP(T)=',SunP
+        !PRINT*,'ShaP(T)=',ShaP
+        !PRINT*,'SunF(T)=',SunF
 
           DO I = 1, NCOLS
             DO J = 1, NROWS
 
               DO K = 1, Layers
                 Ea1L(K)  = CDEA(I,J,K) *
-     &                GAMTLD(SunT(T,I,J,K),D_TEMP(I,J),S) *
-     &                GAMP(SunP(T,I,J,K),D_PPFD(I,J)) *  SunF(T,I,J,K) +
-     &                GAMTLD(ShaT(T,I,J,K),D_TEMP(I,J),S) * 
-     &                GAMP(ShaP(T,I,J,K),D_PPFD(I,J))
-     &                * (1-SunF(T,I,J,K))
+     &                GAMTLD(SunT(I,J,K,T),D_TEMP(I,J),S) *
+     &                GAMP(SunP(I,J,K,T),D_PPFD(I,J)) *  SunF(I,J,K,T) +
+     &                GAMTLD(ShaT(I,J,K,T),D_TEMP(I,J),S) * 
+     &                GAMP(ShaP(I,J,K,T),D_PPFD(I,J))
+     &                * (1-SunF(I,J,K,T))
 
-                Ea2L(K) = GAMTLI(SunT(T,I,J,K),S)* SunF(T,I,J,K)+
-     &              GAMTLI(ShaT(T,I,J,K),S)*(1-SunF(T,I,J,K))
+                Ea2L(K) = GAMTLI(SunT(I,J,K,T),S)* SunF(I,J,K,T)+
+     &              GAMTLI(ShaT(I,J,K,T),S)*(1-SunF(I,J,K,T))
 
               ENDDO   ! ENDDO canopy layers
             GAMTP(I,J)=SUM((Ea1L(:)*LDFMAP(S,I,J) + 
@@ -895,11 +901,11 @@
       real(c_float), intent(in)  :: LDFMAP( NEMIS, NCOLS, NROWS )     ! light depenedent fraction map (input)
       real(c_float), intent(in)  :: LAIp( MXREC, NCOLS, NROWS )    ! Previous time step LAI (input)
       real(c_float), intent(in)  :: LAIc( MXREC, NCOLS, NROWS )    ! Current time step LAI (input)
-      real(c_float), intent(in)  :: SunT ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf temperature (K) (input)
-      real(c_float), intent(in)  :: ShaT ( MXREC, NCOLS, NROWS, Layers )   ! Shade leaf temperature (K) (input)
-      real(c_float), intent(in)  :: SunP ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf PPFD (umol/m2.s) (input)
-      real(c_float), intent(in)  :: ShaP ( MXREC, NCOLS, NROWS, Layers )   ! Shade leaf PPFD (umol/m2.s) (input)
-      real(c_float), intent(in)  :: SunF ( MXREC, NCOLS, NROWS, Layers )   ! Sun leaf fraction (input)
+      real(c_float), intent(in)  :: SunT ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf temperature (K) (input)
+      real(c_float), intent(in)  :: ShaT ( NCOLS, NROWS, Layers, MXREC )   ! Shade leaf temperature (K) (input)
+      real(c_float), intent(in)  :: SunP ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf PPFD (umol/m2.s) (input)
+      real(c_float), intent(in)  :: ShaP ( NCOLS, NROWS, Layers, MXREC )   ! Shade leaf PPFD (umol/m2.s) (input)
+      real(c_float), intent(in)  :: SunF ( NCOLS, NROWS, Layers, MXREC )   ! Sun leaf fraction (input)
       real(c_float), intent(in)  :: Max_temp( N_MaxT, NCOLS, NROWS ) ! input
       real(c_float), intent(in)  :: Max_wind( N_MaxWS, NCOLS, NROWS ) ! input
       real(c_float), intent(in)  :: Min_temp( N_MinT, NCOLS, NROWS ) ! input

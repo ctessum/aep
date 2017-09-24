@@ -657,6 +657,44 @@
 ! Read LDF from MEGVEA.EXT
             LDFMAP = LDF(S)
         ENDIF
+        
+        
+        PRINT*,'SDATE=',SDATE
+        PRINT*,'STIME=',STIME
+        PRINT*,'MXREC=',MXREC
+        PRINT*,'NCOLS=',NCOLS
+        PRINT*,'NROWS=',NROWS
+        PRINT*,'TSTEP=',TSTEP
+        PRINT*,'NEMIS=',NEMIS
+        PRINT*,'Layers=',Layers
+        PRINT*,'N_MaxT=',N_MaxT
+        PRINT*,'N_MinT=',N_MinT
+        PRINT*,'N_MaxWS=',N_MaxWS
+        PRINT*,'GAMBD_YN=',GAMBD_YN
+        PRINT*,'GAMAQ_YN=',GAMAQ_YN
+        PRINT*,'GAMCO2_YN=',GAMCO2_YN
+        PRINT*,'GAMHW_YN=',GAMHW_YN
+        PRINT*,'GAMHT_YN=',GAMHT_YN
+        PRINT*,'GAMLT_YN=',GAMLT_YN
+        PRINT*,'GAMSM_YN=',GAMSM_YN
+        PRINT*,'GAMSM=',GAMSM
+        PRINT*,'AQI=',AQI
+        PRINT*,'LDFMAP=',LDFMAP
+        PRINT*,'LAIp=',LAIp
+        PRINT*,'LAIc=',LAIc
+        PRINT*,'SunT=',SunT
+        PRINT*,'ShaT=',ShaT
+        PRINT*,'SunP=',SunP
+        PRINT*,'ShaP=',ShaP
+        PRINT*,'SunF=',SunF
+        PRINT*,'Max_temp=',Max_temp
+        PRINT*,'Max_wind=',Max_wind
+        PRINT*,'Min_temp=',Min_temp
+        PRINT*,'D_TEMP=',D_TEMP
+        PRINT*,'D_PPFD=',D_PPFD
+        PRINT*,'MaxT=',MaxT
+        PRINT*,'MinT=',MinT
+        PRINT*,'MaxWS=',MaxWS
 
 ! leaf age activity factor
           CALL GAMMA_A( NCOLS, NROWS, S,
