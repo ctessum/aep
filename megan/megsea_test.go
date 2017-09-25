@@ -5,15 +5,19 @@ import (
 	"os"
 )
 
+func GetSoilMoistureAndNOEmissionActivityTestData() SoilMoistureAndNOEmissionActivity {
+	NOEmissionActivity := []float64{0.6491075, 0.6640053, 0.6189721, 0.5696779, 0.5248248, 0.5029572, 0.523435, 0.546968, 0.6322287, 0.7603613, 0.7641032, 0.699164, 0.6803498, 0.6906353, 0.6858764, 0.6965074, 0.7716522, 0.8314256, 0.8096505, 0.8013604, 0.7773128, 0.7740801, 0.8019726, 0.8279191, 0.8342465}
+	SoilMoistureActivity := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.427885, 0.4877728, 0.05184002, 0, 0, 0, 0.4081927, 0.8413952, 1, 1, 0.820465, 1}
+	return SoilMoistureAndNOEmissionActivity{NOEmissionActivity, SoilMoistureActivity}
+}
+
 func TestMegsea(t *testing.T) {
 	go_output, err := run_go_megsea()
 	if err != nil {
 		t.Errorf("ERROR:", err)
 	}
 	
-	NOEmissionActivity_expected := []float64{0.6491075, 0.6640053, 0.6189721, 0.5696779, 0.5248248, 0.5029572, 0.523435, 0.546968, 0.6322287, 0.7603613, 0.7641032, 0.699164, 0.6803498, 0.6906353, 0.6858764, 0.6965074, 0.7716522, 0.8314256, 0.8096505, 0.8013604, 0.7773128, 0.7740801, 0.8019726, 0.8279191, 0.8342465}
-	SoilMoistureActivity_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.427885, 0.4877728, 0.05184002, 0, 0, 0, 0.4081927, 0.8413952, 1, 1, 0.820465, 1}
-	expected_output := Megsea_output{NOEmissionActivity_expected, SoilMoistureActivity_expected}
+	expected_output := GetSoilMoistureAndNOEmissionActivityTestData()
 
 	if !are_megsea_outputs_equal(go_output, expected_output) {
 		t.Errorf("Go and standalone versions produce different results (epsilon=%v)\n", EPSILON)
@@ -37,7 +41,7 @@ func TestMegseaAgainstStandalone(t *testing.T) {
 	}
 }
  
-func run_go_megsea() (output Megsea_output, err error) {
+func run_go_megsea() (output SoilMoistureAndNOEmissionActivity, err error) {
 	start_date := 2013145
 	start_time := 0
 	time_increment := 10000
@@ -54,7 +58,7 @@ func run_go_megsea() (output Megsea_output, err error) {
 	return SoilMoistureAndNOEmissionActivityFactors(start_date, start_time, time_increment, use_PX_version_of_MCIP, temperature, soil_moisture, soil_temperature, precip_adjustment, lai, lattitude, soil_type, canopy_type_factor)
 }
 
-func run_standalone_megsea() Megsea_output {
+func run_standalone_megsea() SoilMoistureAndNOEmissionActivity {
 	// Run standalone MEGSEA script
 	run_command("cd ./MEGAN3/work/; ./run.megsea.v3.single.csh")
 	
@@ -63,10 +67,10 @@ func run_standalone_megsea() Megsea_output {
 	gamno := parse_netcdf_file("GAMNO", output_file)
 	gamsm := parse_netcdf_file("GAMSM", output_file)
 	
-	return Megsea_output{gamno, gamsm}
+	return SoilMoistureAndNOEmissionActivity{gamno, gamsm}
 }
 
-func are_megsea_outputs_equal(output1 Megsea_output, output2 Megsea_output) bool {
+func are_megsea_outputs_equal(output1 SoilMoistureAndNOEmissionActivity, output2 SoilMoistureAndNOEmissionActivity) bool {
 	GAMNO_equal := arrays_approximately_equal(output1.NOEmissionActivity, output2.NOEmissionActivity, EPSILON, "GAMNO")
 	GAMSM_equal := arrays_approximately_equal(output1.SoilMoistureActivity, output2.SoilMoistureActivity, EPSILON, "GAMSM")
 

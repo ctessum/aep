@@ -526,18 +526,12 @@ C***********************************************************************
      &                  MT_CAMP_in, MT_SABI_in, MT_AROM_in, MT_OXY_in, SQT_HR_in, 
      &                  SQT_LR_in, MEOH_in, ACTO_in, ETOH_in, ACID_in, LVOC_in, 
      &                  OXPROD_in, STRESS_in, OTHER_in, CO_in, NO_in, EF, GAMNO, 
-     &                  ISOP, TERP, PAR, XYL, OLE, 
-     &                  NR, MEOH, CH4, NH3, NO, ALD2, ETOH, FORM, ALDX, TOL, 
-     &                  IOLE, CO, ETHA, ETH, ETHY, PRPA, BENZ, ACET, KET, 
-     &                  AACD, FACD, HCN, ISPD, N2O, SESQ, TRS, CH3BR, CH3CL, 
-     &                  CH3I, ISP, TRP, XYLA, SQT, TOLA) 
+     &                  outer) 
      &                  BIND(C,name='run_mgn2mech_c')
       USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_FLOAT, C_BOOL, C_CHAR
       USE MGN2MECH
       
       INCLUDE 'SPC_NOCONVER.EXT'
-           
-      !INTEGER,PARAMETER :: N_MGN_SPC  = 20 ! from 'SPC_NOCONVER.EXT'
       
       ! input parameters
       integer(c_int), intent(in)  :: SDATE, STIME, MXREC, NCOLS, NROWS, TSTEP, NVAR    
@@ -572,53 +566,13 @@ C***********************************************************************
       real(c_float), intent(in)  :: GAMNO(MXREC, ncols, nrows)
 
       ! output arrays 
-      real(c_float), intent(out)  :: ISOP (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: TERP (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: PAR  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: XYL  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: OLE  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: NR   (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: MEOH (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: CH4  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: NH3  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: NO   (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ALD2 (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ETOH (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: FORM (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ALDX (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: TOL  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: IOLE (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: CO   (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ETHA (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ETH  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ETHY (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: PRPA (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: BENZ (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ACET (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: KET  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: AACD (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: FACD (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: HCN  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ISPD (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: N2O  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: SESQ (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: TRS  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: CH3BR(MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: CH3CL(MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: CH3I (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: ISP  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: TRP  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: XYLA (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: SQT  (MXREC, ncols, nrows)
-      real(c_float), intent(out)  :: TOLA (MXREC, ncols, nrows)
+      real(c_float), intent(out)  :: outer(MXREC, NVAR, ncols, nrows)
 
       ! temporary variables
       real(c_float), allocatable  :: inper(:, :, :, :)
-      real(c_float), allocatable  :: outer(:, :, :, :)
       integer :: t, v
       
       ALLOCATE(inper(MXREC, N_MGN_SPC, ncols, nrows))
-      ALLOCATE(outer(MXREC, NVAR, ncols, nrows))
       
       ! copy C string into Fortran string
       DO i = 1,SIZE(C_MECHANISM)
@@ -669,48 +623,7 @@ C***********************************************************************
      &               MECHANISM, garea, inper, EF, GAMNO, outer)
      
       !print*,'outer=',outer
-     
-      ISOP = outer(:, 1, :, :) 
-      TERP = outer(:, 2, :, :) 
-      PAR  = outer(:, 3, :, :) 
-      XYL  = outer(:, 4, :, :) 
-      OLE  = outer(:, 5, :, :) 
-      NR   = outer(:, 6, :, :) 
-      MEOH = outer(:, 7, :, :) 
-      CH4  = outer(:, 8, :, :) 
-      NH3  = outer(:, 9, :, :) 
-      NO   = outer(:, 10, :, :) 
-      ALD2 = outer(:, 11, :, :) 
-      ETOH = outer(:, 12, :, :) 
-      FORM = outer(:, 13, :, :) 
-      ALDX = outer(:, 14, :, :) 
-      TOL  = outer(:, 15, :, :) 
-      IOLE = outer(:, 16, :, :) 
-      CO   = outer(:, 17, :, :) 
-      ETHA = outer(:, 18, :, :) 
-      ETH  = outer(:, 19, :, :) 
-      ETHY = outer(:, 20, :, :) 
-      PRPA = outer(:, 21, :, :) 
-      BENZ = outer(:, 22, :, :) 
-      ACET = outer(:, 23, :, :) 
-      KET  = outer(:, 24, :, :) 
-      AACD = outer(:, 25, :, :) 
-      FACD = outer(:, 26, :, :) 
-      HCN  = outer(:, 27, :, :) 
-      ISPD = outer(:, 28, :, :) 
-      N2O  = outer(:, 29, :, :) 
-      SESQ = outer(:, 30, :, :) 
-      TRS  = outer(:, 31, :, :) 
-      CH3BR= outer(:, 32, :, :) 
-      CH3CL= outer(:, 33, :, :) 
-      CH3I = outer(:, 34, :, :) 
-      ISP  = outer(:, 35, :, :) 
-      TRP  = outer(:, 36, :, :) 
-      XYLA = outer(:, 37, :, :) 
-      SQT  = outer(:, 38, :, :) 
-      TOLA = outer(:, 39, :, :) 
-     
-      DEALLOCATE(outer)
+
       DEALLOCATE(inper)
       
       END SUBROUTINE RUN_MGN2MECH_C

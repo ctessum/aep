@@ -6,49 +6,53 @@ import (
 )
 
 func TestMgn2mech(t *testing.T) {
-	go_output := run_go_mgn2mech()
+	go_output, err := run_go_mgn2mech()
+	if err != nil {
+		t.Errorf("ERROR:", err)
+	}
 	
-	ISOP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.08549863, 0.1901947, 0.01413564, 0, 0, 0, 0.2476667, 0.1697283, 0.134044, 0.1522065, 0.147545, 0.2833969}
-	TERP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.003753447, 0.006545584, 0.0006078602, 0, 0, 0, 0.007363195, 0.01064267, 0.01169429, 0.0131755, 0.01258804, 0.01719705}
-	PAR_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0008894194, 0.001601944, 0.000145092, 0, 0, 0, 0.001852462, 0.002473795, 0.00266421, 0.003008224, 0.002882492, 0.004030752}
+	ISOP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.1426557, 0.1985416, 0.01617785, 0, 0, 0, 0.2870994, 0.2158315, 0.171195, 0.1913865, 0.1810836, 0.3272001}
+	TERP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.004674373, 0.006666114, 0.0006511473, 0, 0, 0, 0.008074618, 0.01192501, 0.01301347, 0.01453947, 0.01370112, 0.01813486}
+	PAR_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.001149452, 0.001634236, 0.0001565454, 0, 0, 0, 0.002053949, 0.002805091, 0.002992571, 0.003349341, 0.003163213, 0.004283844}
 	XYL_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	OLE_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0005940548, 0.0009880014, 9.648284e-05, 0, 0, 0, 0.001079734, 0.001806393, 0.002055798, 0.002319317, 0.00221853, 0.002927803}
+	OLE_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0006949258, 0.000997701, 0.000102002, 0, 0, 0, 0.001168887, 0.001995395, 0.002262468, 0.002532691, 0.002391191, 0.003052761}
 	NR_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	MEOH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.01424337, 0.02848718, 0.002171421, 0, 0, 0, 0.03330369, 0.02422228, 0.01937554, 0.02084235, 0.01890915, 0.03534352}
-	CH4_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4.0258e-06, 6.695504e-06, 6.538464e-07, 0, 0, 0, 7.317158e-06, 1.224159e-05, 1.393176e-05, 1.571759e-05, 1.503457e-05, 1.984118e-05}
+	MEOH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.02162095, 0.03010399, 0.002449014, 0, 0, 0, 0.03723697, 0.02918443, 0.02346343, 0.02502753, 0.02240683, 0.04028454}
+	CH4_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4.709384e-06, 6.761235e-06, 6.912485e-07, 0, 0, 0, 7.921331e-06, 1.352243e-05, 1.533233e-05, 1.716358e-05, 1.620466e-05, 2.068799e-05}
 	NH3_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	NO_expected := []float64{9.940225e-07, 1.016836e-06, 9.478741e-07, 8.723866e-07, 8.036999e-07, 7.702124e-07, 8.015715e-07, 8.376093e-07, 9.681748e-07, 1.164393e-06, 1.170123e-06, 1.070677e-06, 1.041866e-06, 1.057617e-06, 1.050329e-06, 1.066609e-06, 1.181683e-06, 1.273218e-06, 1.239873e-06, 1.227178e-06, 1.190352e-06, 1.185402e-06, 1.228115e-06, 1.267849e-06, 1.277538e-06}
-	ALD2_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0007788371, 0.001615647, 0.0001328344, 0, 0, 0, 0.002031078, 0.002018837, 0.001964166, 0.00227242, 0.002249054, 0.00348371}
-	ETOH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0007355264, 0.001525802, 0.0001254476, 0, 0, 0, 0.001918131, 0.00190657, 0.00185494, 0.002146052, 0.002123985, 0.003289982}
-	FORM_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001291176, 0.0002147418, 2.097052e-05, 0, 0, 0, 0.0002346799, 0.0003926189, 0.0004468271, 0.0005041029, 0.0004821969, 0.0006363572}
+	ALD2_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.001160937, 0.001664394, 0.0001476096, 0, 0, 0, 0.002314583, 0.002415014, 0.002324646, 0.002653275, 0.002570668, 0.003817143}
+	ETOH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.001096378, 0.001571838, 0.0001394011, 0, 0, 0, 0.00218587, 0.002280716, 0.002195373, 0.002505728, 0.002427714, 0.003604874}
+	FORM_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001510419, 0.00021685, 2.21701e-05, 0, 0, 0, 0.0002540572, 0.0004336986, 0.0004917467, 0.0005504795, 0.0005197248, 0.0006635166}
 	ALDX_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	TOL_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	IOLE_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0002844379, 0.0005957698, 4.683446e-05, 0, 0, 0, 0.000752868, 0.0006341767, 0.0005705989, 0.0006462465, 0.0006231555, 0.001049096}
-	CO_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.01078564, 0.02157161, 0.001644285, 0, 0, 0, 0.02521886, 0.01834206, 0.01467192, 0.01578264, 0.01431875, 0.0267635}
-	ETHA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0003516259, 0.0005848063, 5.710899e-05, 0, 0, 0, 0.0006391035, 0.001069219, 0.001216844, 0.001372823, 0.001313166, 0.001732991}
-	ETH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.000660103, 0.001097849, 0.00010721, 0, 0, 0, 0.001199781, 0.002007231, 0.002284365, 0.002577183, 0.00246519, 0.003253322}
+	IOLE_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0004417441, 0.0006181842, 5.26673e-05, 0, 0, 0, 0.0008635624, 0.000772994, 0.0006884884, 0.000770066, 0.0007280394, 0.001174933}
+	CO_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.01637223, 0.02279592, 0.00185449, 0, 0, 0, 0.02819729, 0.02209959, 0.01776743, 0.01895183, 0.01696732, 0.03050503}
+	ETHA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0004113323, 0.0005905473, 6.03758e-05, 0, 0, 0, 0.0006918737, 0.001181091, 0.001339173, 0.00149912, 0.001415366, 0.001806954}
+	ETH_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0007721889, 0.001108627, 0.0001133427, 0, 0, 0, 0.001298846, 0.002217247, 0.002514014, 0.00281428, 0.002657049, 0.003392172}
 	ETHY_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	PRPA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0002200974, 0.0003660547, 3.57469e-05, 0, 0, 0, 0.0004000416, 0.0006692688, 0.0007616734, 0.0008593073, 0.0008219657, 0.001084751}
+	PRPA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0002574701, 0.0003696483, 3.779174e-05, 0, 0, 0, 0.0004330727, 0.0007392943, 0.0008382447, 0.0009383622, 0.0008859368, 0.001131048}
 	BENZ_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	ACET_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0007811487, 0.001299167, 0.0001268695, 0, 0, 0, 0.00141979, 0.002375305, 0.002703259, 0.003049772, 0.002917242, 0.003849897}
+	ACET_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0009137884, 0.001311921, 0.0001341269, 0, 0, 0, 0.00153702, 0.002623833, 0.002975018, 0.003330346, 0.003144283, 0.004014209}
 	KET_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	AACD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9.955039e-05, 0.0002065109, 1.69788e-05, 0, 0, 0, 0.0002596109, 0.0002580462, 0.0002510583, 0.0002904591, 0.0002874724, 0.0004452852}
-	FACD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.000491183, 0.001018927, 8.377361e-05, 0, 0, 0, 0.001280923, 0.001273203, 0.001238725, 0.001433129, 0.001418393, 0.002197043}
-	HCN_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.980381e-05, 7.641892e-05, 6.405617e-06, 0, 0, 0, 9.059165e-05, 9.504362e-05, 9.407754e-05, 0.0001055363, 0.0001004472, 0.0001522734}
-	ISPD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0003895442, 0.0007456595, 6.270209e-05, 0, 0, 0, 0.0008826172, 0.0009358057, 0.0009301949, 0.001043685, 0.0009935179, 0.001499785}
+	AACD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001483901, 0.0002127416, 1.886735e-05, 0, 0, 0, 0.0002958483, 0.0003086853, 0.0002971345, 0.0003391396, 0.0003285808, 0.0004879044}
+	FACD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0007321584, 0.00104967, 9.309175e-05, 0, 0, 0, 0.001459719, 0.001523057, 0.001466066, 0.001673319, 0.001621222, 0.002407327}
+	HCN_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5.612568e-05, 7.906677e-05, 7.059197e-06, 0, 0, 0, 0.0001015603, 0.0001106804, 0.0001083756, 0.000120366, 0.0001127629, 0.0001656461}
+	ISPD_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0005472004, 0.0007711386, 6.903671e-05, 0, 0, 0, 0.0009888771, 0.00108819, 0.001070027, 0.001188702, 0.001113885, 0.001629572}
 	N2O_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	SESQ_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001192427, 0.0002624757, 2.366675e-05, 0, 0, 0, 0.0003511755, 0.0004602313, 0.0004947009, 0.0006061591, 0.0006439399, 0.0009135043}
-	TRS_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6.64725e-06, 1.105537e-05, 1.079607e-06, 0, 0, 0, 1.208182e-05, 2.021286e-05, 2.300361e-05, 2.595229e-05, 2.482452e-05, 3.276102e-05}
-	CH3BR_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4.016739e-07, 6.680434e-07, 6.523749e-08, 0, 0, 0, 7.30069e-07, 1.221404e-06, 1.390041e-06, 1.568221e-06, 1.500073e-06, 1.979653e-06}
-	CH3CL_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.222452e-06, 5.359417e-06, 5.233715e-07, 0, 0, 0, 5.857021e-06, 9.798783e-06, 1.115168e-05, 1.258114e-05, 1.203442e-05, 1.588188e-05}
-	CH3I_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.026836e-05, 1.70778e-05, 1.667725e-06, 0, 0, 0, 1.866342e-05, 3.122386e-05, 3.553488e-05, 4.008986e-05, 3.834773e-05, 5.060766e-05}
-	ISP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.08549863, 0.1901947, 0.01413564, 0, 0, 0, 0.2476667, 0.1697283, 0.134044, 0.1522065, 0.147545, 0.2833969}
-	TRP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.003753447, 0.006545584, 0.0006078602, 0, 0, 0, 0.007363195, 0.01064267, 0.01169429, 0.0131755, 0.01258804, 0.01719705}
+	SESQ_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001679682, 0.0002631191, 2.567569e-05, 0, 0, 0, 0.0003999859, 0.0005464077, 0.0005828123, 0.0007026649, 0.0007271476, 0.000973999}
+	TRS_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7.775959e-06, 1.11639e-05, 1.141364e-06, 0, 0, 0, 1.307941e-05, 2.232773e-05, 2.531617e-05, 2.833986e-05, 2.675654e-05, 3.415925e-05}
+	CH3BR_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4.698785e-07, 6.746018e-07, 6.896927e-08, 0, 0, 0, 7.903503e-07, 1.349199e-06, 1.529782e-06, 1.712495e-06, 1.616819e-06, 2.064143e-06}
+	CH3CL_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.769627e-06, 5.412032e-06, 5.5331e-07, 0, 0, 0, 6.34063e-06, 1.082403e-05, 1.227276e-05, 1.373859e-05, 1.297103e-05, 1.655971e-05}
+	CH3I_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.201193e-05, 1.724546e-05, 1.763124e-06, 0, 0, 0, 2.020444e-05, 3.44908e-05, 3.910721e-05, 4.377806e-05, 4.133223e-05, 5.276758e-05}
+	ISP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.1426557, 0.1985416, 0.01617785, 0, 0, 0, 0.2870994, 0.2158315, 0.171195, 0.1913865, 0.1810836, 0.3272001}
+	TRP_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.004674373, 0.006666114, 0.0006511473, 0, 0, 0, 0.008074618, 0.01192501, 0.01301347, 0.01453947, 0.01370112, 0.01813486}
 	XYLA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	SQT_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001192427, 0.0002624757, 2.366675e-05, 0, 0, 0, 0.0003511755, 0.0004602313, 0.0004947009, 0.0006061591, 0.0006439399, 0.0009135043}
+	SQT_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0001679682, 0.0002631191, 2.567569e-05, 0, 0, 0, 0.0003999859, 0.0005464077, 0.0005828123, 0.0007026649, 0.0007271476, 0.000973999}
 	TOLA_expected := []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
 		
-	expected_output := Mgn2mech_output{ISOP_expected, TERP_expected, PAR_expected, XYL_expected, OLE_expected, NR_expected, MEOH_expected, CH4_expected, NH3_expected, NO_expected, ALD2_expected, ETOH_expected, FORM_expected, ALDX_expected, TOL_expected, IOLE_expected, CO_expected, ETHA_expected, ETH_expected, ETHY_expected, PRPA_expected, BENZ_expected, ACET_expected, KET_expected, AACD_expected, FACD_expected, HCN_expected, ISPD_expected, N2O_expected, SESQ_expected, TRS_expected, CH3BR_expected, CH3CL_expected, CH3I_expected, ISP_expected, TRP_expected, XYLA_expected, SQT_expected, TOLA_expected}
+	expected_output := Species_CB6X{ISOP_expected, TERP_expected, PAR_expected, XYL_expected, OLE_expected, NR_expected, MEOH_expected, CH4_expected, NH3_expected, NO_expected, ALD2_expected, ETOH_expected, FORM_expected, ALDX_expected, TOL_expected, IOLE_expected, CO_expected, ETHA_expected, ETH_expected, ETHY_expected, PRPA_expected, BENZ_expected, ACET_expected, KET_expected, AACD_expected, FACD_expected, HCN_expected, ISPD_expected, N2O_expected, SESQ_expected, TRS_expected, CH3BR_expected, CH3CL_expected, CH3I_expected, ISP_expected, TRP_expected, XYLA_expected, SQT_expected, TOLA_expected}
 
 	if !are_mgn2mech_outputs_equal(go_output, expected_output) {
 		t.Errorf("Go and standalone versions produce different results (epsilon=%v)\n", EPSILON)
@@ -60,7 +64,11 @@ func TestMgn2mechAgainstStandalone(t *testing.T) {
 		t.Skip("skipping test; $MEGAN_STANDALONE_TEST not set")
 	}
 
-	go_output := run_go_mgn2mech()
+	go_output, err := run_go_mgn2mech()
+	if err != nil {
+		t.Errorf("ERROR:", err)
+	}
+	
 	standalone_output := run_standalone_mgn2mech()
 	
 	if !are_mgn2mech_outputs_equal(go_output, standalone_output) {
@@ -68,11 +76,21 @@ func TestMgn2mechAgainstStandalone(t *testing.T) {
 	}
 }
  
-func run_go_mgn2mech() Mgn2mech_output {
-	return RunMgn2mech()
+func run_go_mgn2mech() (output interface{}, err error) {
+	start_date := 2013145
+	start_time := 0
+	time_increment := 10000
+	use_mechanism_conversion := true
+	output_in_ton_per_hr := false
+	area_per_grid_cell := 144000000.0 
+	mechanism := CB6X		
+	inputEmissionActivity := GetEmissionActivityPerEmissionTypeTestData()
+	emission_factor := []float64{8.769534, 0.0224195, 0.3402439, 0.01646902, 0.007909732, 0.008048705, 0.00181239, 0.0019196, 0.00901152, 0.0150626, 1.03454, 0.143244, 0.2013025, 0.060192, 0.3470387, 0.02525556, 0.03697741, 0.00553815, 0.7958, 1.06345e-05}
+	inputSoilMoistureAndNOEmissionActivity := GetSoilMoistureAndNOEmissionActivityTestData()
+	return ChemicalSpeciationAndMechanismConversion(start_date, start_time, time_increment, use_mechanism_conversion, output_in_ton_per_hr, area_per_grid_cell, mechanism, inputEmissionActivity, emission_factor, inputSoilMoistureAndNOEmissionActivity)
 }
 
-func run_standalone_mgn2mech() Mgn2mech_output {
+func run_standalone_mgn2mech() Species_CB6X {
 	// Run standalone script
 	run_command("cd ./MEGAN3/work/; ./run.mgn2mech.v3.single.csh")
 	
@@ -118,49 +136,55 @@ func run_standalone_mgn2mech() Mgn2mech_output {
 	SQT   := parse_netcdf_file("SQT", output_file)
 	TOLA  := parse_netcdf_file("TOLA", output_file)
 	
-	return Mgn2mech_output{ISOP, TERP, PAR, XYL, OLE, NR, MEOH, CH4, NH3, NO, ALD2, ETOH, FORM, ALDX, TOL, IOLE, CO, ETHA, ETH, ETHY, PRPA, BENZ, ACET, KET, AACD, FACD, HCN, ISPD, N2O, SESQ, TRS, CH3BR, CH3CL, CH3I, ISP, TRP, XYLA, SQT, TOLA}
+	return Species_CB6X{ISOP, TERP, PAR, XYL, OLE, NR, MEOH, CH4, NH3, NO, ALD2, ETOH, FORM, ALDX, TOL, IOLE, CO, ETHA, ETH, ETHY, PRPA, BENZ, ACET, KET, AACD, FACD, HCN, ISPD, N2O, SESQ, TRS, CH3BR, CH3CL, CH3I, ISP, TRP, XYLA, SQT, TOLA}
 }
 
-func are_mgn2mech_outputs_equal(output1 Mgn2mech_output, output2 Mgn2mech_output) bool {
-	ISOP_equal  := arrays_approximately_equal(output1.ISOP, output2.ISOP, EPSILON, "ISOP")
-	TERP_equal  := arrays_approximately_equal(output1.TERP, output2.TERP, EPSILON, "TERP")
-	PAR_equal   := arrays_approximately_equal(output1.PAR, output2.PAR, EPSILON, "PAR")
-	XYL_equal   := arrays_approximately_equal(output1.XYL, output2.XYL, EPSILON, "XYL")
-	OLE_equal   := arrays_approximately_equal(output1.OLE, output2.OLE, EPSILON, "OLE")
-	NR_equal    := arrays_approximately_equal(output1.NR, output2.NR, EPSILON, "NR")
-	MEOH_equal  := arrays_approximately_equal(output1.MEOH, output2.MEOH, EPSILON, "MEOH")
-	CH4_equal   := arrays_approximately_equal(output1.CH4, output2.CH4, EPSILON, "CH4")
-	NH3_equal   := arrays_approximately_equal(output1.NH3, output2.NH3, EPSILON, "NH3")
-	NO_equal    := arrays_approximately_equal(output1.NO, output2.NO, EPSILON, "NO")
-	ALD2_equal  := arrays_approximately_equal(output1.ALD2, output2.ALD2, EPSILON, "ALD2")
-	ETOH_equal  := arrays_approximately_equal(output1.ETOH, output2.ETOH, EPSILON, "ETOH")
-	FORM_equal  := arrays_approximately_equal(output1.FORM, output2.FORM, EPSILON, "FORM")
-	ALDX_equal  := arrays_approximately_equal(output1.ALDX, output2.ALDX, EPSILON, "ALDX")
-	TOL_equal   := arrays_approximately_equal(output1.TOL, output2.TOL, EPSILON, "TOL")
-	IOLE_equal  := arrays_approximately_equal(output1.IOLE, output2.IOLE, EPSILON, "IOLE")
-	CO_equal    := arrays_approximately_equal(output1.CO, output2.CO, EPSILON, "CO")
-	ETHA_equal  := arrays_approximately_equal(output1.ETHA, output2.ETHA, EPSILON, "ETHA")
-	ETH_equal   := arrays_approximately_equal(output1.ETH, output2.ETH, EPSILON, "ETH")
-	ETHY_equal  := arrays_approximately_equal(output1.ETHY, output2.ETHY, EPSILON, "ETHY")
-	PRPA_equal  := arrays_approximately_equal(output1.PRPA, output2.PRPA, EPSILON, "PRPA")
-	BENZ_equal  := arrays_approximately_equal(output1.BENZ, output2.BENZ, EPSILON, "BENZ")
-	ACET_equal  := arrays_approximately_equal(output1.ACET, output2.ACET, EPSILON, "ACET")
-	KET_equal   := arrays_approximately_equal(output1.KET, output2.KET, EPSILON, "KET")
-	AACD_equal  := arrays_approximately_equal(output1.AACD, output2.AACD, EPSILON, "AACD")
-	FACD_equal  := arrays_approximately_equal(output1.FACD, output2.FACD, EPSILON, "FACD")
-	HCN_equal   := arrays_approximately_equal(output1.HCN, output2.HCN, EPSILON, "HCN")
-	ISPD_equal  := arrays_approximately_equal(output1.ISPD, output2.ISPD, EPSILON, "ISPD")
-	N2O_equal   := arrays_approximately_equal(output1.N2O, output2.N2O, EPSILON, "N2O")
-	SESQ_equal  := arrays_approximately_equal(output1.SESQ, output2.SESQ, EPSILON, "SESQ")
-	TRS_equal   := arrays_approximately_equal(output1.TRS, output2.TRS, EPSILON, "TRS")
-	CH3BR_equal := arrays_approximately_equal(output1.CH3BR, output2.CH3BR, EPSILON, "CH3BR")
-	CH3CL_equal := arrays_approximately_equal(output1.CH3CL, output2.CH3CL, EPSILON, "CH3CL")
-	CH3I_equal  := arrays_approximately_equal(output1.CH3I, output2.CH3I, EPSILON, "CH3I")
-	ISP_equal   := arrays_approximately_equal(output1.ISP, output2.ISP, EPSILON, "ISP")
-	TRP_equal   := arrays_approximately_equal(output1.TRP, output2.TRP, EPSILON, "TRP")
-	XYLA_equal  := arrays_approximately_equal(output1.XYLA, output2.XYLA, EPSILON, "XYLA")
-	SQT_equal   := arrays_approximately_equal(output1.SQT, output2.SQT, EPSILON, "SQT")
-	TOLA_equal  := arrays_approximately_equal(output1.TOLA, output2.TOLA, EPSILON, "TOLA")
+func are_mgn2mech_outputs_equal(output1 interface{}, output2 interface{}) bool {
 
-	return ISOP_equal && TERP_equal && PAR_equal && XYL_equal && OLE_equal && NR_equal && MEOH_equal && CH4_equal && NH3_equal && NO_equal && ALD2_equal && ETOH_equal && FORM_equal && ALDX_equal && TOL_equal && IOLE_equal && CO_equal && ETHA_equal && ETH_equal && ETHY_equal && PRPA_equal && BENZ_equal && ACET_equal && KET_equal && AACD_equal && FACD_equal && HCN_equal && ISPD_equal && N2O_equal && SESQ_equal && TRS_equal && CH3BR_equal && CH3CL_equal && CH3I_equal && ISP_equal && TRP_equal && XYLA_equal && SQT_equal && TOLA_equal
+	if output1, ok := output1.(Species_CB6X); ok {
+		if output2, ok := output2.(Species_CB6X); ok {
+			ISOP_equal  := arrays_approximately_equal(output1.ISOP, output2.ISOP, EPSILON, "ISOP")
+			TERP_equal  := arrays_approximately_equal(output1.TERP, output2.TERP, EPSILON, "TERP")
+			PAR_equal   := arrays_approximately_equal(output1.PAR, output2.PAR, EPSILON, "PAR")
+			XYL_equal   := arrays_approximately_equal(output1.XYL, output2.XYL, EPSILON, "XYL")
+			OLE_equal   := arrays_approximately_equal(output1.OLE, output2.OLE, EPSILON, "OLE")
+			NR_equal    := arrays_approximately_equal(output1.NR, output2.NR, EPSILON, "NR")
+			MEOH_equal  := arrays_approximately_equal(output1.MEOH, output2.MEOH, EPSILON, "MEOH")
+			CH4_equal   := arrays_approximately_equal(output1.CH4, output2.CH4, EPSILON, "CH4")
+			NH3_equal   := arrays_approximately_equal(output1.NH3, output2.NH3, EPSILON, "NH3")
+			NO_equal    := arrays_approximately_equal(output1.NO, output2.NO, EPSILON, "NO")
+			ALD2_equal  := arrays_approximately_equal(output1.ALD2, output2.ALD2, EPSILON, "ALD2")
+			ETOH_equal  := arrays_approximately_equal(output1.ETOH, output2.ETOH, EPSILON, "ETOH")
+			FORM_equal  := arrays_approximately_equal(output1.FORM, output2.FORM, EPSILON, "FORM")
+			ALDX_equal  := arrays_approximately_equal(output1.ALDX, output2.ALDX, EPSILON, "ALDX")
+			TOL_equal   := arrays_approximately_equal(output1.TOL, output2.TOL, EPSILON, "TOL")
+			IOLE_equal  := arrays_approximately_equal(output1.IOLE, output2.IOLE, EPSILON, "IOLE")
+			CO_equal    := arrays_approximately_equal(output1.CO, output2.CO, EPSILON, "CO")
+			ETHA_equal  := arrays_approximately_equal(output1.ETHA, output2.ETHA, EPSILON, "ETHA")
+			ETH_equal   := arrays_approximately_equal(output1.ETH, output2.ETH, EPSILON, "ETH")
+			ETHY_equal  := arrays_approximately_equal(output1.ETHY, output2.ETHY, EPSILON, "ETHY")
+			PRPA_equal  := arrays_approximately_equal(output1.PRPA, output2.PRPA, EPSILON, "PRPA")
+			BENZ_equal  := arrays_approximately_equal(output1.BENZ, output2.BENZ, EPSILON, "BENZ")
+			ACET_equal  := arrays_approximately_equal(output1.ACET, output2.ACET, EPSILON, "ACET")
+			KET_equal   := arrays_approximately_equal(output1.KET, output2.KET, EPSILON, "KET")
+			AACD_equal  := arrays_approximately_equal(output1.AACD, output2.AACD, EPSILON, "AACD")
+			FACD_equal  := arrays_approximately_equal(output1.FACD, output2.FACD, EPSILON, "FACD")
+			HCN_equal   := arrays_approximately_equal(output1.HCN, output2.HCN, EPSILON, "HCN")
+			ISPD_equal  := arrays_approximately_equal(output1.ISPD, output2.ISPD, EPSILON, "ISPD")
+			N2O_equal   := arrays_approximately_equal(output1.N2O, output2.N2O, EPSILON, "N2O")
+			SESQ_equal  := arrays_approximately_equal(output1.SESQ, output2.SESQ, EPSILON, "SESQ")
+			TRS_equal   := arrays_approximately_equal(output1.TRS, output2.TRS, EPSILON, "TRS")
+			CH3BR_equal := arrays_approximately_equal(output1.CH3BR, output2.CH3BR, EPSILON, "CH3BR")
+			CH3CL_equal := arrays_approximately_equal(output1.CH3CL, output2.CH3CL, EPSILON, "CH3CL")
+			CH3I_equal  := arrays_approximately_equal(output1.CH3I, output2.CH3I, EPSILON, "CH3I")
+			ISP_equal   := arrays_approximately_equal(output1.ISP, output2.ISP, EPSILON, "ISP")
+			TRP_equal   := arrays_approximately_equal(output1.TRP, output2.TRP, EPSILON, "TRP")
+			XYLA_equal  := arrays_approximately_equal(output1.XYLA, output2.XYLA, EPSILON, "XYLA")
+			SQT_equal   := arrays_approximately_equal(output1.SQT, output2.SQT, EPSILON, "SQT")
+			TOLA_equal  := arrays_approximately_equal(output1.TOLA, output2.TOLA, EPSILON, "TOLA")
+
+			return ISOP_equal && TERP_equal && PAR_equal && XYL_equal && OLE_equal && NR_equal && MEOH_equal && CH4_equal && NH3_equal && NO_equal && ALD2_equal && ETOH_equal && FORM_equal && ALDX_equal && TOL_equal && IOLE_equal && CO_equal && ETHA_equal && ETH_equal && ETHY_equal && PRPA_equal && BENZ_equal && ACET_equal && KET_equal && AACD_equal && FACD_equal && HCN_equal && ISPD_equal && N2O_equal && SESQ_equal && TRS_equal && CH3BR_equal && CH3CL_equal && CH3I_equal && ISP_equal && TRP_equal && XYLA_equal && SQT_equal && TOLA_equal
+		}
+	}
+	return false
 }

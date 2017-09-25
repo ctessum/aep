@@ -5,13 +5,8 @@ import (
 	"os"
 )
 
-func TestMegcan(t *testing.T) {
-	go_output, err := run_go_megcan()
-	if err != nil {
-		t.Errorf("ERROR:", err)
-	}
-	
-	SunleafTK_expected := [][]float64{
+func GetWithinCanopyMeteorologyTestData() WithinCanopyMeteorology {
+	SunleafTK := [][]float64{
 		{295.6182, 295.8868, 295.9344, 296.7096, 297.2047}, 
 		{297.5717, 297.8929, 298.8764, 299.3094, 299.4378},  
 		{294.3002, 294.5813, 290.01, 289.1228, 289.5467},  
@@ -37,7 +32,7 @@ func TestMegcan(t *testing.T) {
 		{299.3921, 299.5466, 295.5102, 294.5973, 294.8353}, 
 		{300.4998, 300.6654, 296.5637, 295.632, 295.8712}, 
 		{300.1864, 300.3878, 296.3911, 295.5673, 295.851}}
-	ShadeleafTK_expected := [][]float64{
+	ShadeleafTK := [][]float64{
 		{295.1596, 295.4961, 292.3825, 291.6773, 291.9568}, 
 		{295.8603, 296.2286, 293.0186, 292.0315, 292.1794}, 
 		{294.2982, 294.5833, 296.2413, 296.5161, 296.5336}, 
@@ -63,7 +58,7 @@ func TestMegcan(t *testing.T) {
 		{299.3918, 299.5469, 300.6133, 300.6803, 300.6218}, 
 		{300.4995, 300.6657, 301.7771, 301.8479, 301.7896}, 
 		{300.1861, 300.3882, 301.7128, 301.7371, 301.6449}}
-	SunPPFD_expected := [][]float64{
+	SunPPFD := [][]float64{
 		{617.0796, 581.216, 534.6226, 496.9291, 476.1383}, 
 		{1229, 1218.555, 1169.987, 1133.71, 1117.465}, 
 		{0, 0, 0, 0, 0}, 
@@ -89,7 +84,7 @@ func TestMegcan(t *testing.T) {
 		{61.27688, 49.7164, 36.69876, 27.17148, 22.1674}, 
 		{60.90872, 49.41769, 36.47827, 27.00823, 22.03422}, 
 		{91.83125, 74.50639, 54.99779, 40.71994, 33.22069}}
-	ShadePPFD_expected := [][]float64{
+	ShadePPFD := [][]float64{
 		{235.1983, 199.3347, 152.7413, 115.0479, 94.25706}, 
 		{159.3897, 148.9443, 100.3765, 64.09938, 47.8544}, 
 		{0, 0, 0, 0, 0}, 
@@ -115,7 +110,7 @@ func TestMegcan(t *testing.T) {
 		{61.27688, 49.7164, 36.69876, 27.17148, 22.1674}, 
 		{60.90872, 49.41769, 36.47827, 27.00823, 22.03422}, 
 		{91.83125, 74.50639, 54.99779, 40.71994, 33.22069}}
-	SunFrac_expected := [][]float64{
+	SunFrac := [][]float64{
 		{0.9111186, 0.6343481, 0.3760942, 0.22486, 0.1589793}, 
 		{0.8086445, 0.3566621, 0.1114906, 0.03613561, 0.01703344}, 
 		{0.2, 0.2, 0.2, 0.2, 0.2}, 
@@ -142,7 +137,16 @@ func TestMegcan(t *testing.T) {
 		{0.9406589, 0.7410105, 0.5242341, 0.372282, 0.2953098}, 
 		{0.9113433, 0.6351085, 0.3770557, 0.2257312, 0.1597351}}
 	
-	expected_output := Megcan_output{SunleafTK_expected, ShadeleafTK_expected, SunPPFD_expected, ShadePPFD_expected, SunFrac_expected}
+	return WithinCanopyMeteorology{SunleafTK, ShadeleafTK, SunPPFD, ShadePPFD, SunFrac}
+}
+
+func TestMegcan(t *testing.T) {
+	go_output, err := run_go_megcan()
+	if err != nil {
+		t.Errorf("ERROR:", err)
+	}
+	
+	expected_output := GetWithinCanopyMeteorologyTestData()
 
 	if !are_megcan_outputs_equal(go_output, expected_output) {
 		t.Errorf("Go and standalone versions produce different results (epsilon=%v)\n", EPSILON)
@@ -166,7 +170,7 @@ func TestMegcanAgainstStandalone(t *testing.T) {
 	}
 }
 
-func run_go_megcan() (output Megcan_output, err error) {
+func run_go_megcan() (output WithinCanopyMeteorology, err error) {
 	start_date := 2013145
 	start_time := 0
 	time_increment := 10000
@@ -183,7 +187,7 @@ func run_go_megcan() (output Megcan_output, err error) {
 	return ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(start_date, start_time, time_increment, latitude, longitude, leaf_area_index, temperature, incoming_photosynthetic_active_radiation, wind_speed, pressure, water_vapor_mixing_ratio, canopy_type_factor)
 }
 
-func run_standalone_megcan() Megcan_output {
+func run_standalone_megcan() WithinCanopyMeteorology {
 	// Run standalone MEGCAN script
 	run_command("cd ./MEGAN3/work/; ./run.megcan.v3.single.csh")
 	
@@ -197,14 +201,14 @@ func run_standalone_megcan() Megcan_output {
 	
 	timestep_count := 25
 	canopy_layers := 5
-	return Megcan_output{Convert1Dto2D(SunleafTK, timestep_count, canopy_layers), 
+	return WithinCanopyMeteorology{Convert1Dto2D(SunleafTK, timestep_count, canopy_layers), 
 						 Convert1Dto2D(ShadeleafTK, timestep_count, canopy_layers), 
 						 Convert1Dto2D(SunPPFD, timestep_count, canopy_layers), 
 						 Convert1Dto2D(ShadePPFD, timestep_count, canopy_layers), 
 						 Convert1Dto2D(SunFrac, timestep_count, canopy_layers)}
 }
 
-func are_megcan_outputs_equal(output1 Megcan_output, output2 Megcan_output) bool {
+func are_megcan_outputs_equal(output1 WithinCanopyMeteorology, output2 WithinCanopyMeteorology) bool {
 	SunleafTK_equal := arrays_approximately_equal_2d(output1.SunleafTK, output2.SunleafTK, EPSILON, "SunleafTK")
 	ShadeleafTK_equal := arrays_approximately_equal_2d(output1.ShadeleafTK, output2.ShadeleafTK, EPSILON, "ShadeleafTK")
 	SunPPFD_equal := arrays_approximately_equal_2d(output1.SunPPFD, output2.SunPPFD, EPSILON, "SunPPFD")

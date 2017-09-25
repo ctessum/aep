@@ -108,3 +108,55 @@ func parse_netcdf_file(variable, file string) []float64 {
 	
 	return float_array
 }
+
+func CFloat_to_Float64(in []C.float) []float64 {
+	out := make([]float64, len(in))
+	for i := range in {
+		out[i] = float64(in[i])
+	}
+	return out
+}
+
+func Float64_to_CFloat(in []float64) []C.float {
+	out := make([]C.float, len(in))
+	for i := range in {
+		out[i] = C.float(in[i])
+	}
+	return out
+}
+
+func Convert1Dto2D_Cfloat(in []C.float, n int, m int) [][]float64 {
+	return Convert1Dto2D(CFloat_to_Float64(in), n, m)
+}
+
+func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
+	out := make([][]float64, n)
+    for i := range out {
+        out[i] = make([]float64, m)
+		copy(out[i], in[i*m : (i+1)*m])
+    }
+	return out
+}
+
+func Convert2Dto1D_Cfloat(in [][]float64, ) []C.float {
+	return Float64_to_CFloat(Convert2Dto1D(in))
+}
+
+func Convert2Dto1D(in [][]float64) []float64 {
+	n := len(in)
+	m := len(in[0])
+	out := make([]float64, n * m)
+    for i := range in {
+		copy(out[i*m : (i+1)*m], in[i])
+    }
+	return out
+}
+
+func allEquals(values []int) bool {
+    for i := 1; i < len(values); i++ {
+        if values[i] != values[0] {
+            return false
+        }
+    }
+    return true
+}

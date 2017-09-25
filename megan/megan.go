@@ -11,18 +11,19 @@ package megan
 void run_megsea_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, float* TEMP, float* PRECADJ, float* CTF, float* LAIc, float* LAT, float* SOILM, float* SOILT, float* RSTYP, _Bool* LSOIL, float* GAMNO, float* GAMSM);
 void run_megcan_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* Layers, float* LAT, float* LONG, float* LAIc, float* TEMP, float* PPFD, float* WIND, float* PRES, float* QV, float* CTF, float* SunleafTK, float* ShadeleafTK, float* SunPPFD, float* ShadePPFD, float* SunFrac);
 void run_megvea_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NEMIS, int* Layers, int* N_MaxT, int* N_MinT, int* N_MaxWS, _Bool* GAMBD_YN, _Bool* GAMAQ_YN, _Bool* GAMCO2_YN, _Bool* GAMHW_YN, _Bool* GAMHT_YN, _Bool* GAMLT_YN, _Bool* GAMSM_YN, float* GAMSM, float* AQI, float* LDFMAP, float* LAIp, float* LAIc, float* SunT, float* ShaT, float* SunP, float* ShaP, float* SunF, float* Max_temp, float* Max_wind, float* Min_temp, float* D_TEMP, float* D_PPFD, float* ISOP, float* MBO, float* MT_PINE, float* MT_ACYC, float* MT_CAMP, float* MT_SABI, float* MT_AROM, float* MT_OXY, float* SQT_HR, float* SQT_LR, float* MEOH, float* ACTO, float* ETOH, float* ACID, float* LVOC, float* OXPROD, float* STRESS, float* OTHER, float* CO, float* NO);
-void run_mgn2mech_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NVAR, _Bool* CONVERSION, _Bool* TONPHR, char* MECHANISM, int* MECHANISM_len, float* garea, float* ISOP_in, float* MBO_in, float* MT_PINE_in, float* MT_ACYC_in, float* MT_CAMP_in, float* MT_SABI_in, float* MT_AROM_in, float* MT_OXY_in, float* SQT_HR_in, float* SQT_LR_in, float* MEOH_in, float* ACTO_in, float* ETOH_in, float* ACID_in, float* LVOC_in, float* OXPROD_in, float* STRESS_in, float* OTHER_in, float* CO_in, float* NO_in, float* EF, float* GAMNO, float* ISOP, float* TERP, float* PAR, float* XYL, float* OLE, float* NR, float* MEOH, float* CH4, float* NH3, float* NO, float* ALD2, float* ETOH, float* FORM, float* ALDX, float* TOL, float* IOLE, float* CO, float* ETHA, float* ETH, float* ETHY, float* PRPA, float* BENZ, float* ACET, float* KET, float* AACD, float* FACD, float* HCN, float* ISPD, float* N2O, float* SESQ, float* TRS, float* CH3BR, float* CH3CL, float* CH3I, float* ISP, float* TRP, float* XYLA, float* SQT, float* TOLA );
+void run_mgn2mech_c(int* SDATE, int* STIME, int* MXREC, int* NCOLS, int* NROWS, int* TSTEP, int* NVAR, _Bool* CONVERSION, _Bool* TONPHR, char* MECHANISM, int* MECHANISM_len, float* garea, float* ISOP_in, float* MBO_in, float* MT_PINE_in, float* MT_ACYC_in, float* MT_CAMP_in, float* MT_SABI_in, float* MT_AROM_in, float* MT_OXY_in, float* SQT_HR_in, float* SQT_LR_in, float* MEOH_in, float* ACTO_in, float* ETOH_in, float* ACID_in, float* LVOC_in, float* OXPROD_in, float* STRESS_in, float* OTHER_in, float* CO_in, float* NO_in, float* EF, float* GAMNO, float* outer);
 
 */
 import "C"
 import "unsafe"
 import "errors"
 import "fmt"
+import "reflect"
 
 /*
  n = number of time steps (1st dimension)
 */
-type Megsea_output struct {
+type SoilMoistureAndNOEmissionActivity struct { // MEGSEA output
 	NOEmissionActivity 		[]float64   // Final NO emission activity
 	SoilMoistureActivity	[]float64   // Soil moisture activity for isoprene
 }
@@ -31,7 +32,7 @@ type Megsea_output struct {
  n = number of time steps (1st dimension)
  m = number of canopy layers (2nd dimension)
 */
-type Megcan_output struct {
+type WithinCanopyMeteorology struct { // MEGCAN output
 	SunleafTK 	[][]float64	  // Leaf temperature for sun leaves [K] (weighted by canopy type)
 	ShadeleafTK [][]float64   // Leaf temperature for shade leaves [K] (weighted by canopy type)
 	SunPPFD 	[][]float64   // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
@@ -39,7 +40,11 @@ type Megcan_output struct {
 	SunFrac 	[][]float64   // Fraction of sun leaves (weighted by canopy type)
 }
 
-type Megvea_output struct {
+/*
+ Emission activity for each of the 20 emission types
+ n = number of time steps (1st dimension)
+*/
+type EmissionActivityPerEmissionType struct { // MEGVEA output
 	ISOP 	[]float64  	// isoprene
 	MBO 	[]float64  	// MBO
 	MT_PINE []float64  	// monoterpenes: pines (alpha and beta)
@@ -62,105 +67,10 @@ type Megvea_output struct {
 	NO 		[]float64  	// Nitric oxide
 }
 
-type Mgn2mech_output struct {
-	ISOP  []float64
-	TERP  []float64
-	PAR   []float64
-	XYL   []float64
-	OLE   []float64
-	NR    []float64
-	MEOH  []float64
-	CH4   []float64
-	NH3   []float64
-	NO    []float64
-	ALD2  []float64
-	ETOH  []float64
-	FORM  []float64
-	ALDX  []float64
-	TOL   []float64
-	IOLE  []float64
-	CO    []float64
-	ETHA  []float64
-	ETH   []float64
-	ETHY  []float64
-	PRPA  []float64
-	BENZ  []float64
-	ACET  []float64
-	KET   []float64
-	AACD  []float64
-	FACD  []float64
-	HCN   []float64
-	ISPD  []float64
-	N2O   []float64
-	SESQ  []float64
-	TRS   []float64
-	CH3BR []float64
-	CH3CL []float64
-	CH3I  []float64
-	ISP   []float64
-	TRP   []float64
-	XYLA  []float64
-	SQT   []float64
-	TOLA  []float64
-}
- 
-
-func CFloat_to_Float64(in []C.float) []float64 {
-	out := make([]float64, len(in))
-	for i := range in {
-		out[i] = float64(in[i])
-	}
-	return out
-}
-
-func Float64_to_CFloat(in []float64) []C.float {
-	out := make([]C.float, len(in))
-	for i := range in {
-		out[i] = C.float(in[i])
-	}
-	return out
-}
-
-func Convert1Dto2D_Cfloat(in []C.float, n int, m int) [][]float64 {
-	return Convert1Dto2D(CFloat_to_Float64(in), n, m)
-}
-
-func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
-	out := make([][]float64, n)
-    for i := range out {
-        out[i] = make([]float64, m)
-		copy(out[i], in[i*m : (i+1)*m])
-    }
-	return out
-}
-
-func Convert2Dto1D_Cfloat(in [][]float64, ) []C.float {
-	return Float64_to_CFloat(Convert2Dto1D(in))
-}
-
-func Convert2Dto1D(in [][]float64) []float64 {
-	n := len(in)
-	m := len(in[0])
-	out := make([]float64, n * m)
-    for i := range in {
-		copy(out[i*m : (i+1)*m], in[i])
-    }
-	return out
-}
-
-func allEquals(values []int) bool {
-    for i := 1; i < len(values); i++ {
-        if values[i] != values[0] {
-            return false
-        }
-    }
-    return true
-}
-
 /* Computes isoprene soil moisture activity and soil NO emission 
    activity factor using MCIP output variables.
 */
-func SoilMoistureAndNOEmissionActivityFactors(
+func SoilMoistureAndNOEmissionActivityFactors( // MEGSEA
 	start_date int, // Start date (YYYYDDD) 
 	start_time int, // Start time (HHMMSS)
 	time_increment int, // Time increment (HHMMSS)
@@ -173,7 +83,7 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	lattitude []float64, // Lattitude per timestep
 	soil_type []float64, // Soil type per timestep (between 1 and NRTYP, cf. MEGSEA.EXT)
 	canopy_type_factor []float64, // Canopy type factor
-) (output Megsea_output, err error) {
+) (output SoilMoistureAndNOEmissionActivity, err error) {
 	var (
 		// Date and time parameters used to compute the day of the growing season
 		SDATE C.int = C.int(start_date) 
@@ -193,7 +103,7 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	
 	// Check that all input slices have the same length
 	if !allEquals([]int{len(temperature), len(soil_moisture), len(soil_temperature), len(precipitation_adjustment), len(leaf_area_index), len(lattitude), len(soil_type)}) {
-		return Megsea_output{}, errors.New("All input slices must have the same length")
+		return SoilMoistureAndNOEmissionActivity{}, errors.New("All input slices must have the same length")
 	}	
 	
 	TEMP := Float64_to_CFloat(temperature)
@@ -215,13 +125,13 @@ func SoilMoistureAndNOEmissionActivityFactors(
 	//fmt.Println("GAMNO: %v", GAMNO)
 	//fmt.Println("GAMSM: %v", GAMSM)
 
-	return Megsea_output{CFloat_to_Float64(GAMNO), CFloat_to_Float64(GAMSM)}, nil
+	return SoilMoistureAndNOEmissionActivity{CFloat_to_Float64(GAMNO), CFloat_to_Float64(GAMSM)}, nil
 }
 
 /* Computes isoprene soil moisture activity and soil NO emission 
    activity factor using MCIP output variables.
 */
-func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
+func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology( // MEGCAN
 	start_date int, // Start date (YYYYDDD) 
 	start_time int, // Start time (HHMMSS)
 	time_increment int, // Time increment (HHMMSS)
@@ -234,7 +144,7 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
 	pressure []float64, // Pressure [Pa]
 	water_vapor_mixing_ratio []float64, // Water vapor mixing ratio [KG/KG] (NOT CERTAIN, TO BE CONFIRMED, QV variable in MEGCAN)
 	canopy_type_factor []float64, // Canopy type factor
-) (output Megcan_output, err error) {
+) (output WithinCanopyMeteorology, err error) {
 	var (
 		// Date and time parameters used to compute the solar angle
 		SDATE C.int = C.int(start_date) 
@@ -254,7 +164,7 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
 	
 	// Check that all input slices have the same length
 	if !allEquals([]int{len(leaf_area_index), len(temperature), len(incoming_photosynthetic_active_radiation), len(wind_speed), len(pressure), len(water_vapor_mixing_ratio)}) {
-		return Megcan_output{}, errors.New("All input slices must have the same length")
+		return WithinCanopyMeteorology{}, errors.New("All input slices must have the same length")
 	}
 	
 	LAT := Float64_to_CFloat([]float64{latitude})
@@ -282,15 +192,9 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
 	// Call FORTRAN
     C.run_megcan_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &Layers, &LAT[0], &LONG[0], &LAIc[0], &TEMP[0], &PPFD[0], &WIND[0], &PRES[0], &QV[0], &CTF[0], &SunleafTK[0], &ShadeleafTK[0], &SunPPFD[0], &ShadePPFD[0], &SunFrac[0])
 	
-	//fmt.Printf("SunleafTK: %v\n", SunleafTK)
-	//fmt.Printf("ShadeleafTK: %v\n", ShadeleafTK)
-	//fmt.Printf("SunPPFD: %v\n", SunPPFD)
-	//fmt.Printf("ShadePPFD: %v\n", ShadePPFD)
-	//fmt.Printf("SunFrac: %v\n", SunFrac)	
-	
 	timestep_count := int(MXREC)
 	canopy_layers := int(Layers)
-	return Megcan_output{Convert1Dto2D_Cfloat(SunleafTK, timestep_count, canopy_layers), 
+	return WithinCanopyMeteorology{Convert1Dto2D_Cfloat(SunleafTK, timestep_count, canopy_layers), 
 						 Convert1Dto2D_Cfloat(ShadeleafTK, timestep_count, canopy_layers), 
 						 Convert1Dto2D_Cfloat(SunPPFD, timestep_count, canopy_layers), 
 						 Convert1Dto2D_Cfloat(ShadePPFD, timestep_count, canopy_layers), 
@@ -300,7 +204,7 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(
 /* Calculate Vegetation emission activity (EA) for each emission
    class as the product of EA for individual drivers
 */
-func CalculateVariousEmissionActivityFactors(
+func CalculateVariousEmissionActivityFactors( // MEGVEA
 	start_date int, // Start date (YYYYDDD) 
 	start_time int, // Start time (HHMMSS)
 	time_increment int, // Time increment (HHMMSS)
@@ -326,7 +230,7 @@ func CalculateVariousEmissionActivityFactors(
 	min_temperature []float64, // Minimum temperature of previous n days (K)	
 	daily_average_temperature []float64, // Daily average temperature (K)
 	daily_average_PPFD []float64, // Daily average PPFD (umol/m2.s)
-) (output Megvea_output, err error) {
+) (output EmissionActivityPerEmissionType, err error) {
 	var (
 		// Date and time parameters used to compute the solar angle
 		SDATE C.int = C.int(start_date) 
@@ -359,15 +263,15 @@ func CalculateVariousEmissionActivityFactors(
 	
 	// Check that light_dependent_fraction_map has a length equal to NEMIS * NROWS * NCOLS
 	if len(light_dependent_fraction_map) != int(NEMIS * NROWS * NCOLS) {
-		return Megvea_output{}, errors.New(fmt.Sprintf("light_dependent_fraction_map length must be %v", NEMIS * NROWS * NCOLS))
+		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("light_dependent_fraction_map length must be %v", NEMIS * NROWS * NCOLS))
 	}
 	// Check that air_quality_index has a length equal to NROWS * NCOLS
 	if len(air_quality_index) != int(NROWS * NCOLS) {
-		return Megvea_output{}, errors.New(fmt.Sprintf("air_quality_index length must be %v", NROWS * NCOLS))
+		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("air_quality_index length must be %v", NROWS * NCOLS))
 	}
 	// Check that all other input slices have the same length MXREC * NROWS * NCOLS
 	if !allEquals([]int{len(soil_moisture_activity), len(previous_time_step_LAI), len(current_time_step_LAI), len(sunleafTK), len(shadeleafTK), len(sunPPFD), len(shadePPFD), len(sunFrac), int(MXREC * NROWS * NCOLS)}) {
-		return Megvea_output{}, errors.New(fmt.Sprintf("The length of the input slices soil_moisture_activity, previous_time_step_LAI, current_time_step_LAI, sunleafTK, shadeleafTK, sunPPFD, shadePPFD and sunFrac must be %v", MXREC * NROWS * NCOLS))
+		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("The length of the input slices soil_moisture_activity, previous_time_step_LAI, current_time_step_LAI, sunleafTK, shadeleafTK, sunPPFD, shadePPFD and sunFrac must be %v", MXREC * NROWS * NCOLS))
 	}
 	
 	GAMSM := Float64_to_CFloat(soil_moisture_activity)
@@ -413,107 +317,109 @@ func CalculateVariousEmissionActivityFactors(
 	// Call FORTRAN
     C.run_megvea_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &NEMIS, &Layers, &N_MaxT, &N_MinT, &N_MaxWS, &GAMBD_YN, &GAMAQ_YN, &GAMCO2_YN, &GAMHW_YN, &GAMHT_YN, &GAMLT_YN, &GAMSM_YN, &GAMSM[0], &AQI[0], &LDFMAP[0], &LAIp[0], &LAIc[0], &SunT[0], &ShaT[0], &SunP[0], &ShaP[0], &SunF[0], &Max_temp[0], &Max_wind[0], &Min_temp[0], &D_TEMP[0], &D_PPFD[0], &ISOP[0], &MBO[0], &MT_PINE[0], &MT_ACYC[0], &MT_CAMP[0], &MT_SABI[0], &MT_AROM[0], &MT_OXY[0], &SQT_HR[0], &SQT_LR[0], &MEOH[0], &ACTO[0], &ETOH[0], &ACID[0], &LVOC[0], &OXPROD[0], &STRESS[0], &OTHER[0], &CO[0], &NO[0])
 	
-	//fmt.Printf("NON_DIMGARMA: %v\n", NON_DIMGARMA)
-	
-	return Megvea_output{CFloat_to_Float64(ISOP), CFloat_to_Float64(MBO), CFloat_to_Float64(MT_PINE), CFloat_to_Float64(MT_ACYC), CFloat_to_Float64(MT_CAMP), CFloat_to_Float64(MT_SABI), CFloat_to_Float64(MT_AROM), CFloat_to_Float64(MT_OXY), CFloat_to_Float64(SQT_HR), CFloat_to_Float64(SQT_LR), CFloat_to_Float64(MEOH), CFloat_to_Float64(ACTO), CFloat_to_Float64(ETOH), CFloat_to_Float64(ACID), CFloat_to_Float64(LVOC), CFloat_to_Float64(OXPROD), CFloat_to_Float64(STRESS), CFloat_to_Float64(OTHER), CFloat_to_Float64(CO), CFloat_to_Float64(NO)}, nil
+	return EmissionActivityPerEmissionType{CFloat_to_Float64(ISOP), CFloat_to_Float64(MBO), CFloat_to_Float64(MT_PINE), CFloat_to_Float64(MT_ACYC), CFloat_to_Float64(MT_CAMP), CFloat_to_Float64(MT_SABI), CFloat_to_Float64(MT_AROM), CFloat_to_Float64(MT_OXY), CFloat_to_Float64(SQT_HR), CFloat_to_Float64(SQT_LR), CFloat_to_Float64(MEOH), CFloat_to_Float64(ACTO), CFloat_to_Float64(ETOH), CFloat_to_Float64(ACID), CFloat_to_Float64(LVOC), CFloat_to_Float64(OXPROD), CFloat_to_Float64(STRESS), CFloat_to_Float64(OTHER), CFloat_to_Float64(CO), CFloat_to_Float64(NO)}, nil
 }
 
-func RunMgn2mech() Mgn2mech_output {
+/* Chemical speciation and MECHANISM conversion.
+   The output is converted from 20 to 201 species which
+   are then lumped according to the MECHANISM assigned
+*/
+func ChemicalSpeciationAndMechanismConversion( // MGN2MECH
+	start_date int, // Start date (YYYYDDD) 
+	start_time int, // Start time (HHMMSS)
+	time_increment int, // Time increment (HHMMSS)
+	use_mechanism_conversion bool, // Mechanism conversion flag
+	output_in_ton_per_hr bool, // Output in tons/hr flag
+	area_per_grid_cell float64, // Area per grid cell (m2)
+	mechanism Mechanism, // Mechanism
+	input_emission_activity EmissionActivityPerEmissionType, // Emission Activity Per Emission Type
+	emission_factor []float64, // Emission factor  
+	soil_moisture_and_NO_emission_activity SoilMoistureAndNOEmissionActivity, // Soil Moisture And NO Emission Activity
+) (output interface{}, err error) {
 	var (
-		SDATE C.int = 2013145
-		STIME C.int = 0
-		MXREC C.int = 25
-		NCOLS C.int = 1
-		NROWS C.int = 1
-		TSTEP C.int = 10000
-		NVAR C.int = 39
-		CONVERSION C.bool = true
-		TONPHR C.bool = false
-		garea C.float = 144000000.0
-		SIZE int = int(MXREC * NROWS * NCOLS)
+		// Date and time parameters used to compute the solar angle
+		SDATE C.int = C.int(start_date) 
+		STIME C.int = C.int(start_time) 
+		TSTEP C.int = C.int(time_increment) 
+		
+		// Input/Output dimensions
+		NROWS C.int = 1 // Number of rows (HARDCODED)
+		NCOLS C.int = 1 // Number of columns (HARDCODED)
+		MXREC C.int = C.int(len(input_emission_activity.ISOP)) // Total number of timesteps
+		N_MGN_SPC int = 20 // Number of emission types  (HARDCODED, cf. SPC_NOCONVER.EXT)
+
+		mechanism_species_count = GetNumberOfMechanismSpecies(mechanism) // Number of mechanism species (cf. SPC_"MECHANISM".EXT file)
+		NVAR C.int = C.int(mechanism_species_count) 
+		CONVERSION C.bool = C.bool(use_mechanism_conversion) 
+		TONPHR C.bool = C.bool(output_in_ton_per_hr)
+		garea C.float = C.float(area_per_grid_cell)
+		
+		// Calculated values
+		output_size int = int(MXREC * NCOLS * NROWS)
 	)
 	
-	MECHANISM := C.CString("CB6X")
+	// Check that emission_factor has a length equal to N_MGN_SPC
+	if len(emission_factor) != N_MGN_SPC {
+		return Species_CB6X{}, errors.New(fmt.Sprintf("emission_factor length must be %v", N_MGN_SPC))
+	}
+	// Check that all other input slices have the same length MXREC * NROWS * NCOLS
+	if !allEquals([]int{len(input_emission_activity.ISOP), len(input_emission_activity.MBO), len(input_emission_activity.MT_PINE), len(input_emission_activity.MT_ACYC), len(input_emission_activity.MT_CAMP), len(input_emission_activity.MT_SABI), len(input_emission_activity.MT_AROM), len(input_emission_activity.MT_OXY), len(input_emission_activity.SQT_HR), len(input_emission_activity.SQT_LR), len(input_emission_activity.MEOH), len(input_emission_activity.ACTO), len(input_emission_activity.ETOH), len(input_emission_activity.ACID), len(input_emission_activity.LVOC), len(input_emission_activity.OXPROD), len(input_emission_activity.STRESS), len(input_emission_activity.OTHER), len(input_emission_activity.CO), len(input_emission_activity.NO), len(soil_moisture_and_NO_emission_activity.NOEmissionActivity), int(MXREC * NROWS * NCOLS)}) {
+		return Species_CB6X{}, errors.New(fmt.Sprintf("The length of ISOP, MBO, MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, MT_AROM, MT_OXY, SQT_HR, SQT_LR, MEOH, ACTO, ETOH, ACID, LVOC, OXPROD, STRESS, OTHER, CO, NO and NOEmissionActivity must be %v", MXREC * NROWS * NCOLS))
+	}
+	
+	// Convert GO string to C string
+	mechanism_string := fmt.Sprintf("%v", mechanism)
+	MECHANISM := C.CString(mechanism_string)
 	defer C.free(unsafe.Pointer(MECHANISM))
-	var MECHANISM_len C.int = 4
+	var MECHANISM_len C.int = C.int(len(mechanism_string))
 	
-	/*inper := []C.float{0,0,0,0,0,0,0,0,0,0,0,0,0,0.06770491,0.1506119,0.01119377,0,0,0,0.196123,0.1344049,0.1061472,0.1205298,0.1168384,0.2244172,0,0,0,0,0,0,0,0,0,0,0,0,0,0.06770491,0.1506119,0.01119377,0,0,0,0.196123,0.1344049,0.1061472,0.1205298,0.1168384,0.2244172,0,0,0,0,0,0,0,0,0,0,0,0,0,0.06933573,0.1202633,0.01123249,0,0,0,0.134856,0.1982512,0.2188023,0.2465584,0.2356006,0.3204671,0,0,0,0,0,0,0,0,0,0,0,0,0,0.08496049,0.1642323,0.01366621,0,0,0,0.1953614,0.2000265,0.1960313,0.219812,0.2091313,0.3202239,0,0,0,0,0,0,0,0,0,0,0,0,0,0.05284291,0.08925098,0.008574537,0,0,0,0.09848323,0.1572113,0.1770349,0.1996476,0.1909046,0.2545713,0,0,0,0,0,0,0,0,0,0,0,0,0,0.05447638,0.09219893,0.008838497,0,0,0,0.101865,0.1615902,0.1816995,0.2048965,0.1959141,0.2616284,0,0,0,0,0,0,0,0,0,0,0,0,0,0.08056435,0.1449134,0.01302163,0,0,0,0.1659329,0.217198,0.2321275,0.2612407,0.2493507,0.3501392,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03801988,0.06323272,0.006174963,0,0,0,0.06910365,0.1156103,0.1315724,0.1484378,0.1419873,0.1873812,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03663687,0.08102604,0.007240801,0,0,0,0.1088041,0.1389914,0.1483657,0.1817109,0.1929337,0.2755488,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03296247,0.07232749,0.006560703,0,0,0,0.0965313,0.1286724,0.1389317,0.170283,0.1809583,0.2555993,0,0,0,0,0,0,0,0,0,0,0,0,0,0.09560993,0.1912228,0.01457586,0,0,0,0.2235541,0.1625942,0.1300601,0.1399062,0.1269294,0.2372466,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03786996,0.06298337,0.006150613,0,0,0,0.06883116,0.1151544,0.1310535,0.1478524,0.1414274,0.1866423,0,0,0,0,0,0,0,0,0,0,0,0,0,0.05224184,0.1083723,0.008910099,0,0,0,0.136238,0.135417,0.1317498,0.1524265,0.1508592,0.2336758,0,0,0,0,0,0,0,0,0,0,0,0,0,0.06889792,0.1429243,0.01175087,0,0,0,0.1796743,0.1785914,0.1737551,0.2010241,0.198957,0.3081778,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03786996,0.06298337,0.006150613,0,0,0,0.06883116,0.1151544,0.1310535,0.1478524,0.1414274,0.1866423,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03786996,0.06298337,0.006150613,0,0,0,0.06883116,0.1151544,0.1310535,0.1478524,0.1414274,0.1866423,0,0,0,0,0,0,0,0,0,0,0,0,0,0.0847534,0.1627171,0.01363934,0,0,0,0.1928948,0.2023743,0.2003172,0.2247161,0.21388,0.3242324,0,0,0,0,0,0,0,0,0,0,0,0,0,0.03786996,0.06298337,0.006150613,0,0,0,0.06883116,0.1151544,0.1310535,0.1478524,0.1414274,0.1866423,0,0,0,0,0,0,0,0,0,0,0,0,0,0.09411947,0.1882419,0.01434864,0,0,0,0.2200691,0.1600596,0.1280326,0.1377252,0.1249507,0.2335482,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}*/
-	
-	ISOP_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.06770491, 0.1506119, 0.01119377, 0, 0, 0, 0.196123, 0.1344049, 0.1061472, 0.1205298, 0.1168384, 0.2244172}
-	MBO_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.06770491, 0.1506119, 0.01119377, 0, 0, 0, 0.196123, 0.1344049, 0.1061472, 0.1205298, 0.1168384, 0.2244172}
-	MT_PINE_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.06933573, 0.1202633, 0.01123249, 0, 0, 0, 0.134856, 0.1982512, 0.2188023, 0.2465584, 0.2356006, 0.3204671}
-	MT_ACYC_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.08496049, 0.1642323, 0.01366621, 0, 0, 0, 0.1953614, 0.2000265, 0.1960313, 0.219812, 0.2091313, 0.3202239}
-	MT_CAMP_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05284291, 0.08925098, 0.008574537, 0, 0, 0, 0.09848323, 0.1572113, 0.1770349, 0.1996476, 0.1909046, 0.2545713}
-	MT_SABI_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05447638, 0.09219893, 0.008838497, 0, 0, 0, 0.101865, 0.1615902, 0.1816995, 0.2048965, 0.1959141, 0.2616284}
-	MT_AROM_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.08056435, 0.1449134, 0.01302163, 0, 0, 0, 0.1659329, 0.217198, 0.2321275, 0.2612407, 0.2493507, 0.3501392}
-	MT_OXY_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03801988, 0.06323272, 0.006174963, 0, 0, 0, 0.06910365, 0.1156103, 0.1315724, 0.1484378, 0.1419873, 0.1873812}
-	SQT_HR_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03663687, 0.08102604, 0.007240801, 0, 0, 0, 0.1088041, 0.1389914, 0.1483657, 0.1817109, 0.1929337, 0.2755488}
-	SQT_LR_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03296247, 0.07232749, 0.006560703, 0, 0, 0, 0.0965313, 0.1286724, 0.1389317, 0.170283, 0.1809583, 0.2555993}
-	MEOH_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.09560993, 0.1912228, 0.01457586, 0, 0, 0, 0.2235541, 0.1625942, 0.1300601, 0.1399062, 0.1269294, 0.2372466}
-	ACTO_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03786996, 0.06298337, 0.006150613, 0, 0, 0, 0.06883116, 0.1151544, 0.1310535, 0.1478524, 0.1414274, 0.1866423}
-	ETOH_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05224184, 0.1083723, 0.008910099, 0, 0, 0, 0.136238, 0.135417, 0.1317498, 0.1524265, 0.1508592, 0.2336758}
-	ACID_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.06889792, 0.1429243, 0.01175087, 0, 0, 0, 0.1796743, 0.1785914, 0.1737551, 0.2010241, 0.198957, 0.3081778}
-	LVOC_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03786996, 0.06298337, 0.006150613, 0, 0, 0, 0.06883116, 0.1151544, 0.1310535, 0.1478524, 0.1414274, 0.1866423}
-	OXPROD_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03786996, 0.06298337, 0.006150613, 0, 0, 0, 0.06883116, 0.1151544, 0.1310535, 0.1478524, 0.1414274, 0.1866423}
-	STRESS_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0847534, 0.1627171, 0.01363934, 0, 0, 0, 0.1928948, 0.2023743, 0.2003172, 0.2247161, 0.21388, 0.3242324}
-	OTHER_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.03786996, 0.06298337, 0.006150613, 0, 0, 0, 0.06883116, 0.1151544, 0.1310535, 0.1478524, 0.1414274, 0.1866423}
-	CO_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.09411947, 0.1882419, 0.01434864, 0, 0, 0, 0.2200691, 0.1600596, 0.1280326, 0.1377252, 0.1249507, 0.2335482}
-	NO_in := []C.float{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	
-	
-	EF := []C.float{8.769534, 0.0224195, 0.3402439, 0.01646902, 0.007909732, 0.008048705, 0.00181239, 0.0019196, 0.00901152, 0.0150626, 1.03454, 0.143244, 0.2013025, 0.060192, 0.3470387, 0.02525556, 0.03697741, 0.00553815, 0.7958, 1.06345e-05}
-	GAMNO := []C.float{0.6491075, 0.6640053, 0.6189721, 0.5696779, 0.5248248, 0.5029572, 0.523435, 0.546968, 0.6322287, 0.7603613, 0.7641032, 0.699164, 0.6803498, 0.6906353, 0.6858764, 0.6965074, 0.7716522, 0.8314256, 0.8096505, 0.8013604, 0.7773128, 0.7740801, 0.8019726, 0.8279191, 0.8342465}
-
-	/*fmt.Printf("MECHANISM: %v\n", MECHANISM)
-	fmt.Printf("inper: %v\n", inper)
-	fmt.Printf("EF: %v\n", EF)
-	fmt.Printf("GAMNO: %v\n", GAMNO)*/
-	
-	var ISOP, TERP, PAR, XYL, OLE, NR, MEOH, CH4, NH3, NO, ALD2, ETOH, FORM, ALDX, TOL, IOLE, CO, ETHA, ETH, ETHY, PRPA, BENZ, ACET, KET, AACD, FACD, HCN, ISPD, N2O, SESQ, TRS, CH3BR, CH3CL, CH3I, ISP, TRP, XYLA, SQT, TOLA []C.float
-	ISOP  = make([]C.float, SIZE)
-	TERP  = make([]C.float, SIZE)
-	PAR   = make([]C.float, SIZE)
-	XYL   = make([]C.float, SIZE)
-	OLE   = make([]C.float, SIZE)
-	NR    = make([]C.float, SIZE)
-	MEOH  = make([]C.float, SIZE)
-	CH4   = make([]C.float, SIZE)
-	NH3   = make([]C.float, SIZE)
-	NO    = make([]C.float, SIZE)
-	ALD2  = make([]C.float, SIZE)
-	ETOH  = make([]C.float, SIZE)
-	FORM  = make([]C.float, SIZE)
-	ALDX  = make([]C.float, SIZE)
-	TOL   = make([]C.float, SIZE)
-	IOLE  = make([]C.float, SIZE)
-	CO    = make([]C.float, SIZE)
-	ETHA  = make([]C.float, SIZE)
-	ETH   = make([]C.float, SIZE)
-	ETHY  = make([]C.float, SIZE)
-	PRPA  = make([]C.float, SIZE)
-	BENZ  = make([]C.float, SIZE)
-	ACET  = make([]C.float, SIZE)
-	KET   = make([]C.float, SIZE)
-	AACD  = make([]C.float, SIZE)
-	FACD  = make([]C.float, SIZE)
-	HCN   = make([]C.float, SIZE)
-	ISPD  = make([]C.float, SIZE)
-	N2O   = make([]C.float, SIZE)
-	SESQ  = make([]C.float, SIZE)
-	TRS   = make([]C.float, SIZE)
-	CH3BR = make([]C.float, SIZE)
-	CH3CL = make([]C.float, SIZE)
-	CH3I  = make([]C.float, SIZE)
-	ISP   = make([]C.float, SIZE)
-	TRP   = make([]C.float, SIZE)
-	XYLA  = make([]C.float, SIZE)
-	SQT   = make([]C.float, SIZE)
-	TOLA  = make([]C.float, SIZE)
+	var output_data []C.float
+	output_data = make([]C.float, output_size * mechanism_species_count) 
 	
 	// Call FORTRAN
-    C.run_mgn2mech_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &NVAR, &CONVERSION, &TONPHR, MECHANISM, &MECHANISM_len, &garea, &ISOP_in[0], &MBO_in[0], &MT_PINE_in[0], &MT_ACYC_in[0], &MT_CAMP_in[0], &MT_SABI_in[0], &MT_AROM_in[0], &MT_OXY_in[0], &SQT_HR_in[0], &SQT_LR_in[0], &MEOH_in[0], &ACTO_in[0], &ETOH_in[0], &ACID_in[0], &LVOC_in[0], &OXPROD_in[0], &STRESS_in[0], &OTHER_in[0], &CO_in[0], &NO_in[0], &EF[0], &GAMNO[0], &ISOP[0], &TERP[0], &PAR[0], &XYL[0], &OLE[0], &NR[0], &MEOH[0], &CH4[0], &NH3[0], &NO[0], &ALD2[0], &ETOH[0], &FORM[0], &ALDX[0], &TOL[0], &IOLE[0], &CO[0], &ETHA[0], &ETH[0], &ETHY[0], &PRPA[0], &BENZ[0], &ACET[0], &KET[0], &AACD[0], &FACD[0], &HCN[0], &ISPD[0], &N2O[0], &SESQ[0], &TRS[0], &CH3BR[0], &CH3CL[0], &CH3I[0], &ISP[0], &TRP[0], &XYLA[0], &SQT[0], &TOLA[0])
+    C.run_mgn2mech_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &NVAR, &CONVERSION, &TONPHR, MECHANISM, &MECHANISM_len, &garea, 
+	&Float64_to_CFloat(input_emission_activity.ISOP)[0], 
+	&Float64_to_CFloat(input_emission_activity.MBO)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_PINE)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_ACYC)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_CAMP)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_SABI)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_AROM)[0], 
+	&Float64_to_CFloat(input_emission_activity.MT_OXY)[0], 
+	&Float64_to_CFloat(input_emission_activity.SQT_HR)[0], 
+	&Float64_to_CFloat(input_emission_activity.SQT_LR)[0], 
+	&Float64_to_CFloat(input_emission_activity.MEOH)[0], 
+	&Float64_to_CFloat(input_emission_activity.ACTO)[0], 
+	&Float64_to_CFloat(input_emission_activity.ETOH)[0], 
+	&Float64_to_CFloat(input_emission_activity.ACID)[0], 
+	&Float64_to_CFloat(input_emission_activity.LVOC)[0], 
+	&Float64_to_CFloat(input_emission_activity.OXPROD)[0], 
+	&Float64_to_CFloat(input_emission_activity.STRESS)[0], 
+	&Float64_to_CFloat(input_emission_activity.OTHER)[0], 
+	&Float64_to_CFloat(input_emission_activity.CO)[0], 
+	&Float64_to_CFloat(input_emission_activity.NO)[0], 
+	&Float64_to_CFloat(emission_factor)[0], 
+	&Float64_to_CFloat(soil_moisture_and_NO_emission_activity.NOEmissionActivity)[0], // GAMNO
+	&output_data[0])
+
+	species := FillSpeciesData(GetMechanismSpecies(mechanism), output_data, int(MXREC)) // Fill species data from output_data
 	
-	//fmt.Printf("ISOP: %v\n", ISOP)
+	return species, nil
+}
+
+func FillSpeciesData(species interface{}, data []C.float, timestep_count int) interface{} {
+	// Get pointer to species
+	ptr := reflect.New(reflect.TypeOf(species))
+	temp := ptr.Elem()
+	temp.Set(reflect.ValueOf(species))
+
+	// Iterate over species fields and set data
+	for i := 0; i < temp.NumField(); i++ {
+		f := temp.Field(i)
+		species_data := CFloat_to_Float64(data[i*timestep_count : (i+1)*timestep_count]) // data for the i'th species 
+		f.Set(reflect.ValueOf(species_data))
+		//fmt.Printf("%d: %s %s = %v\n", i, typeOfT.Field(i).Name, f.Type(), f.Interface())
+	}
 	
-	return Mgn2mech_output{CFloat_to_Float64(ISOP), CFloat_to_Float64(TERP), CFloat_to_Float64(PAR), CFloat_to_Float64(XYL), CFloat_to_Float64(OLE), CFloat_to_Float64(NR), CFloat_to_Float64(MEOH), CFloat_to_Float64(CH4), CFloat_to_Float64(NH3), CFloat_to_Float64(NO), CFloat_to_Float64(ALD2), CFloat_to_Float64(ETOH), CFloat_to_Float64(FORM), CFloat_to_Float64(ALDX), CFloat_to_Float64(TOL), CFloat_to_Float64(IOLE), CFloat_to_Float64(CO), CFloat_to_Float64(ETHA), CFloat_to_Float64(ETH), CFloat_to_Float64(ETHY), CFloat_to_Float64(PRPA), CFloat_to_Float64(BENZ), CFloat_to_Float64(ACET), CFloat_to_Float64(KET), CFloat_to_Float64(AACD), CFloat_to_Float64(FACD), CFloat_to_Float64(HCN), CFloat_to_Float64(ISPD), CFloat_to_Float64(N2O), CFloat_to_Float64(SESQ), CFloat_to_Float64(TRS), CFloat_to_Float64(CH3BR), CFloat_to_Float64(CH3CL), CFloat_to_Float64(CH3I), CFloat_to_Float64(ISP), CFloat_to_Float64(TRP), CFloat_to_Float64(XYLA), CFloat_to_Float64(SQT), CFloat_to_Float64(TOLA)}
+	return temp.Interface()
 }
