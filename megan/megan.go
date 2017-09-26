@@ -24,8 +24,8 @@ import "reflect"
  n = number of time steps (1st dimension)
 */
 type SoilMoistureAndNOEmissionActivity struct { // MEGSEA output
-	NOEmissionActivity 		[]float64   // Final NO emission activity
-	SoilMoistureActivity	[]float64   // Soil moisture activity for isoprene
+	NOEmissionActivity 		float64   // Final NO emission activity
+	SoilMoistureActivity	float64   // Soil moisture activity for isoprene
 }
 
 /*
@@ -33,11 +33,11 @@ type SoilMoistureAndNOEmissionActivity struct { // MEGSEA output
  m = number of canopy layers (2nd dimension)
 */
 type WithinCanopyMeteorology struct { // MEGCAN output
-	SunleafTK 	[][]float64	  // Leaf temperature for sun leaves [K] (weighted by canopy type)
-	ShadeleafTK [][]float64   // Leaf temperature for shade leaves [K] (weighted by canopy type)
-	SunPPFD 	[][]float64   // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
-	ShadePPFD 	[][]float64   // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
-	SunFrac 	[][]float64   // Fraction of sun leaves (weighted by canopy type)
+	SunleafTK 	[]float64	  // Leaf temperature for sun leaves [K] (weighted by canopy type)
+	ShadeleafTK []float64   // Leaf temperature for shade leaves [K] (weighted by canopy type)
+	SunPPFD 	[]float64   // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
+	ShadePPFD 	[]float64   // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
+	SunFrac 	[]float64   // Fraction of sun leaves (weighted by canopy type)
 }
 
 /*
@@ -45,66 +45,60 @@ type WithinCanopyMeteorology struct { // MEGCAN output
  n = number of time steps (1st dimension)
 */
 type EmissionActivityPerEmissionType struct { // MEGVEA output
-	ISOP 	[]float64  	// isoprene
-	MBO 	[]float64  	// MBO
-	MT_PINE []float64  	// monoterpenes: pines (alpha and beta)
-	MT_ACYC []float64  	// monoterpenes: acyclic, 3 = (e.g., myrcene, ocimenes)
-	MT_CAMP []float64  	// monoterpenes: carene, camphene, others
-	MT_SABI []float64  	// monoterpenes: sabinene, limonene, terpinenes, others
-	MT_AROM []float64  	// C10 aromatic: cymenes, cymenenes
-	MT_OXY 	[]float64  	// C8-C13 oxygenated (e.g., camphor)
-	SQT_HR 	[]float64  	// Highly reactive SQT (e.g., caryophyllene)
-	SQT_LR 	[]float64  	// less reactive SQT  (e.g., longifolene, copaene) and salates
-	MEOH 	[]float64  	// methanol
-	ACTO 	[]float64  	// acetone
-	ETOH 	[]float64  	// acetaldehyde and ethanol
-	ACID 	[]float64  	// organic acids: formic acid, acetic acid, pyruvic acid
-	LVOC 	[]float64  	// C2 to C4 HC (e.g., ethene, ethane)
-	OXPROD 	[]float64  	// oxidation products: aldehydes 
-	STRESS 	[]float64  	// Stress compounds (e.g., linalool)
-	OTHER 	[]float64  	// other VOC (e.g., indole, pentane, methyl bromide)
-	CO 		[]float64  	// carbon monoxide
-	NO 		[]float64  	// Nitric oxide
+	ISOP 	float64  	// isoprene
+	MBO 	float64  	// MBO
+	MT_PINE float64  	// monoterpenes: pines (alpha and beta)
+	MT_ACYC float64  	// monoterpenes: acyclic, 3 = (e.g., myrcene, ocimenes)
+	MT_CAMP float64  	// monoterpenes: carene, camphene, others
+	MT_SABI float64  	// monoterpenes: sabinene, limonene, terpinenes, others
+	MT_AROM float64  	// C10 aromatic: cymenes, cymenenes
+	MT_OXY 	float64  	// C8-C13 oxygenated (e.g., camphor)
+	SQT_HR 	float64  	// Highly reactive SQT (e.g., caryophyllene)
+	SQT_LR 	float64  	// less reactive SQT  (e.g., longifolene, copaene) and salates
+	MEOH 	float64  	// methanol
+	ACTO 	float64  	// acetone
+	ETOH 	float64  	// acetaldehyde and ethanol
+	ACID 	float64  	// organic acids: formic acid, acetic acid, pyruvic acid
+	LVOC 	float64  	// C2 to C4 HC (e.g., ethene, ethane)
+	OXPROD 	float64  	// oxidation products: aldehydes 
+	STRESS 	float64  	// Stress compounds (e.g., linalool)
+	OTHER 	float64  	// other VOC (e.g., indole, pentane, methyl bromide)
+	CO 		float64  	// carbon monoxide
+	NO 		float64  	// Nitric oxide
 }
 
 /* Computes isoprene soil moisture activity and soil NO emission 
    activity factor using MCIP output variables.
 */
 func SoilMoistureAndNOEmissionActivityFactors( // MEGSEA
-	start_date int, // Start date (YYYYDDD) 
-	start_time int, // Start time (HHMMSS)
-	time_increment int, // Time increment (HHMMSS)
+	date int, // Start date (YYYYDDD) 
+	time int, // Start time (HHMMSS)
 	use_PX_version_of_MCIP bool, // true: using PX version of MCIP (cf. soilnox.F)
-	temperature []float64, // Temperautre (K) per timestep
-	soil_moisture []float64, // Soil moisture (M**3/M**3) per timestep
-	soil_temperature []float64, // Soil temperature (K) per timestep
-	precipitation_adjustment []float64, // Precip adjustment per timestep
-	leaf_area_index []float64, // Leaf area index [m2 per m2 ground area] per timestep
-	lattitude []float64, // Lattitude per timestep
-	soil_type []float64, // Soil type per timestep (between 1 and NRTYP, cf. MEGSEA.EXT)
+	temperature float64, // Temperautre (K) per timestep
+	soil_moisture float64, // Soil moisture (M**3/M**3) per timestep
+	soil_temperature float64, // Soil temperature (K) per timestep
+	precipitation_adjustment float64, // Precip adjustment per timestep
+	leaf_area_index float64, // Leaf area index [m2 per m2 ground area] per timestep
+	lattitude float64, // Lattitude per timestep
+	soil_type float64, // Soil type per timestep (between 1 and NRTYP, cf. MEGSEA.EXT)
 	canopy_type_factor []float64, // Canopy type factor
 ) (output SoilMoistureAndNOEmissionActivity, err error) {
 	var (
 		// Date and time parameters used to compute the day of the growing season
-		SDATE C.int = C.int(start_date) 
-		STIME C.int = C.int(start_time) 
-		TSTEP C.int = C.int(time_increment) 
+		SDATE C.int = C.int(date) 
+		STIME C.int = C.int(time) 
+		TSTEP C.int = C.int(0) // Time increment (HHMMSS) (HARDCODED)
 		
 		// Input/Output dimensions
 		NROWS C.int = 1 // Number of rows (HARDCODED)
 		NCOLS C.int = 1 // Number of columns (HARDCODED)
-		MXREC C.int = C.int(len(temperature)) // Total number of timesteps
+		MXREC C.int = 1 // Total number of timesteps (HARDCODED)
 		
 		LSOIL C.bool = C.bool(use_PX_version_of_MCIP) 
 
 		// Calculated values
 		output_size int = int(NROWS * NCOLS * MXREC)
 	)	
-	
-	// Check that all input slices have the same length
-	if !allEquals([]int{len(temperature), len(soil_moisture), len(soil_temperature), len(precipitation_adjustment), len(leaf_area_index), len(lattitude), len(soil_type)}) {
-		return SoilMoistureAndNOEmissionActivity{}, errors.New("All input slices must have the same length")
-	}	
 	
 	TEMP := Float64_to_CFloat(temperature)
 	SOILM := Float64_to_CFloat(soil_moisture)	
@@ -113,7 +107,7 @@ func SoilMoistureAndNOEmissionActivityFactors( // MEGSEA
 	LAIc := Float64_to_CFloat(leaf_area_index)	
 	LAT := Float64_to_CFloat(lattitude)	
 	RSTYP := Float64_to_CFloat(soil_type)
-	CTF := Float64_to_CFloat(canopy_type_factor)
+	CTF := Float64_to_CFloat_array(canopy_type_factor)
 	
 	var GAMNO, GAMSM []C.float	
 	GAMNO = make([]C.float, output_size) // Final NO emission activity
@@ -132,29 +126,28 @@ func SoilMoistureAndNOEmissionActivityFactors( // MEGSEA
    activity factor using MCIP output variables.
 */
 func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology( // MEGCAN
-	start_date int, // Start date (YYYYDDD) 
-	start_time int, // Start time (HHMMSS)
-	time_increment int, // Time increment (HHMMSS)
+	date int, // Start date (YYYYDDD) 
+	time int, // Start time (HHMMSS)
 	latitude float64, // Latitude
 	longitude float64, // Longitude
-	leaf_area_index []float64, // Leaf area index [m2 per m2 ground area] per timestep
-	temperature []float64, // Temperautre (K) per timestep
-	incoming_photosynthetic_active_radiation []float64, // Incoming photosynthetic active radiation [umol/m2/s1]
-	wind_speed []float64, // Wind speed [m s-1]
-	pressure []float64, // Pressure [Pa]
-	water_vapor_mixing_ratio []float64, // Water vapor mixing ratio [KG/KG] (NOT CERTAIN, TO BE CONFIRMED, QV variable in MEGCAN)
+	leaf_area_index float64, // Leaf area index [m2 per m2 ground area] per timestep
+	temperature float64, // Temperautre (K) per timestep
+	incoming_photosynthetic_active_radiation float64, // Incoming photosynthetic active radiation [umol/m2/s1]
+	wind_speed float64, // Wind speed [m s-1]
+	pressure float64, // Pressure [Pa]
+	water_vapor_mixing_ratio float64, // Water vapor mixing ratio [KG/KG] (NOT CERTAIN, TO BE CONFIRMED, QV variable in MEGCAN)
 	canopy_type_factor []float64, // Canopy type factor
 ) (output WithinCanopyMeteorology, err error) {
 	var (
 		// Date and time parameters used to compute the solar angle
-		SDATE C.int = C.int(start_date) 
-		STIME C.int = C.int(start_time) 
-		TSTEP C.int = C.int(time_increment) 
+		SDATE C.int = C.int(date) 
+		STIME C.int = C.int(time) 
+		TSTEP C.int = C.int(0) // Time increment (HHMMSS) (HARDCODED)
 		
 		// Input/Output dimensions
 		NROWS C.int = 1 // Number of rows (HARDCODED)
 		NCOLS C.int = 1 // Number of columns (HARDCODED)
-		MXREC C.int = C.int(len(temperature)) // Total number of timesteps
+		MXREC C.int = 1 // Total number of timesteps (HARDCODED)
 			
 		Layers C.int = 5 // Number of layers in canopy model (HARDCODED, defined in MEGCAN.EXT)
 		
@@ -162,20 +155,15 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology( // MEGCAN
 		output_size int = int(MXREC * NROWS * NCOLS * Layers)
 	)
 	
-	// Check that all input slices have the same length
-	if !allEquals([]int{len(leaf_area_index), len(temperature), len(incoming_photosynthetic_active_radiation), len(wind_speed), len(pressure), len(water_vapor_mixing_ratio)}) {
-		return WithinCanopyMeteorology{}, errors.New("All input slices must have the same length")
-	}
-	
-	LAT := Float64_to_CFloat([]float64{latitude})
-	LONG := Float64_to_CFloat([]float64{longitude})
+	LAT := Float64_to_CFloat(latitude)
+	LONG := Float64_to_CFloat(longitude)
 	LAIc := Float64_to_CFloat(leaf_area_index)
 	TEMP := Float64_to_CFloat(temperature)
 	PPFD := Float64_to_CFloat(incoming_photosynthetic_active_radiation)
 	WIND := Float64_to_CFloat(wind_speed)
 	PRES := Float64_to_CFloat(pressure)
 	QV := Float64_to_CFloat(water_vapor_mixing_ratio)
-	CTF := Float64_to_CFloat(canopy_type_factor)
+	CTF := Float64_to_CFloat_array(canopy_type_factor)
 	
 	// Multipy incoming photosynthetic active radiation by 4.5 (cf. megcan.f, line 430) --> NEEDED?
 	for i, _ := range PPFD {
@@ -192,22 +180,19 @@ func ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology( // MEGCAN
 	// Call FORTRAN
     C.run_megcan_c(&SDATE, &STIME, &MXREC, &NCOLS, &NROWS, &TSTEP, &Layers, &LAT[0], &LONG[0], &LAIc[0], &TEMP[0], &PPFD[0], &WIND[0], &PRES[0], &QV[0], &CTF[0], &SunleafTK[0], &ShadeleafTK[0], &SunPPFD[0], &ShadePPFD[0], &SunFrac[0])
 	
-	timestep_count := int(MXREC)
-	canopy_layers := int(Layers)
-	return WithinCanopyMeteorology{Convert1Dto2D_Cfloat(SunleafTK, timestep_count, canopy_layers), 
-						 Convert1Dto2D_Cfloat(ShadeleafTK, timestep_count, canopy_layers), 
-						 Convert1Dto2D_Cfloat(SunPPFD, timestep_count, canopy_layers), 
-						 Convert1Dto2D_Cfloat(ShadePPFD, timestep_count, canopy_layers), 
-						 Convert1Dto2D_Cfloat(SunFrac, timestep_count, canopy_layers)}, nil
+	return WithinCanopyMeteorology{CFloat_to_Float64_array(SunleafTK), 
+								   CFloat_to_Float64_array(ShadeleafTK), 
+								   CFloat_to_Float64_array(SunPPFD), 
+								   CFloat_to_Float64_array(ShadePPFD), 
+								   CFloat_to_Float64_array(SunFrac)}, nil
 }
 
 /* Calculate Vegetation emission activity (EA) for each emission
    class as the product of EA for individual drivers
 */
 func CalculateVariousEmissionActivityFactors( // MEGVEA
-	start_date int, // Start date (YYYYDDD) 
-	start_time int, // Start time (HHMMSS)
-	time_increment int, // Time increment (HHMMSS)
+	date int, // Start date (YYYYDDD) 
+	time int, // Start time (HHMMSS)
 	use_EA_for_bidirectional_exchange_LAI_response bool, // Use Vegetation Emission Activity algorithm for bidirectional exchange LAI response
 	use_EA_for_response_to_air_pollution bool, // Use Vegetation Emission Activity algorithm for response to air pollution
 	use_EA_for_CO2_response bool, // Use Vegetation Emission Activity algorithm for CO2 response (only applied to isoprene)
@@ -215,36 +200,36 @@ func CalculateVariousEmissionActivityFactors( // MEGVEA
 	use_EA_for_resposne_to_high_temperature bool, // Use Vegetation Emission Activity algorithm for resposne to high temperature
 	use_EA_for_response_to_low_temperature bool, // Use Vegetation Emission Activity algorithm for response to low temperature
 	use_EA_for_response_to_soil_moisture bool, // Use Vegetation Emission Activity algorithm for response to soil moisture (multiplied with LDF)
-	soil_moisture_activity []float64, // Soil moisture activity for isoprene
-	air_quality_index []float64, // Air quality index (i.e.W126)
+	soil_moisture_activity float64, // Soil moisture activity for isoprene
+	air_quality_index float64, // Air quality index (i.e.W126)
 	light_dependent_fraction_map []float64, // Light dependent fraction map
-	previous_time_step_LAI []float64, // Previous time step LAI
-	current_time_step_LAI []float64, // Current time step LAI
-	sunleafTK [][]float64, // Leaf temperature for sun leaves [K] (weighted by canopy type)
-	shadeleafTK [][]float64, // Leaf temperature for shade leaves [K] (weighted by canopy type)
-	sunPPFD [][]float64, // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
-	shadePPFD [][]float64, // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
-	sunFrac [][]float64, // Fraction of sun leaves (weighted by canopy type)
+	previous_time_step_LAI float64, // Previous time step LAI
+	current_time_step_LAI float64, // Current time step LAI
+	sunleafTK []float64, // Leaf temperature for sun leaves [K] (weighted by canopy type)
+	shadeleafTK []float64, // Leaf temperature for shade leaves [K] (weighted by canopy type)
+	sunPPFD []float64, // PPFD on a sun leaf [umol/m2/s] (weighted by canopy type)
+	shadePPFD []float64, // PPFD on a shade leaf [umol/m2/s] (weighted by canopy type)
+	sunFrac []float64, // Fraction of sun leaves (weighted by canopy type)
 	max_temperature []float64, // Maximum temperature of previous n days (K)
 	max_wind_speed []float64, // Maximum wind speed of previous n days (m/s)
 	min_temperature []float64, // Minimum temperature of previous n days (K)	
-	daily_average_temperature []float64, // Daily average temperature (K)
-	daily_average_PPFD []float64, // Daily average PPFD (umol/m2.s)
+	daily_average_temperature float64, // Daily average temperature (K)
+	daily_average_PPFD float64, // Daily average PPFD (umol/m2.s)
 ) (output EmissionActivityPerEmissionType, err error) {
 	var (
 		// Date and time parameters used to compute the solar angle
-		SDATE C.int = C.int(start_date) 
-		STIME C.int = C.int(start_time) 
-		TSTEP C.int = C.int(time_increment) 
+		SDATE C.int = C.int(date) 
+		STIME C.int = C.int(time) 
+		TSTEP C.int = C.int(0) // Time increment (HHMMSS) (HARDCODED)
 		
 		// Input/Output dimensions
 		NROWS C.int = 1 // Number of rows (HARDCODED)
 		NCOLS C.int = 1 // Number of columns (HARDCODED)
-		MXREC C.int = C.int(len(soil_moisture_activity)) // Total number of timesteps
+		MXREC C.int = 1 // Total number of timesteps (HARDCODED)
 		
 		NEMIS C.int = 20 // Number of emission classes (HARDCODED, defined in MEGVEA.EXT)
 		
-		Layers C.int = C.int(len(sunleafTK[0])) // Canopy vertical layers, default is 5 (2nd dimension of sunleafTK, shadeleafTK, sunPPFD, shadePPFD, sunFrac)
+		Layers C.int = C.int(len(sunleafTK)) // Canopy vertical layers, default is 5 (2nd dimension of sunleafTK, shadeleafTK, sunPPFD, shadePPFD, sunFrac)
 		N_MaxT C.int = C.int(len(max_temperature)) // Number of past days for maximum temperature (dimension of max_temperature)
 		N_MinT C.int = C.int(len(min_temperature)) // Number of past days for minimum temperature (dimension of min_temperature)
 		N_MaxWS C.int = C.int(len(max_wind_speed)) // Number of past days for maximum wind speed (dimension of max_wind_speed)
@@ -265,30 +250,22 @@ func CalculateVariousEmissionActivityFactors( // MEGVEA
 	if len(light_dependent_fraction_map) != int(NEMIS * NROWS * NCOLS) {
 		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("light_dependent_fraction_map length must be %v", NEMIS * NROWS * NCOLS))
 	}
-	// Check that air_quality_index has a length equal to NROWS * NCOLS
-	if len(air_quality_index) != int(NROWS * NCOLS) {
-		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("air_quality_index length must be %v", NROWS * NCOLS))
-	}
-	// Check that all other input slices have the same length MXREC * NROWS * NCOLS
-	if !allEquals([]int{len(soil_moisture_activity), len(previous_time_step_LAI), len(current_time_step_LAI), len(sunleafTK), len(shadeleafTK), len(sunPPFD), len(shadePPFD), len(sunFrac), int(MXREC * NROWS * NCOLS)}) {
-		return EmissionActivityPerEmissionType{}, errors.New(fmt.Sprintf("The length of the input slices soil_moisture_activity, previous_time_step_LAI, current_time_step_LAI, sunleafTK, shadeleafTK, sunPPFD, shadePPFD and sunFrac must be %v", MXREC * NROWS * NCOLS))
-	}
 	
 	GAMSM := Float64_to_CFloat(soil_moisture_activity)
 	AQI := Float64_to_CFloat(air_quality_index)
-	LDFMAP := Float64_to_CFloat(light_dependent_fraction_map)
+	LDFMAP := Float64_to_CFloat_array(light_dependent_fraction_map)
 	LAIp := Float64_to_CFloat(previous_time_step_LAI)
 	LAIc := Float64_to_CFloat(current_time_step_LAI)
 	
-	SunT := Convert2Dto1D_Cfloat(sunleafTK)
-	ShaT := Convert2Dto1D_Cfloat(shadeleafTK)
-	SunP := Convert2Dto1D_Cfloat(sunPPFD)
-	ShaP := Convert2Dto1D_Cfloat(shadePPFD)
-	SunF := Convert2Dto1D_Cfloat(sunFrac)
+	SunT := Float64_to_CFloat_array(sunleafTK)
+	ShaT := Float64_to_CFloat_array(shadeleafTK)
+	SunP := Float64_to_CFloat_array(sunPPFD)
+	ShaP := Float64_to_CFloat_array(shadePPFD)
+	SunF := Float64_to_CFloat_array(sunFrac)
 	
-	Max_temp := Float64_to_CFloat(max_temperature)
-	Max_wind := Float64_to_CFloat(max_wind_speed)
-	Min_temp := Float64_to_CFloat(min_temperature)
+	Max_temp := Float64_to_CFloat_array(max_temperature)
+	Max_wind := Float64_to_CFloat_array(max_wind_speed)
+	Min_temp := Float64_to_CFloat_array(min_temperature)
 	D_TEMP := Float64_to_CFloat(daily_average_temperature)
 	D_PPFD := Float64_to_CFloat(daily_average_PPFD)
 	
@@ -325,9 +302,8 @@ func CalculateVariousEmissionActivityFactors( // MEGVEA
    are then lumped according to the MECHANISM assigned
 */
 func ChemicalSpeciationAndMechanismConversion( // MGN2MECH
-	start_date int, // Start date (YYYYDDD) 
-	start_time int, // Start time (HHMMSS)
-	time_increment int, // Time increment (HHMMSS)
+	date int, // Start date (YYYYDDD) 
+	time int, // Start time (HHMMSS)
 	use_mechanism_conversion bool, // Mechanism conversion flag
 	output_in_ton_per_hr bool, // Output in tons/hr flag
 	area_per_grid_cell float64, // Area per grid cell (m2)
@@ -338,14 +314,14 @@ func ChemicalSpeciationAndMechanismConversion( // MGN2MECH
 ) (output interface{}, err error) {
 	var (
 		// Date and time parameters used to compute the solar angle
-		SDATE C.int = C.int(start_date) 
-		STIME C.int = C.int(start_time) 
-		TSTEP C.int = C.int(time_increment) 
+		SDATE C.int = C.int(date) 
+		STIME C.int = C.int(time) 
+		TSTEP C.int = C.int(0) // Time increment (HHMMSS) (HARDCODED)
 		
 		// Input/Output dimensions
 		NROWS C.int = 1 // Number of rows (HARDCODED)
 		NCOLS C.int = 1 // Number of columns (HARDCODED)
-		MXREC C.int = C.int(len(input_emission_activity.ISOP)) // Total number of timesteps
+		MXREC C.int = 1 // Total number of timesteps (HARDCODED)
 		N_MGN_SPC int = 20 // Number of emission types  (HARDCODED, cf. SPC_NOCONVER.EXT)
 
 		mechanism_species_count = GetNumberOfMechanismSpecies(mechanism) // Number of mechanism species (cf. SPC_"MECHANISM".EXT file)
@@ -361,10 +337,6 @@ func ChemicalSpeciationAndMechanismConversion( // MGN2MECH
 	// Check that emission_factor has a length equal to N_MGN_SPC
 	if len(emission_factor) != N_MGN_SPC {
 		return Species_CB6X{}, errors.New(fmt.Sprintf("emission_factor length must be %v", N_MGN_SPC))
-	}
-	// Check that all other input slices have the same length MXREC * NROWS * NCOLS
-	if !allEquals([]int{len(input_emission_activity.ISOP), len(input_emission_activity.MBO), len(input_emission_activity.MT_PINE), len(input_emission_activity.MT_ACYC), len(input_emission_activity.MT_CAMP), len(input_emission_activity.MT_SABI), len(input_emission_activity.MT_AROM), len(input_emission_activity.MT_OXY), len(input_emission_activity.SQT_HR), len(input_emission_activity.SQT_LR), len(input_emission_activity.MEOH), len(input_emission_activity.ACTO), len(input_emission_activity.ETOH), len(input_emission_activity.ACID), len(input_emission_activity.LVOC), len(input_emission_activity.OXPROD), len(input_emission_activity.STRESS), len(input_emission_activity.OTHER), len(input_emission_activity.CO), len(input_emission_activity.NO), len(soil_moisture_and_NO_emission_activity.NOEmissionActivity), int(MXREC * NROWS * NCOLS)}) {
-		return Species_CB6X{}, errors.New(fmt.Sprintf("The length of ISOP, MBO, MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, MT_AROM, MT_OXY, SQT_HR, SQT_LR, MEOH, ACTO, ETOH, ACID, LVOC, OXPROD, STRESS, OTHER, CO, NO and NOEmissionActivity must be %v", MXREC * NROWS * NCOLS))
 	}
 	
 	// Convert GO string to C string
@@ -398,7 +370,7 @@ func ChemicalSpeciationAndMechanismConversion( // MGN2MECH
 	&Float64_to_CFloat(input_emission_activity.OTHER)[0], 
 	&Float64_to_CFloat(input_emission_activity.CO)[0], 
 	&Float64_to_CFloat(input_emission_activity.NO)[0], 
-	&Float64_to_CFloat(emission_factor)[0], 
+	&Float64_to_CFloat_array(emission_factor)[0], 
 	&Float64_to_CFloat(soil_moisture_and_NO_emission_activity.NOEmissionActivity)[0], // GAMNO
 	&output_data[0])
 

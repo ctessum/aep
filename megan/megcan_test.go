@@ -6,11 +6,11 @@ import (
 )
 
 func GetWithinCanopyMeteorologyTestData() WithinCanopyMeteorology {
-	SunleafTK := [][]float64{{295.6182, 295.8877, 295.1347, 295.1322, 295.3771}}
-	ShadeleafTK := [][]float64{{295.1602, 295.4964, 292.3763, 291.6741, 291.9568}}
-	SunPPFD := [][]float64{{617.0796, 581.216, 534.6226, 496.9291, 476.1383}}
-	ShadePPFD := [][]float64{{235.1983, 199.3347, 152.7413, 115.0479, 94.25706}}
-	SunFrac := [][]float64{{0.9111186, 0.6343481, 0.3760942, 0.22486, 0.1589793}}
+	SunleafTK := []float64{295.6182, 295.8877, 295.1347, 295.1322, 295.3771}
+	ShadeleafTK := []float64{295.1602, 295.4964, 292.3763, 291.6741, 291.9568}
+	SunPPFD := []float64{617.0796, 581.216, 534.6226, 496.9291, 476.1383}
+	ShadePPFD := []float64{235.1983, 199.3347, 152.7413, 115.0479, 94.25706}
+	SunFrac := []float64{0.9111186, 0.6343481, 0.3760942, 0.22486, 0.1589793}
 	
 	return WithinCanopyMeteorology{SunleafTK, ShadeleafTK, SunPPFD, ShadePPFD, SunFrac}
 }
@@ -46,20 +46,19 @@ func TestMegcanAgainstStandalone(t *testing.T) {
 }
 
 func run_go_megcan() (output WithinCanopyMeteorology, err error) {
-	start_date := 2013145
-	start_time := 0
-	time_increment := 10000
+	date := 2013145
+	time := 0
 	latitude := 24.9699
 	longitude := -106.4971
-	leaf_area_index := []float64{1.5165}
-	temperature := []float64{297.082306}	
-	incoming_photosynthetic_active_radiation := []float64{170.3816}	
-	wind_speed := []float64{5.094378}
-	pressure := []float64{82208.09}
-	water_vapor_mixing_ratio := []float64{0.007762248}
+	leaf_area_index := 1.5165
+	temperature := 297.082306
+	incoming_photosynthetic_active_radiation := 170.3816
+	wind_speed := 5.094378
+	pressure := 82208.09
+	water_vapor_mixing_ratio := 0.007762248
 	canopy_type_factor := []float64{0, 21.6363, 30.5448, 34.4223, 33.8522, 36.0447}
 	
-	return ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(start_date, start_time, time_increment, latitude, longitude, leaf_area_index, temperature, incoming_photosynthetic_active_radiation, wind_speed, pressure, water_vapor_mixing_ratio, canopy_type_factor)
+	return ConvertAboveCanopyMeteorologyToWithinCanopyMeteorology(date, time, latitude, longitude, leaf_area_index, temperature, incoming_photosynthetic_active_radiation, wind_speed, pressure, water_vapor_mixing_ratio, canopy_type_factor)
 }
 
 func run_standalone_megcan() WithinCanopyMeteorology {
@@ -74,21 +73,15 @@ func run_standalone_megcan() WithinCanopyMeteorology {
 	ShadePPFD := parse_netcdf_file("ShadePPFD", output_file)
 	SunFrac := parse_netcdf_file("SunFrac", output_file)
 	
-	timestep_count := 1
-	canopy_layers := 5
-	return WithinCanopyMeteorology{Convert1Dto2D(SunleafTK, timestep_count, canopy_layers), 
-						 Convert1Dto2D(ShadeleafTK, timestep_count, canopy_layers), 
-						 Convert1Dto2D(SunPPFD, timestep_count, canopy_layers), 
-						 Convert1Dto2D(ShadePPFD, timestep_count, canopy_layers), 
-						 Convert1Dto2D(SunFrac, timestep_count, canopy_layers)}
+	return WithinCanopyMeteorology{SunleafTK, ShadeleafTK, SunPPFD, ShadePPFD, SunFrac}
 }
 
 func are_megcan_outputs_equal(output1 WithinCanopyMeteorology, output2 WithinCanopyMeteorology) bool {
-	SunleafTK_equal := arrays_approximately_equal_2d(output1.SunleafTK, output2.SunleafTK, EPSILON, "SunleafTK")
-	ShadeleafTK_equal := arrays_approximately_equal_2d(output1.ShadeleafTK, output2.ShadeleafTK, EPSILON, "ShadeleafTK")
-	SunPPFD_equal := arrays_approximately_equal_2d(output1.SunPPFD, output2.SunPPFD, EPSILON, "SunPPFD")
-	ShadePPFD_equal := arrays_approximately_equal_2d(output1.ShadePPFD, output2.ShadePPFD, EPSILON, "ShadePPFD")
-	SunFrac_equal := arrays_approximately_equal_2d(output1.SunFrac, output2.SunFrac, EPSILON, "SunFrac")
+	SunleafTK_equal := arrays_approximately_equal(output1.SunleafTK, output2.SunleafTK, EPSILON, "SunleafTK")
+	ShadeleafTK_equal := arrays_approximately_equal(output1.ShadeleafTK, output2.ShadeleafTK, EPSILON, "ShadeleafTK")
+	SunPPFD_equal := arrays_approximately_equal(output1.SunPPFD, output2.SunPPFD, EPSILON, "SunPPFD")
+	ShadePPFD_equal := arrays_approximately_equal(output1.ShadePPFD, output2.ShadePPFD, EPSILON, "ShadePPFD")
+	SunFrac_equal := arrays_approximately_equal(output1.SunFrac, output2.SunFrac, EPSILON, "SunFrac")
 	
 	return SunleafTK_equal && ShadeleafTK_equal && SunPPFD_equal && ShadePPFD_equal && SunFrac_equal
 }

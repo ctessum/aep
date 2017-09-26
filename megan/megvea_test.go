@@ -6,26 +6,26 @@ import (
 )
 
 func GetEmissionActivityPerEmissionTypeTestData() EmissionActivityPerEmissionType {
-	ISOP :=  	[]float64{0.1956952}
-	MBO := 		[]float64{0.1956952}
-	MT_PINE := 	[]float64{0.1198538}
-	MT_ACYC := 	[]float64{0.1942892}
-	MT_CAMP := 	[]float64{0.084581}
-	MT_SABI := 	[]float64{0.08772708}
-	MT_AROM := 	[]float64{0.153811}
-	MT_OXY := 	[]float64{0.05809301}
-	SQT_HR := 	[]float64{0.07359937}
-	SQT_LR := 	[]float64{0.06386646}
-	MEOH := 	[]float64{0.2623324}
-	ACTO := 	[]float64{0.05786393}
-	ETOH := 	[]float64{0.1241714}
-	ACID := 	[]float64{0.1637605}
-	LVOC := 	[]float64{0.05786393}
-	OXPROD := 	[]float64{0.05786393}
-	STRESS := 	[]float64{0.1906811}
-	OTHER := 	[]float64{0.05786393}
-	CO := 		[]float64{0.2582429}
-	NO := 		[]float64{0}
+	ISOP :=  	0.1956952
+	MBO := 		0.1956952
+	MT_PINE := 	0.1198538
+	MT_ACYC := 	0.1942892
+	MT_CAMP := 	0.084581
+	MT_SABI := 	0.08772708
+	MT_AROM := 	0.153811
+	MT_OXY := 	0.05809301
+	SQT_HR := 	0.07359937
+	SQT_LR := 	0.06386646
+	MEOH := 	0.2623324
+	ACTO := 	0.05786393
+	ETOH := 	0.1241714
+	ACID := 	0.1637605
+	LVOC := 	0.05786393
+	OXPROD := 	0.05786393
+	STRESS := 	0.1906811
+	OTHER := 	0.05786393
+	CO := 		0.2582429
+	NO := 		0.
 
 	return EmissionActivityPerEmissionType{ISOP, MBO, MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, MT_AROM, MT_OXY, SQT_HR, SQT_LR, MEOH, ACTO, ETOH, ACID, LVOC, OXPROD, STRESS, OTHER, CO, NO}
 }
@@ -60,9 +60,8 @@ func TestMegveaAgainstStandalone(t *testing.T) {
 }
 
 func run_go_megvea() (output EmissionActivityPerEmissionType, err error) {
-	start_date := 2013145
-	start_time := 0
-	time_increment := 10000
+	date := 2013145
+	time := 0
 	
 	use_EA_for_bidirectional_exchange_LAI_response := true
 	use_EA_for_response_to_air_pollution := true
@@ -72,21 +71,21 @@ func run_go_megvea() (output EmissionActivityPerEmissionType, err error) {
 	use_EA_for_response_to_low_temperature := true 
 	use_EA_for_response_to_soil_moisture := true
 	
-	soil_moisture_activity := []float64{0.502049565}
-	air_quality_index := []float64{11.621}
+	soil_moisture_activity := 0.502049565
+	air_quality_index := 11.621
 	light_dependent_fraction_map := []float64{1,1,0.4445464,0.8168195,0.3,0.312323,0.6,0.2,0.4630309,0.4,1,0.2,0.8,0.8,0.2,0.2,0.8,0.2,1,0}
-	previous_time_step_LAI := []float64{1.6469}
-	current_time_step_LAI := []float64{1.5165}
+	previous_time_step_LAI := 1.6469
+	current_time_step_LAI := 1.5165
 	
 	withinCanopyMeteorologyTestData := GetWithinCanopyMeteorologyTestData()
 	
 	max_temperature := []float64{299.7025}
 	max_wind_speed := []float64{6.027919}
 	min_temperature := []float64{287.4598}
-	daily_average_temperature := []float64{293.5855}
-	daily_average_PPFD := []float64{739.8692}
+	daily_average_temperature := 293.5855
+	daily_average_PPFD := 739.8692
 	
-	return CalculateVariousEmissionActivityFactors(start_date, start_time, time_increment, use_EA_for_bidirectional_exchange_LAI_response, use_EA_for_response_to_air_pollution, use_EA_for_CO2_response, use_EA_for_response_to_high_wind_storms, use_EA_for_resposne_to_high_temperature, use_EA_for_response_to_low_temperature, use_EA_for_response_to_soil_moisture, soil_moisture_activity, air_quality_index, light_dependent_fraction_map, previous_time_step_LAI, current_time_step_LAI, 
+	return CalculateVariousEmissionActivityFactors(date, time, use_EA_for_bidirectional_exchange_LAI_response, use_EA_for_response_to_air_pollution, use_EA_for_CO2_response, use_EA_for_response_to_high_wind_storms, use_EA_for_resposne_to_high_temperature, use_EA_for_response_to_low_temperature, use_EA_for_response_to_soil_moisture, soil_moisture_activity, air_quality_index, light_dependent_fraction_map, previous_time_step_LAI, current_time_step_LAI, 
 	withinCanopyMeteorologyTestData.SunleafTK, 
 	withinCanopyMeteorologyTestData.ShadeleafTK, 
 	withinCanopyMeteorologyTestData.SunPPFD, 
@@ -101,51 +100,51 @@ func run_standalone_megvea() EmissionActivityPerEmissionType {
 	
 	// Extract outputs from NETCDF files
 	output_file := "./MEGAN3/Output/INT/MGNERS.tceq_12km.J4.2013145.single.nc"
-	ISOP := parse_netcdf_file("ISOP", output_file)
-	MBO := parse_netcdf_file("MBO", output_file)    
-	MT_PINE := parse_netcdf_file("MT_PINE", output_file)
-	MT_ACYC := parse_netcdf_file("MT_ACYC", output_file)
-	MT_CAMP := parse_netcdf_file("MT_CAMP", output_file)
-	MT_SABI := parse_netcdf_file("MT_SABI", output_file)
-	MT_AROM := parse_netcdf_file("MT_AROM", output_file)
-	MT_OXY := parse_netcdf_file("MT_OXY", output_file) 
-	SQT_HR := parse_netcdf_file("SQT_HR", output_file) 
-	SQT_LR := parse_netcdf_file("SQT_LR", output_file) 
-	MEOH := parse_netcdf_file("MEOH", output_file)   
-	ACTO := parse_netcdf_file("ACTO", output_file)   
-	ETOH := parse_netcdf_file("ETOH", output_file)   
-	ACID := parse_netcdf_file("ACID", output_file)   
-	LVOC := parse_netcdf_file("LVOC", output_file)   
-	OXPROD := parse_netcdf_file("OXPROD", output_file) 
-	STRESS := parse_netcdf_file("STRESS", output_file) 
-	OTHER := parse_netcdf_file("OTHER", output_file)  
-	CO := parse_netcdf_file("CO", output_file)     
-	NO := parse_netcdf_file("NO", output_file)     
+	ISOP := parse_netcdf_file("ISOP", output_file)[0]
+	MBO := parse_netcdf_file("MBO", output_file)[0]    
+	MT_PINE := parse_netcdf_file("MT_PINE", output_file)[0]
+	MT_ACYC := parse_netcdf_file("MT_ACYC", output_file)[0]
+	MT_CAMP := parse_netcdf_file("MT_CAMP", output_file)[0]
+	MT_SABI := parse_netcdf_file("MT_SABI", output_file)[0]
+	MT_AROM := parse_netcdf_file("MT_AROM", output_file)[0]
+	MT_OXY := parse_netcdf_file("MT_OXY", output_file)[0] 
+	SQT_HR := parse_netcdf_file("SQT_HR", output_file)[0] 
+	SQT_LR := parse_netcdf_file("SQT_LR", output_file)[0] 
+	MEOH := parse_netcdf_file("MEOH", output_file)[0]   
+	ACTO := parse_netcdf_file("ACTO", output_file)[0]   
+	ETOH := parse_netcdf_file("ETOH", output_file)[0]   
+	ACID := parse_netcdf_file("ACID", output_file)[0]   
+	LVOC := parse_netcdf_file("LVOC", output_file)[0]   
+	OXPROD := parse_netcdf_file("OXPROD", output_file)[0] 
+	STRESS := parse_netcdf_file("STRESS", output_file)[0] 
+	OTHER := parse_netcdf_file("OTHER", output_file)[0]  
+	CO := parse_netcdf_file("CO", output_file)[0]     
+	NO := parse_netcdf_file("NO", output_file)[0]     
 	
 	return EmissionActivityPerEmissionType{ISOP, MBO, MT_PINE, MT_ACYC, MT_CAMP, MT_SABI, MT_AROM, MT_OXY, SQT_HR, SQT_LR, MEOH, ACTO, ETOH, ACID, LVOC, OXPROD, STRESS, OTHER, CO, NO}
 }
 
 func are_megvea_outputs_equal(output1 EmissionActivityPerEmissionType, output2 EmissionActivityPerEmissionType) bool {
-	ISOP_equal := arrays_approximately_equal(output1.ISOP, output2.ISOP, EPSILON, "ISOP")
-	MBO_equal := arrays_approximately_equal(output1.MBO, output2.MBO, EPSILON, "MBO") 
-	MT_PINE_equal := arrays_approximately_equal(output1.MT_PINE, output2.MT_PINE, EPSILON, "MT_PINE")
-	MT_ACYC_equal := arrays_approximately_equal(output1.MT_ACYC, output2.MT_ACYC, EPSILON, "MT_ACYC")
-	MT_CAMP_equal := arrays_approximately_equal(output1.MT_CAMP, output2.MT_CAMP, EPSILON, "MT_CAMP")
-	MT_SABI_equal := arrays_approximately_equal(output1.MT_SABI, output2.MT_SABI, EPSILON, "MT_SABI")
-	MT_AROM_equal := arrays_approximately_equal(output1.MT_AROM, output2.MT_AROM, EPSILON, "MT_AROM")
-	MT_OXY_equal := arrays_approximately_equal(output1.MT_OXY, output2.MT_OXY, EPSILON, "MT_OXY") 
-	SQT_HR_equal := arrays_approximately_equal(output1.SQT_HR, output2.SQT_HR, EPSILON, "SQT_HR") 
-	SQT_LR_equal := arrays_approximately_equal(output1.SQT_LR, output2.SQT_LR, EPSILON, "SQT_LR") 
-	MEOH_equal := arrays_approximately_equal(output1.MEOH, output2.MEOH, EPSILON, "MEOH")
-	ACTO_equal := arrays_approximately_equal(output1.ACTO, output2.ACTO, EPSILON, "ACTO")
-	ETOH_equal := arrays_approximately_equal(output1.ETOH, output2.ETOH, EPSILON, "ETOH")
-	ACID_equal := arrays_approximately_equal(output1.ACID, output2.ACID, EPSILON, "ACID")
-	LVOC_equal := arrays_approximately_equal(output1.LVOC, output2.LVOC, EPSILON, "LVOC")
-	OXPROD_equal := arrays_approximately_equal(output1.OXPROD, output2.OXPROD, EPSILON, "OXPROD") 
-	STRESS_equal := arrays_approximately_equal(output1.STRESS, output2.STRESS, EPSILON, "STRESS") 
-	OTHER_equal := arrays_approximately_equal(output1.OTHER, output2.OTHER, EPSILON, "OTHER")  
-	CO_equal := arrays_approximately_equal(output1.CO, output2.CO, EPSILON, "CO")  
-	NO_equal := arrays_approximately_equal(output1.NO, output2.NO, EPSILON, "NO")  
+	ISOP_equal := approximately_equal(output1.ISOP, output2.ISOP, EPSILON, "ISOP")
+	MBO_equal := approximately_equal(output1.MBO, output2.MBO, EPSILON, "MBO") 
+	MT_PINE_equal := approximately_equal(output1.MT_PINE, output2.MT_PINE, EPSILON, "MT_PINE")
+	MT_ACYC_equal := approximately_equal(output1.MT_ACYC, output2.MT_ACYC, EPSILON, "MT_ACYC")
+	MT_CAMP_equal := approximately_equal(output1.MT_CAMP, output2.MT_CAMP, EPSILON, "MT_CAMP")
+	MT_SABI_equal := approximately_equal(output1.MT_SABI, output2.MT_SABI, EPSILON, "MT_SABI")
+	MT_AROM_equal := approximately_equal(output1.MT_AROM, output2.MT_AROM, EPSILON, "MT_AROM")
+	MT_OXY_equal := approximately_equal(output1.MT_OXY, output2.MT_OXY, EPSILON, "MT_OXY") 
+	SQT_HR_equal := approximately_equal(output1.SQT_HR, output2.SQT_HR, EPSILON, "SQT_HR") 
+	SQT_LR_equal := approximately_equal(output1.SQT_LR, output2.SQT_LR, EPSILON, "SQT_LR") 
+	MEOH_equal := approximately_equal(output1.MEOH, output2.MEOH, EPSILON, "MEOH")
+	ACTO_equal := approximately_equal(output1.ACTO, output2.ACTO, EPSILON, "ACTO")
+	ETOH_equal := approximately_equal(output1.ETOH, output2.ETOH, EPSILON, "ETOH")
+	ACID_equal := approximately_equal(output1.ACID, output2.ACID, EPSILON, "ACID")
+	LVOC_equal := approximately_equal(output1.LVOC, output2.LVOC, EPSILON, "LVOC")
+	OXPROD_equal := approximately_equal(output1.OXPROD, output2.OXPROD, EPSILON, "OXPROD") 
+	STRESS_equal := approximately_equal(output1.STRESS, output2.STRESS, EPSILON, "STRESS") 
+	OTHER_equal := approximately_equal(output1.OTHER, output2.OTHER, EPSILON, "OTHER")  
+	CO_equal := approximately_equal(output1.CO, output2.CO, EPSILON, "CO")  
+	NO_equal := approximately_equal(output1.NO, output2.NO, EPSILON, "NO")  
 
 	return ISOP_equal && MBO_equal && MT_PINE_equal && MT_ACYC_equal && MT_CAMP_equal && MT_SABI_equal && MT_AROM_equal && MT_OXY_equal && SQT_HR_equal && SQT_LR_equal && MEOH_equal && ACTO_equal && ETOH_equal && ACID_equal && LVOC_equal && OXPROD_equal && STRESS_equal && OTHER_equal && CO_equal && NO_equal
 }

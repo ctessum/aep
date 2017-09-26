@@ -20,14 +20,18 @@ func run_command(command string) string {
 	return string(out)
 }
 
-func approximately_equal(a float64, b float64, epsilon float64) bool {
+func approximately_equal(a float64, b float64, epsilon float64, variable string) bool {
 	var val float64
 	if math.Abs(a) < math.Abs(b) {
 		val = b
 	} else {
 		val = a
 	}
-	return math.Abs(a - b) <= math.Abs(val) * epsilon
+	if !(math.Abs(a - b) <= math.Abs(val) * epsilon) {
+		fmt.Printf(variable + " - %v != %v (eps=%v)\n", a, b, epsilon)
+		return false
+	}
+	return true
 }
 
 func arrays_approximately_equal(a []float64, b []float64, epsilon float64, variable string) bool {
@@ -44,8 +48,7 @@ func arrays_approximately_equal(a []float64, b []float64, epsilon float64, varia
     }
 	res := true
     for i := range a {
-		if !approximately_equal(a[i], b[i], epsilon) {
-			fmt.Printf(variable + " - %v != %v (eps=%v)\n", a[i], b[i], epsilon)
+		if !approximately_equal(a[i], b[i], epsilon, variable) {
 			res = false
 		}
     }
@@ -71,8 +74,7 @@ func arrays_approximately_equal_2d(a [][]float64, b [][]float64, epsilon float64
 			return false
 		}
 		for j:= range a[i] {
-			if !approximately_equal(a[i][j], b[i][j], epsilon) {
-				fmt.Printf(variable + " - %v != %v (eps=%v)\n", a[i][j], b[i][j], epsilon)
+			if !approximately_equal(a[i][j], b[i][j], epsilon, variable) {
 				res = false
 			}
 		}	
@@ -109,7 +111,11 @@ func parse_netcdf_file(variable, file string) []float64 {
 	return float_array
 }
 
-func CFloat_to_Float64(in []C.float) []float64 {
+func CFloat_to_Float64(in []C.float) float64 {
+	return float64(in[0])
+}
+
+func CFloat_to_Float64_array(in []C.float) []float64 {
 	out := make([]float64, len(in))
 	for i := range in {
 		out[i] = float64(in[i])
@@ -117,7 +123,13 @@ func CFloat_to_Float64(in []C.float) []float64 {
 	return out
 }
 
-func Float64_to_CFloat(in []float64) []C.float {
+func Float64_to_CFloat(in float64) []C.float {
+	out := make([]C.float, 1)
+	out[0] = C.float(in)
+	return out
+}
+
+func Float64_to_CFloat_array(in []float64) []C.float {
 	out := make([]C.float, len(in))
 	for i := range in {
 		out[i] = C.float(in[i])
@@ -126,7 +138,7 @@ func Float64_to_CFloat(in []float64) []C.float {
 }
 
 func Convert1Dto2D_Cfloat(in []C.float, n int, m int) [][]float64 {
-	return Convert1Dto2D(CFloat_to_Float64(in), n, m)
+	return Convert1Dto2D(CFloat_to_Float64_array(in), n, m)
 }
 
 func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
@@ -139,7 +151,7 @@ func Convert1Dto2D(in []float64, n int, m int) [][]float64 {
 }
 
 func Convert2Dto1D_Cfloat(in [][]float64, ) []C.float {
-	return Float64_to_CFloat(Convert2Dto1D(in))
+	return Float64_to_CFloat_array(Convert2Dto1D(in))
 }
 
 func Convert2Dto1D(in [][]float64) []float64 {
