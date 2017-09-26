@@ -233,7 +233,6 @@
 
           WRITE(MESG,1030) 'Entering CANOPY: ',IDATE,ITIME
 !          CALL M3MESG( MESG )
-
           DO I=1, NCOLS
            DO J=1, NROWS
             SunleafTK(I,J,:,T)   = TEMP(T,I,J)
@@ -816,7 +815,7 @@
 
 ! REVISE - Replace LeafIRout with LeafIR
 !      IRoutairT = LeafIROut(tairK, eps)
-      IRoutairT  = LeafIR(TairK + Tdelt, Eps)
+      IRoutairT  = LeafIR(TairK, Eps) ! Replaced "TairK + Tdelt" by "TairK" (Tdelt is undefined, cf. https://github.com/matiasinsaurralde/megan/blob/808bba4d5adb9f75c4a80a0a208dd650f4d079ac/src/EMPROC/canopy.f
 
       ! Latent heat of vaporization (J Kg-1)
       LatHv = LHV(TairK)

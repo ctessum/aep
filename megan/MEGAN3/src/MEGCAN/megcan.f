@@ -456,21 +456,29 @@
         ENDIF
         
         
-        print*,'LAT=',LAT
-        print*,'LONG=',LONG       
-        print*,'LAIc=',LAIc
-        print*,'TEMP=',TEMP
-        print*,'PPFD=',PPFD       
-        print*,'WIND=',WIND
-        print*,'PRES=',PRES
-        print*,'QV=',QV       
-        print*,'CTF=',CTF
+        PRINT*,'SDATE=',SDATE
+        PRINT*,'STIME=',STIME
+        PRINT*,'MXREC=',MXREC
+        PRINT*,'NCOLS=',NCOLS
+        PRINT*,'NROWS=',NROWS
+        PRINT*,'TSTEP=',TSTEP
+        PRINT*,'LAT=',LAT
+        PRINT*,'LONG=',LONG
+        PRINT*,'LAIc=',LAIc
+        PRINT*,'TEMP=',TEMP
+        PRINT*,'PPFD=',PPFD
+        PRINT*,'WIND=',WIND
+        PRINT*,'PRES=',PRES
+        PRINT*,'QV=',QV
+        PRINT*,'CTF=',CTF
         
         
 
           WRITE(MESG,1030) 'Entering CANOPY: ',IDATE,ITIME
           CALL M3MESG( MESG )
-
+          print*,'T=',T
+          print*,'IDATE=',IDATE
+          print*,'ITIME=',ITIME
           DO I=1, NCOLS
            DO J=1, NROWS
             SunleafTK(I,J,:)   = TEMP(I,J)
@@ -482,7 +490,7 @@
             DO I_CT = 1,NRTYP   !canopy types
               TotalCT = TotalCT + CTF(I_CT,I,J) * 0.01
             ENDDO   ! ENDDO I_CT
-
+            print*,'TotalCT=',TotalCT
             IF (TotalCT .GT. 0.0 .AND. LAIc(I,J) .GT. 0.0) THEN
 !           only invoke canopy model when both CT and LAI are valid
 
@@ -528,24 +536,58 @@
 
                  HumidairPa0  =  WaterVapPres(QV(I,J), PRES(I,J), WaterAirRatio)
                  Trate    =  Stability(Canopychar, I_CT, Solar , NrCha, NrTyp)
+                 
                  Call CanopyEB(Trate, Layers, VPgausDis, Canopychar, I_CT,
      &                         TairK, HumidairPa, Ws, sun_ppfd,
      &                         shade_ppfd, SunQv, ShadeQv, SunQn, ShadeQn,
      &                         sun_tk, SunleafSH, SunleafLH, SunleafIR,
      &                         shade_tk,ShadeleafSH,ShadeleafLH,ShadeleafIR,
      &                         NrCha, NrTyp, Ws0, TairK0, HumidairPa0)
+                 if (T .eq. 1) then
+                 print*,'Trate=',Trate
+                 print*,'Layers=',Layers
+                 print*,'VPgausDis=',VPgausDis
+                 print*,'Canopychar=',Canopychar
+                 print*,'I_CT=',I_CT
+                 print*,'TairK=',TairK
+                 print*,'HumidairPa=',HumidairPa
+                 print*,'Ws=',Ws
+                 print*,'sun_ppfd=',sun_ppfd
+                 print*,'shade_ppfd=',shade_ppfd
+                 print*,'SunQv=',SunQv
+                 print*,'ShadeQv=',ShadeQv
+                 print*,'SunQn=',SunQn
+                 print*,'ShadeQn=',ShadeQn
+                 print*,'sun_tk=',sun_tk
+                 print*,'SunleafSH=',SunleafSH
+                 print*,'SunleafLH=',SunleafLH
+                 print*,'SunleafIR=',SunleafIR
+                 print*,'shade_tk=',shade_tk
+                 print*,'ShadeleafSH=',ShadeleafSH
+                 print*,'ShadeleafLH=',ShadeleafLH
+                 print*,'ShadeleafIR=',ShadeleafIR
+                 print*,'NrCha=',NrCha
+                 print*,'NrTyp=',NrTyp
+                 print*,'Ws0=',Ws0
+                 print*,'TairK0=',TairK0
+                 print*,'HumidairPa0=',HumidairPa0
+                 endif
+     
                      sun_ppfd_total(:)   = sun_ppfd_total(:) + 
      &                                0.01*CTF(I_CT,I,J)*sun_ppfd(:)
                      shade_ppfd_total(:) = shade_ppfd_total(:) +
      &                                0.01*CTF(I_CT,I,J)*shade_ppfd(:)
                      sun_tk_total(:)     = sun_tk_total(:) +
      &                                0.01*CTF(I_CT,I,J)*sun_tk(:)
+                     !print*,'CTF(I_CT,I,J)=',CTF(I_CT,I,J)
+                     print*,'sun_tk(:)=',sun_tk(:)
                      shade_tk_total(:)   = shade_tk_total(:) + 
      &                                0.01*CTF(I_CT,I,J)*shade_tk(:)
                      sun_frac_total(:)   = sun_frac_total(:) + 
      &                                0.01*CTF(I_CT,I,J)*sun_frac(:)
                 ENDIF
               ENDDO  ! ENDDO I_CT
+              print*,'sun_tk_total=',sun_tk_total(:)
               SunleafTK(I,J,:)   = sun_tk_total(:)/TotalCT
               ShadeleafTK(I,J,:) = shade_tk_total(:)/TotalCT
               SunPPFD(I,J,:)     = sun_ppfd_total(:)/TotalCT
@@ -993,6 +1035,7 @@
       Cheight       = Canopychar(4, Cantype)
       Eps           = Canopychar(10,Cantype)
       TranspireType = Canopychar(11,Cantype)
+      print*,'Cdepth=',Cdepth
 
       IF (TairK0  > 288) THEN
 ! Pa m-1  (humidity profile for T < 288)
@@ -1101,7 +1144,9 @@
 
 ! REVISE - Replace LeafIRout with LeafIR
 !      IRoutairT = LeafIROut(tairK, eps)
-      IRoutairT  = LeafIR(TairK + Tdelt, Eps)
+      IRoutairT  = LeafIR(TairK, Eps) ! Replaced "TairK + Tdelt" by "TairK" (Tdelt is undefined, cf. https://github.com/matiasinsaurralde/megan/blob/808bba4d5adb9f75c4a80a0a208dd650f4d079ac/src/EMPROC/canopy.f)
+      !print*,'Tdelt=',Tdelt
+      !print*,'IRoutairT=',IRoutairT
 
       ! Latent heat of vaporization (J Kg-1)
       LatHv = LHV(TairK)
@@ -1134,14 +1179,24 @@
           IRout  = LeafIR(TairK + Tdelt, Eps)
           IRout1 = IRout - IRoutairT
           Tdelt  = E1 / ((SH1 + LH1 + IRout1) / Tdelt)
+          print*,'E1=',E1
+          print*,'SH1=',SH1
+          print*,'LH1=',LH1
+          print*,'IRout1=',IRout1
+          print*,'Tddelt=',Tdelt
           Balance = Q + IRin - IRout - SH1 - LH
         ENDIF
       ENDDO
 
       If (Tdelt > 10)  Tdelt = 10
       If (Tdelt < -10) Tdelt = -10
+      
+      !print*,'Tdelt2=',Tdelt
 
       Tleaf = TairK + Tdelt
+      print*,'TairK=',TairK
+      print*,'Tdelt=',Tdelt
+      print*,'Tleaf=',Tleaf
       GH    = LeafBLC(GHforced, Tleaf - TairK, Llength)
       SH    = LeafH(Tleaf - TairK, GH)
       LH    = LeafLE(Tleaf, HumidAirKgm3, LatHv,         
