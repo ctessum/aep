@@ -30,7 +30,7 @@ while ($JD <= 2013145)
 # Set up time and date to process
 setenv SDATE $JD        #start date
 setenv STIME 0
-setenv RLENG 250000
+setenv RLENG 10000
 
 ########################################################################
 
