@@ -1,0 +1,132 @@
+netcdf MET.MEGAN.tceq_12km.rad45.2013145.single {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 10 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float SOIM1(TSTEP, LAY, ROW, COL) ;
+		SOIM1:long_name = "SOIM1           " ;
+		SOIM1:units = "M**3/M**3       " ;
+		SOIM1:var_desc = "volumetric soil moisture in top cm                                              " ;
+	float SOIT1(TSTEP, LAY, ROW, COL) ;
+		SOIT1:long_name = "SOIT1           " ;
+		SOIT1:units = "K               " ;
+		SOIT1:var_desc = "soil temperature in top cm                                                      " ;
+	float SLTYP(TSTEP, LAY, ROW, COL) ;
+		SLTYP:long_name = "SLTYP           " ;
+		SLTYP:units = "CATEGORY        " ;
+		SLTYP:var_desc = "soil texture type by USDA category                                              " ;
+	float TEMP2(TSTEP, LAY, ROW, COL) ;
+		TEMP2:long_name = "TEMP2           " ;
+		TEMP2:units = "K               " ;
+		TEMP2:var_desc = "temperature at 2 m                                                              " ;
+	float PRES(TSTEP, LAY, ROW, COL) ;
+		PRES:long_name = "PRES            " ;
+		PRES:units = "Pa              " ;
+		PRES:var_desc = "pressure                                                                        " ;
+	float QV(TSTEP, LAY, ROW, COL) ;
+		QV:long_name = "QV              " ;
+		QV:units = "KG/KG           " ;
+		QV:var_desc = "water vapor mixing ratio                                                        " ;
+	float WINDSPD(TSTEP, LAY, ROW, COL) ;
+		WINDSPD:long_name = "WINDSPD         " ;
+		WINDSPD:units = "m/s             " ;
+		WINDSPD:var_desc = "Cell centered Windspeed                                                         " ;
+	float RAIN_ACC24(TSTEP, LAY, ROW, COL) ;
+		RAIN_ACC24:long_name = "RAIN_ACC24      " ;
+		RAIN_ACC24:units = "cm              " ;
+		RAIN_ACC24:var_desc = "24-hour accumulated rain                                                        " ;
+	float PREC_ADJ(TSTEP, LAY, ROW, COL) ;
+		PREC_ADJ:long_name = "PREC_ADJ        " ;
+		PREC_ADJ:units = "No dimension    " ;
+		PREC_ADJ:var_desc = "Precip adjustment factor                                                        " ;
+	float PAR(TSTEP, LAY, ROW, COL) ;
+		PAR:long_name = "PAR             " ;
+		PAR:units = "WATTS/M**2      " ;
+		PAR:var_desc = "Photosynthetically Active Radiation                                             " ;
+
+// global attributes:
+		:IOAPI_VERSION = "$Id: @(#) ioapi library version 3.0 $                                           " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017191 ;
+		:CTIME = 74333 ;
+		:WDATE = 2017191 ;
+		:WTIME = 74333 ;
+		:SDATE = 2013145 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 10 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 7 ;
+		:VGTOP = 5000.f ;
+		:VGLVLS = 1.f, 0.996f ;
+		:GDNAM = "METCRO_aqrp_bvoc" ;
+		:UPNAM = "TPAR2IOAPI      " ;
+		:VAR-LIST = "SOIM1           SOIT1           SLTYP           TEMP2           PRES            QV              WINDSPD         RAIN_ACC24      PREC_ADJ        PAR             " ;
+		:FILEDESC = "US EPA COMMUNITY MULTISCALE AIR QUALITY MODEL                                   METEOROLOGY-CHEMISTRY INTERFACE PROCESSOR                                                                                                                       MCIP V4.2  FROZEN 09/30/2013                                                                                                                                                                                                                    INPUT METEOROLOGY DATA FROM WRF ARW V3.6.1                                      INPUT RUN INITIALIZED:  2013-05-20-12:00:00.0000                                                                                                                CUMULUS PARAMETERIZATION:  Kain-Fritsch (new Eta)                                                                                                               SHALLOW CONVECTION:  No shallow convection                                                                                                                      MICROPHYSICS:  WSM 6-Class                                                                                                                                      LONGWAVE RADIATION:  RRTMg                                                                                                                                      SHORTWAVE RADIATION:  RRTMg                                                                                                                                     PBL SCHEME:  YSU                                                                                                                                                SURFACE LAYER SCHEME:  Monin-Obukhov                                                                                                                            LAND-SURFACE SCHEME:  NOAH Land-Surface Model                                                                                                                   URBAN MODEL:  No urban physics                                                                                                                                  LAND USE CLASSIFICATION:  USGS                                                                                                                                  3D ANALYSIS NUDGING:  GRID                                                         WIND COEFF:   3.000E-04 s-1                                                     TEMP COEFF:   3.000E-04 s-1                                                     MOIS COEFF:   3.000E-04 s-1                                                     GEOP COEFF:  not applicable                                                                                                                                  SFC ANALYSIS NUDGING:  OFF                                                         WIND COEFF:  not applicable                                                     TEMP COEFF:  not applicable                                                     MOIS COEFF:  not applicable                                                                                                                                  OBS NUDGING:  OFF                                                                  WIND COEFF:  not applicable                                                     TEMP COEFF:  not applicable                                                     MOIS COEFF:  not applicable                                                                                                                                  EARTH RADIUS ASSUMED IN MCIP:  6370000.000 m                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0,
+  2013145, 0 ;
+
+ SOIM1 =
+  0.19508198 ;
+
+ SOIT1 =
+  303.537;
+
+ SLTYP =
+  6 ;
+
+ TEMP2 =
+  297.0823 ;
+
+ PRES =
+  82208.09 ;
+
+ QV =
+  0.007762248 ;
+
+ WINDSPD =
+  5.094378;
+
+ RAIN_ACC24 =
+  0.004456222 ;
+
+ PREC_ADJ =
+  2;
+
+ PAR =
+  170.3816;
+}

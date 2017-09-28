@@ -1,0 +1,48 @@
+SHELL=/bin/sh
+FC= gfortran
+FFLAGS= -O0 -ffixed-line-length-none -Wall -fcheck=bounds -fPIC -g -fbacktrace
+PROGRAM= run_megcan_module
+LIBRARY_STATIC= ../../bin/libmegan.a
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INCLUDE = -I/usr/local/include \
+          -I$(CURDIR)	  
+
+OBJS = \
+     checkmem.o \
+     findlai.o  \
+	 megcan_module.o \
+	 julday.o \
+	 gregorian.o \
+	 incrementDateTime.o \
+     $(PROGRAM).o
+
+MODULES= *mod.f
+
+#-----------------------------------------------------------------------
+# line to allow file.mod files to be recognised by GNU make
+%.o : %.mod
+#-----------------------------------------------------------------------
+
+.SUFFIXES : .f .f .o 
+
+.f.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+	ar -r $(LIBRARY_STATIC) $@ 
+.F.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+	ar -r $(LIBRARY_STATIC) $@ 
+
+#-----------------------------------------------------------------------
+
+all: clean $(PROGRAM)
+
+$(PROGRAM):	$(OBJS)
+	$(FC) $(FFLAGS) $(INCLUDE) -o $(@) $(OBJS) $(LIBS)
+
+#-----------------------------------------------------------------------
+
+clean:
+	rm -f $(PROGRAM) *.o *.mod *.core
+#-----------------------------------------------------------------------
+
+

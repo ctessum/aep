@@ -1,0 +1,43 @@
+SHELL=/bin/sh
+FC= gfortran
+FFLAGS= -O0 -ffixed-line-length-none
+PROGRAM= megsea
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INCLUDE = -I/usr/local/include \
+          -I$(CURDIR)
+
+
+OBJS = \
+     checkmem.o \
+     findlai.o \
+     soilnox_fx.o \
+     soilnox.o \
+     growseason.o \
+     $(PROGRAM).o
+
+MODULES= *mod.f
+
+#-----------------------------------------------------------------------
+# line to allow file.mod files to be recognised by GNU make
+%.o : %.mod
+#-----------------------------------------------------------------------
+
+.SUFFIXES : .f .f .o 
+
+.f.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+.F.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+
+#-----------------------------------------------------------------------
+
+$(PROGRAM):	$(OBJS)
+	$(FC) $(FFLAGS) $(INCLUDE) -o $(@) $(OBJS) $(LIBS)
+
+#-----------------------------------------------------------------------
+
+clean:
+	rm -f $(PROGRAM) *.o *.mod *.core
+#-----------------------------------------------------------------------
+
+

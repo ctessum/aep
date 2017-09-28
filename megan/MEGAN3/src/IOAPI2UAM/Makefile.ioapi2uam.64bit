@@ -1,0 +1,20 @@
+SHELL = /bin/sh
+FC = gfortran
+FFLAGS = -O2 -ffixed-line-length-none #-Mdalign -Mnoframe -byteswapio -Mlfs -Bstatic_pgi
+PROGRAM = ioapi2uam
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INCLUDE = -I/usr/local/include \
+
+RAW = $(PROGRAM).o
+
+.f.o:
+	$(FC) $(FFLAGS) $(INCLUDE) -c -o $@ $<
+
+.F.o:
+	$(FC) $(FFLAGS) $(INCLUDE) -c -o $@ $<
+
+$(PROGRAM):     $(RAW)
+	$(FC) $(FFLAGS) $(INCLUDE) -o $(@) $(RAW) $(LIBS)
+
+clean:
+	rm -f $(PROGRAM)

@@ -1,0 +1,436 @@
+netcdf LAI3_tceq_12km.single {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 48 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float LAI01(TSTEP, LAY, ROW, COL) ;
+		LAI01:long_name = "LAI01           " ;
+		LAI01:units = "nondimension    " ;
+		LAI01:var_desc = "" ;
+	float LAI02(TSTEP, LAY, ROW, COL) ;
+		LAI02:long_name = "LAI02           " ;
+		LAI02:units = "nondimension    " ;
+		LAI02:var_desc = "" ;
+	float LAI03(TSTEP, LAY, ROW, COL) ;
+		LAI03:long_name = "LAI03           " ;
+		LAI03:units = "nondimension    " ;
+		LAI03:var_desc = "" ;
+	float LAI04(TSTEP, LAY, ROW, COL) ;
+		LAI04:long_name = "LAI04           " ;
+		LAI04:units = "nondimension    " ;
+		LAI04:var_desc = "" ;
+	float LAI05(TSTEP, LAY, ROW, COL) ;
+		LAI05:long_name = "LAI05           " ;
+		LAI05:units = "nondimension    " ;
+		LAI05:var_desc = "" ;
+	float LAI06(TSTEP, LAY, ROW, COL) ;
+		LAI06:long_name = "LAI06           " ;
+		LAI06:units = "nondimension    " ;
+		LAI06:var_desc = "" ;
+	float LAI07(TSTEP, LAY, ROW, COL) ;
+		LAI07:long_name = "LAI07           " ;
+		LAI07:units = "nondimension    " ;
+		LAI07:var_desc = "" ;
+	float LAI08(TSTEP, LAY, ROW, COL) ;
+		LAI08:long_name = "LAI08           " ;
+		LAI08:units = "nondimension    " ;
+		LAI08:var_desc = "" ;
+	float LAI09(TSTEP, LAY, ROW, COL) ;
+		LAI09:long_name = "LAI09           " ;
+		LAI09:units = "nondimension    " ;
+		LAI09:var_desc = "" ;
+	float LAI10(TSTEP, LAY, ROW, COL) ;
+		LAI10:long_name = "LAI10           " ;
+		LAI10:units = "nondimension    " ;
+		LAI10:var_desc = "" ;
+	float LAI11(TSTEP, LAY, ROW, COL) ;
+		LAI11:long_name = "LAI11           " ;
+		LAI11:units = "nondimension    " ;
+		LAI11:var_desc = "" ;
+	float LAI12(TSTEP, LAY, ROW, COL) ;
+		LAI12:long_name = "LAI12           " ;
+		LAI12:units = "nondimension    " ;
+		LAI12:var_desc = "" ;
+	float LAI13(TSTEP, LAY, ROW, COL) ;
+		LAI13:long_name = "LAI13           " ;
+		LAI13:units = "nondimension    " ;
+		LAI13:var_desc = "" ;
+	float LAI14(TSTEP, LAY, ROW, COL) ;
+		LAI14:long_name = "LAI14           " ;
+		LAI14:units = "nondimension    " ;
+		LAI14:var_desc = "" ;
+	float LAI15(TSTEP, LAY, ROW, COL) ;
+		LAI15:long_name = "LAI15           " ;
+		LAI15:units = "nondimension    " ;
+		LAI15:var_desc = "" ;
+	float LAI16(TSTEP, LAY, ROW, COL) ;
+		LAI16:long_name = "LAI16           " ;
+		LAI16:units = "nondimension    " ;
+		LAI16:var_desc = "" ;
+	float LAI17(TSTEP, LAY, ROW, COL) ;
+		LAI17:long_name = "LAI17           " ;
+		LAI17:units = "nondimension    " ;
+		LAI17:var_desc = "" ;
+	float LAI18(TSTEP, LAY, ROW, COL) ;
+		LAI18:long_name = "LAI18           " ;
+		LAI18:units = "nondimension    " ;
+		LAI18:var_desc = "" ;
+	float LAI19(TSTEP, LAY, ROW, COL) ;
+		LAI19:long_name = "LAI19           " ;
+		LAI19:units = "nondimension    " ;
+		LAI19:var_desc = "" ;
+	float LAI20(TSTEP, LAY, ROW, COL) ;
+		LAI20:long_name = "LAI20           " ;
+		LAI20:units = "nondimension    " ;
+		LAI20:var_desc = "" ;
+	float LAI21(TSTEP, LAY, ROW, COL) ;
+		LAI21:long_name = "LAI21           " ;
+		LAI21:units = "nondimension    " ;
+		LAI21:var_desc = "" ;
+	float LAI22(TSTEP, LAY, ROW, COL) ;
+		LAI22:long_name = "LAI22           " ;
+		LAI22:units = "nondimension    " ;
+		LAI22:var_desc = "" ;
+	float LAI23(TSTEP, LAY, ROW, COL) ;
+		LAI23:long_name = "LAI23           " ;
+		LAI23:units = "nondimension    " ;
+		LAI23:var_desc = "" ;
+	float LAI24(TSTEP, LAY, ROW, COL) ;
+		LAI24:long_name = "LAI24           " ;
+		LAI24:units = "nondimension    " ;
+		LAI24:var_desc = "" ;
+	float LAI25(TSTEP, LAY, ROW, COL) ;
+		LAI25:long_name = "LAI25           " ;
+		LAI25:units = "nondimension    " ;
+		LAI25:var_desc = "" ;
+	float LAI26(TSTEP, LAY, ROW, COL) ;
+		LAI26:long_name = "LAI26           " ;
+		LAI26:units = "nondimension    " ;
+		LAI26:var_desc = "" ;
+	float LAI27(TSTEP, LAY, ROW, COL) ;
+		LAI27:long_name = "LAI27           " ;
+		LAI27:units = "nondimension    " ;
+		LAI27:var_desc = "" ;
+	float LAI28(TSTEP, LAY, ROW, COL) ;
+		LAI28:long_name = "LAI28           " ;
+		LAI28:units = "nondimension    " ;
+		LAI28:var_desc = "" ;
+	float LAI29(TSTEP, LAY, ROW, COL) ;
+		LAI29:long_name = "LAI29           " ;
+		LAI29:units = "nondimension    " ;
+		LAI29:var_desc = "" ;
+	float LAI30(TSTEP, LAY, ROW, COL) ;
+		LAI30:long_name = "LAI30           " ;
+		LAI30:units = "nondimension    " ;
+		LAI30:var_desc = "" ;
+	float LAI31(TSTEP, LAY, ROW, COL) ;
+		LAI31:long_name = "LAI31           " ;
+		LAI31:units = "nondimension    " ;
+		LAI31:var_desc = "" ;
+	float LAI32(TSTEP, LAY, ROW, COL) ;
+		LAI32:long_name = "LAI32           " ;
+		LAI32:units = "nondimension    " ;
+		LAI32:var_desc = "" ;
+	float LAI33(TSTEP, LAY, ROW, COL) ;
+		LAI33:long_name = "LAI33           " ;
+		LAI33:units = "nondimension    " ;
+		LAI33:var_desc = "" ;
+	float LAI34(TSTEP, LAY, ROW, COL) ;
+		LAI34:long_name = "LAI34           " ;
+		LAI34:units = "nondimension    " ;
+		LAI34:var_desc = "" ;
+	float LAI35(TSTEP, LAY, ROW, COL) ;
+		LAI35:long_name = "LAI35           " ;
+		LAI35:units = "nondimension    " ;
+		LAI35:var_desc = "" ;
+	float LAI36(TSTEP, LAY, ROW, COL) ;
+		LAI36:long_name = "LAI36           " ;
+		LAI36:units = "nondimension    " ;
+		LAI36:var_desc = "" ;
+	float LAI37(TSTEP, LAY, ROW, COL) ;
+		LAI37:long_name = "LAI37           " ;
+		LAI37:units = "nondimension    " ;
+		LAI37:var_desc = "" ;
+	float LAI38(TSTEP, LAY, ROW, COL) ;
+		LAI38:long_name = "LAI38           " ;
+		LAI38:units = "nondimension    " ;
+		LAI38:var_desc = "" ;
+	float LAI39(TSTEP, LAY, ROW, COL) ;
+		LAI39:long_name = "LAI39           " ;
+		LAI39:units = "nondimension    " ;
+		LAI39:var_desc = "" ;
+	float LAI40(TSTEP, LAY, ROW, COL) ;
+		LAI40:long_name = "LAI40           " ;
+		LAI40:units = "nondimension    " ;
+		LAI40:var_desc = "" ;
+	float LAI41(TSTEP, LAY, ROW, COL) ;
+		LAI41:long_name = "LAI41           " ;
+		LAI41:units = "nondimension    " ;
+		LAI41:var_desc = "" ;
+	float LAI42(TSTEP, LAY, ROW, COL) ;
+		LAI42:long_name = "LAI42           " ;
+		LAI42:units = "nondimension    " ;
+		LAI42:var_desc = "" ;
+	float LAI43(TSTEP, LAY, ROW, COL) ;
+		LAI43:long_name = "LAI43           " ;
+		LAI43:units = "nondimension    " ;
+		LAI43:var_desc = "" ;
+	float LAI44(TSTEP, LAY, ROW, COL) ;
+		LAI44:long_name = "LAI44           " ;
+		LAI44:units = "nondimension    " ;
+		LAI44:var_desc = "" ;
+	float LAI45(TSTEP, LAY, ROW, COL) ;
+		LAI45:long_name = "LAI45           " ;
+		LAI45:units = "nondimension    " ;
+		LAI45:var_desc = "" ;
+	float LAI46(TSTEP, LAY, ROW, COL) ;
+		LAI46:long_name = "LAI46           " ;
+		LAI46:units = "nondimension    " ;
+		LAI46:var_desc = "" ;
+	float LAT(TSTEP, LAY, ROW, COL) ;
+		LAT:long_name = "LAT             " ;
+		LAT:units = "" ;
+		LAT:var_desc = "Latitude                                                                        " ;
+	float LONG(TSTEP, LAY, ROW, COL) ;
+		LONG:long_name = "LONG            " ;
+		LONG:units = "" ;
+		LONG:var_desc = "Longitude                                                                       " ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017255 ;
+		:CTIME = 182954 ;
+		:WDATE = 2017255 ;
+		:WTIME = 182954 ;
+		:SDATE = -635 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 48 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 0 ;
+		:VGTOP = 0.f ;
+		:VGLVLS = 0.f, 0.f ;
+		:GDNAM = "tceq_12km       " ;
+		:UPNAM = "CNVT_LAI        " ;
+		:VAR-LIST = "LAI01           LAI02           LAI03           LAI04           LAI05           LAI06           LAI07           LAI08           LAI09           LAI10           LAI11           LAI12           LAI13           LAI14           LAI15           LAI16           LAI17           LAI18           LAI19           LAI20           LAI21           LAI22           LAI23           LAI24           LAI25           LAI26           LAI27           LAI28           LAI29           LAI30           LAI31           LAI32           LAI33           LAI34           LAI35           LAI36           LAI37           LAI38           LAI39           LAI40           LAI41           LAI42           LAI43           LAI44           LAI45           LAI46           LAT             LONG            " ;
+		:FILEDESC = "Converted from MEGAN input text file:                                           /home/Paul-Antoine/src/MEGAN3/Input/MAP/LAI3.tceq_12km.csv                      " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0 ;
+
+ LAI01 =
+  1.2116 ;
+
+ LAI02 =
+  1.5236 ;
+
+ LAI03 =
+  1.4637 ;
+
+ LAI04 =
+  1.726 ;
+
+ LAI05 =
+  1.5113 ;
+
+ LAI06 =
+  1.6135 ;
+
+ LAI07 =
+  1.1528 ;
+
+ LAI08 =
+  1.657 ;
+
+ LAI09 =
+  1.6845 ;
+
+ LAI10 =
+  1.4709 ;
+
+ LAI11 =
+  1.4936 ;
+
+ LAI12 =
+  1.5078 ;
+
+ LAI13 =
+  1.4419 ;
+
+ LAI14 =
+  1.5393 ;
+
+ LAI15 =
+  1.5277 ;
+
+ LAI16 =
+  1.6219 ;
+
+ LAI17 =
+  1.5394 ;
+
+ LAI18 =
+  1.6469 ;
+
+ LAI19 =
+  1.5165 ;
+
+ LAI20 =
+  1.6411 ;
+
+ LAI21 =
+  1.3436 ;
+
+ LAI22 =
+  1.9042 ;
+
+ LAI23 =
+  2.0496 ;
+
+ LAI24 =
+  2.1723 ;
+
+ LAI25 =
+  1.9855 ;
+
+ LAI26 =
+  2.2041 ;
+
+ LAI27 =
+  3.2489 ;
+
+ LAI28 =
+  4.0001 ;
+
+ LAI29 =
+  3.7938 ;
+
+ LAI30 =
+  3.4891 ;
+
+ LAI31 =
+  3.418 ;
+
+ LAI32 =
+  2.7115 ;
+
+ LAI33 =
+  2.8815 ;
+
+ LAI34 =
+  2.5812 ;
+
+ LAI35 =
+  3.4005 ;
+
+ LAI36 =
+  3.1837 ;
+
+ LAI37 =
+  2.6611 ;
+
+ LAI38 =
+  2.3872 ;
+
+ LAI39 =
+  1.6327 ;
+
+ LAI40 =
+  2.2989 ;
+
+ LAI41 =
+  2.2422 ;
+
+ LAI42 =
+  1.6806 ;
+
+ LAI43 =
+  1.4994 ;
+
+ LAI44 =
+  1.5698 ;
+
+ LAI45 =
+  1.7493 ;
+
+ LAI46 =
+  1.4851 ;
+
+ LAT =
+  24.9699 ;
+
+ LONG =
+  -106.4971 ;
+}

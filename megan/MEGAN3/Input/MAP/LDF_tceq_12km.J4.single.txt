@@ -1,0 +1,212 @@
+netcdf LDF_tceq_12km.J4 {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 20 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float LDF01(TSTEP, LAY, ROW, COL) ;
+		LDF01:long_name = "LDF01           " ;
+		LDF01:units = "nondimension    " ;
+		LDF01:var_desc = "W126                                                                            " ;
+	float LDF02(TSTEP, LAY, ROW, COL) ;
+		LDF02:long_name = "LDF02           " ;
+		LDF02:units = "nondimension    " ;
+		LDF02:var_desc = "" ;
+	float LDF03(TSTEP, LAY, ROW, COL) ;
+		LDF03:long_name = "LDF03           " ;
+		LDF03:units = "nondimension    " ;
+		LDF03:var_desc = "" ;
+	float LDF04(TSTEP, LAY, ROW, COL) ;
+		LDF04:long_name = "LDF04           " ;
+		LDF04:units = "nondimension    " ;
+		LDF04:var_desc = "" ;
+	float LDF05(TSTEP, LAY, ROW, COL) ;
+		LDF05:long_name = "LDF05           " ;
+		LDF05:units = "nondimension    " ;
+		LDF05:var_desc = "" ;
+	float LDF06(TSTEP, LAY, ROW, COL) ;
+		LDF06:long_name = "LDF06           " ;
+		LDF06:units = "nondimension    " ;
+		LDF06:var_desc = "" ;
+	float LDF07(TSTEP, LAY, ROW, COL) ;
+		LDF07:long_name = "LDF07           " ;
+		LDF07:units = "nondimension    " ;
+		LDF07:var_desc = "" ;
+	float LDF08(TSTEP, LAY, ROW, COL) ;
+		LDF08:long_name = "LDF08           " ;
+		LDF08:units = "nondimension    " ;
+		LDF08:var_desc = "" ;
+	float LDF09(TSTEP, LAY, ROW, COL) ;
+		LDF09:long_name = "LDF09           " ;
+		LDF09:units = "nondimension    " ;
+		LDF09:var_desc = "" ;
+	float LDF10(TSTEP, LAY, ROW, COL) ;
+		LDF10:long_name = "LDF10           " ;
+		LDF10:units = "nondimension    " ;
+		LDF10:var_desc = "" ;
+	float LDF11(TSTEP, LAY, ROW, COL) ;
+		LDF11:long_name = "LDF11           " ;
+		LDF11:units = "nondimension    " ;
+		LDF11:var_desc = "" ;
+	float LDF12(TSTEP, LAY, ROW, COL) ;
+		LDF12:long_name = "LDF12           " ;
+		LDF12:units = "nondimension    " ;
+		LDF12:var_desc = "" ;
+	float LDF13(TSTEP, LAY, ROW, COL) ;
+		LDF13:long_name = "LDF13           " ;
+		LDF13:units = "nondimension    " ;
+		LDF13:var_desc = "" ;
+	float LDF14(TSTEP, LAY, ROW, COL) ;
+		LDF14:long_name = "LDF14           " ;
+		LDF14:units = "nondimension    " ;
+		LDF14:var_desc = "" ;
+	float LDF15(TSTEP, LAY, ROW, COL) ;
+		LDF15:long_name = "LDF15           " ;
+		LDF15:units = "nondimension    " ;
+		LDF15:var_desc = "" ;
+	float LDF16(TSTEP, LAY, ROW, COL) ;
+		LDF16:long_name = "LDF16           " ;
+		LDF16:units = "nondimension    " ;
+		LDF16:var_desc = "" ;
+	float LDF17(TSTEP, LAY, ROW, COL) ;
+		LDF17:long_name = "LDF17           " ;
+		LDF17:units = "nondimension    " ;
+		LDF17:var_desc = "" ;
+	float LDF18(TSTEP, LAY, ROW, COL) ;
+		LDF18:long_name = "LDF18           " ;
+		LDF18:units = "nondimension    " ;
+		LDF18:var_desc = "" ;
+	float LDF19(TSTEP, LAY, ROW, COL) ;
+		LDF19:long_name = "LDF19           " ;
+		LDF19:units = "nondimension    " ;
+		LDF19:var_desc = "" ;
+	float LDF20(TSTEP, LAY, ROW, COL) ;
+		LDF20:long_name = "LDF20           " ;
+		LDF20:units = "nondimension    " ;
+		LDF20:var_desc = "" ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017255 ;
+		:CTIME = 182954 ;
+		:WDATE = 2017255 ;
+		:WTIME = 182954 ;
+		:SDATE = -635 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 20 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 0 ;
+		:VGTOP = 0.f ;
+		:VGLVLS = 0.f, 0.f ;
+		:GDNAM = "tceq_12km       " ;
+		:UPNAM = "CNVT_LDF        " ;
+		:VAR-LIST = "LDF01           LDF02           LDF03           LDF04           LDF05           LDF06           LDF07           LDF08           LDF09           LDF10           LDF11           LDF12           LDF13           LDF14           LDF15           LDF16           LDF17           LDF18           LDF19           LDF20           " ;
+		:FILEDESC = "Converted from MEGAN input text file:                                           /home/Paul-Antoine/src/MEGAN3/Input/MAP/grid_LDF.tceq_12km.J4.csv               " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0,
+  0, 0 ;
+
+ LDF01 =
+  1 ;
+
+ LDF02 =
+  1 ;
+
+ LDF03 =
+  0.4445464 ;
+
+ LDF04 =
+  0.8168195;
+
+ LDF05 =
+  0.3;
+
+ LDF06 =
+  0.312323;
+
+ LDF07 =
+  0.1;
+
+ LDF08 =
+  0.1;
+
+ LDF09 =
+  0.4630309;
+
+ LDF10 =
+  0.4;
+
+ LDF11 =
+  0.8 ;
+
+ LDF12 =
+  0.2 ;
+
+ LDF13 =
+  0.8;
+
+ LDF14 =
+  0.8;
+
+ LDF15 =
+  0.2;
+
+ LDF16 =
+  0.2;
+
+ LDF17 =
+  0.8;
+
+ LDF18 =
+  0.1;
+
+ LDF19 =
+  1;
+
+ LDF20 =
+  0;
+}

@@ -1,0 +1,54 @@
+FC = gfortran
+FCFLGS = -O -ffixed-line-length-none #-Mextend -Mlfs -Msecond_underscore
+FCFLGS2 = -O -ffixed-line-length-none #-Mbyteswapio -Mextend -Mlfs -Msecond_underscore
+LNKFLGS = #-Bstatic_pgi
+
+OBJCTS = \
+met2mgn.o \
+readpar.o \
+readmcip.o \
+micromet.o \
+caldate.o \
+lcpgeo.o \
+interp_lcp.o \
+procmm5.o \
+readmm5.o \
+xtod.o \
+vertmap.o \
+juldate.o \
+utmgeo.o
+
+LIBS =   -L/usr/local/lib -lioapi -lnetcdf -lnetcdff
+INC = -I/usr/local/include \
+
+met2mgn: $(OBJCTS)
+	$(FC) $(LNKFLAGS) $(OBJCTS) $(LIBS) -o met2mgn.rad45
+met2mgn.o:
+	$(FC) -c $(FCFLGS2) $(INC) met2mgn.f
+readpar.o:
+	$(FC) -c $(FCFLGS) $(INC) readpar.f
+readmcip.o:
+	$(FC) -c $(FCFLGS2) $(INC) readmcip.f
+micromet.o:
+	$(FC) -c $(FCFLGS2) $(INC) micromet.f
+caldate.o:
+	$(FC) -c $(FCFLGS2) $(INC) caldate.f
+lcpgeo.o:
+	$(FC) -c $(FCFLGS2) ${INC} lcpgeo.f
+interp_lcp.o:
+	$(FC) -c $(FCFLGS2) ${INC} interp_lcp.f
+procmm5.o:
+	$(FC) -c $(FCFLGS2) ${INC} procmm5.f
+readmm5.o:
+	$(FC) -c $(FCFLGS2) ${INC} readmm5.f
+xtod.o:
+	$(FC) -c $(FCFLGS2) ${INC} xtod.f
+vertmap.o:
+	$(FC) -c $(FCFLGS2) ${INC} vertmap.f
+juldate.o:
+	$(FC) -c $(FCFLGS2) ${INC} juldate.f
+utmgeo.o:
+	$(FC) -c $(FCFLGS2) ${INC} utmgeo.f
+clean:
+	rm -rf *.o met2mgn
+

@@ -1,0 +1,60 @@
+netcdf W126_tceq_12km {
+dimensions:
+	TSTEP = UNLIMITED ; // (1 currently)
+	DATE-TIME = 2 ;
+	LAY = 1 ;
+	VAR = 1 ;
+	ROW = 1 ;
+	COL = 1 ;
+variables:
+	int TFLAG(TSTEP, VAR, DATE-TIME) ;
+		TFLAG:units = "<YYYYDDD,HHMMSS>" ;
+		TFLAG:long_name = "TFLAG           " ;
+		TFLAG:var_desc = "Timestep-valid flags:  (1) YYYYDDD or (2) HHMMSS                                " ;
+	float W126(TSTEP, LAY, ROW, COL) ;
+		W126:long_name = "W126            " ;
+		W126:units = "ppm-hours       " ;
+		W126:var_desc = "W126                                                                            " ;
+
+// global attributes:
+		:IOAPI_VERSION = "ioapi-3.1: $Id:: init3.F 321 2016-02-26 16:00:20Z coats                $        " ;
+		:EXEC_ID = "????????????????                                                                " ;
+		:FTYPE = 1 ;
+		:CDATE = 2017255 ;
+		:CTIME = 182954 ;
+		:WDATE = 2017255 ;
+		:WTIME = 182954 ;
+		:SDATE = -635 ;
+		:STIME = 0 ;
+		:TSTEP = 10000 ;
+		:NTHIK = 1 ;
+		:NCOLS = 1 ;
+		:NROWS = 1 ;
+		:NLAYS = 1 ;
+		:NVARS = 1 ;
+		:GDTYP = 2 ;
+		:P_ALP = 33. ;
+		:P_BET = 45. ;
+		:P_GAM = -97. ;
+		:XCENT = -97. ;
+		:YCENT = 40. ;
+		:XORIG = -984000. ;
+		:YORIG = -1632000. ;
+		:XCELL = 12000. ;
+		:YCELL = 12000. ;
+		:VGTYP = 0 ;
+		:VGTOP = 0.f ;
+		:VGLVLS = 0.f, 0.f ;
+		:GDNAM = "tceq_12km       " ;
+		:UPNAM = "CNVT_W126       " ;
+		:VAR-LIST = "W126            " ;
+		:FILEDESC = "Converted from MEGAN input text file:                                           /home/Paul-Antoine/src/MEGAN3/Input/MAP/grid_W126.tceq_12km.csv                 " ;
+		:HISTORY = "" ;
+data:
+
+ TFLAG =
+  0, 0 ;
+
+ W126 =
+  11.621;
+}
