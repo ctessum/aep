@@ -46,7 +46,7 @@ type InventoryConfig struct {
 
 // ReadEmissions returns emissions records for the files specified
 // in the NEIFiles field in the receiver. The returned records are
-// split up by SCC code.
+// split up by sector.
 func (c *InventoryConfig) ReadEmissions() (map[string][]aep.Record, *aep.InventoryReport, error) {
 	var r *aep.EmissionsReader
 	var err error
@@ -92,7 +92,7 @@ func (c *InventoryConfig) ReadEmissions() (map[string][]aep.Record, *aep.Invento
 		inventoryReport.AddData(sectorReport.Files...)
 
 		for _, rec := range recs {
-			records[rec.GetSCC()] = append(records[rec.GetSCC()], rec)
+			records[sector] = append(records[sector], rec)
 		}
 	}
 	return records, inventoryReport, nil

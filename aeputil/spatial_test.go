@@ -63,29 +63,17 @@ func TestSpatial(t *testing.T) {
 	}
 
 	wantEmis := map[string]map[aep.Pollutant]float64{
-		"2280003010": map[aep.Pollutant]float64{
-			aep.Pollutant{Name: "NOX"}:   1.9694509976996027e+07,
-			aep.Pollutant{Name: "VOC"}:   650406.6575234848,
-			aep.Pollutant{Name: "PM2_5"}: 1.3251549508572659e+06,
-			aep.Pollutant{Name: "SO2"}:   1.5804381260919824e+07,
-		},
-		"2280003030": map[aep.Pollutant]float64{
-			aep.Pollutant{Name: "VOC"}:   20.29296822897,
-			aep.Pollutant{Name: "PM2_5"}: 186.401532717915,
+		"othar": map[aep.Pollutant]float64{
+			aep.Pollutant{Name: "NOX"}:   1.9694509976996027e+07 + 3329.29929452133,
+			aep.Pollutant{Name: "VOC"}:   650426.9504917137,
+			aep.Pollutant{Name: "PM2_5"}: 1.3251549508572659e+06 + 186.401532717915,
+			aep.Pollutant{Name: "SO2"}:   1.5804381260919824e+07 + 1939.6783010388299,
 			aep.Pollutant{Name: "NH3"}:   34.056105917699995,
-			aep.Pollutant{Name: "SO2"}:   1939.6783010388299,
-			aep.Pollutant{Name: "NOX"}:   3329.29929452133,
 		},
 	}
 
 	wantUnits := map[string]map[aep.Pollutant]unit.Dimensions{
-		"2280003010": map[aep.Pollutant]unit.Dimensions{
-			aep.Pollutant{Name: "VOC"}:   unit.Dimensions{4: 1},
-			aep.Pollutant{Name: "PM2_5"}: unit.Dimensions{4: 1},
-			aep.Pollutant{Name: "SO2"}:   unit.Dimensions{4: 1},
-			aep.Pollutant{Name: "NOX"}:   unit.Dimensions{4: 1},
-		},
-		"2280003030": map[aep.Pollutant]unit.Dimensions{
+		"othar": map[aep.Pollutant]unit.Dimensions{
 			aep.Pollutant{Name: "PM2_5"}: unit.Dimensions{4: 1},
 			aep.Pollutant{Name: "NH3"}:   unit.Dimensions{4: 1},
 			aep.Pollutant{Name: "SO2"}:   unit.Dimensions{4: 1},
@@ -93,19 +81,19 @@ func TestSpatial(t *testing.T) {
 			aep.Pollutant{Name: "VOC"}:   unit.Dimensions{4: 1},
 		},
 	}
-	for scc, recs := range records {
+	for sector, recs := range records {
 		emis, units, err := c.Spatial.SpatializeTotal(recs...)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for pol, grid := range emis {
-			if grid[0].Sum() != wantEmis[scc][pol] {
-				t.Errorf("emissions for %v %v, have %g but want %g", scc, pol, grid[0].Sum(), wantEmis[scc][pol])
+			if grid[0].Sum() != wantEmis[sector][pol] {
+				t.Errorf("emissions for %v %v, have %g but want %g", sector, pol, grid[0].Sum(), wantEmis[sector][pol])
 			}
 		}
 		for pol, u := range units {
-			if !u.Matches(wantUnits[scc][pol]) {
-				t.Errorf("units for %v %v: have %v but want %v", scc, pol, wantUnits[scc][pol], units)
+			if !u.Matches(wantUnits[sector][pol]) {
+				t.Errorf("units for %v %v: have %v but want %v", sector, pol, wantUnits[sector][pol], units)
 			}
 		}
 	}
