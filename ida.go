@@ -50,12 +50,20 @@ type polygonRecordIDA struct {
 	Emissions
 }
 
+// PointData exists to fulfill the Record interface but always returns
+// nil because this is not a point source.
+func (r *polygonRecordIDA) PointData() *PointSourceData { return nil }
+
 // mobilePolygonRecordIDA holds information about an emissions source that has a polygon
 // location and only has source and emissions data.
 type mobilePolygonRecordIDA struct {
 	SourceData
 	Emissions
 }
+
+// PointData exists to fulfill the Record interface but always returns
+// nil because this is not a point source.
+func (r *mobilePolygonRecordIDA) PointData() *PointSourceData { return nil }
 
 func (f *InventoryFile) readHeaderIDA(inputConverter func(float64) *unit.Unit) error {
 	year, country, err := f.readHeaderGeneral()

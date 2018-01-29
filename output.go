@@ -24,7 +24,7 @@ import "time"
 // output spatiotemporal emissions data.
 type Outputter interface {
 	Output(recs []Record, sp *SpatialProcessor, tp *TemporalProcessor, partialMatch bool, startTime, endTime time.Time, timeStep time.Duration) error
-	PlumeRise(point PointSource, sp *SpatialProcessor, gi int) (int, error)
+	PlumeRise(point Record, sp *SpatialProcessor, gi int) (int, error)
 	Layers() int
 }
 

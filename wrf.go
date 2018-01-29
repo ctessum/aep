@@ -672,7 +672,7 @@ func (m *MetData) Close() {
 // ``Atmospheric Chemistry and Physics - From Air Pollution to Climate Change
 // Uses meteorology from WRF output from a previous run.
 // It returns the layer index of the plume.
-func (w *WRFOutputter) PlumeRise(point PointSource, sp *SpatialProcessor, gi int) (int, error) {
+func (w *WRFOutputter) PlumeRise(point Record, sp *SpatialProcessor, gi int) (int, error) {
 	if w.files.config.Kemit == 1 {
 		return 0, nil
 	}

@@ -197,9 +197,8 @@ func EmissionsGriddedAtTime(recs []Record, t time.Time, o Outputter, sp *Spatial
 		for gi := range sp.Grids {
 			// Get the vertical layer index.
 			var k int
-			switch r.(type) {
-			case PointSource:
-				k, err = o.PlumeRise(r.(PointSource), sp, gi)
+			if r.PointData() != nil {
+				k, err = o.PlumeRise(r, sp, gi)
 				if err != nil {
 					return nil, err
 				}

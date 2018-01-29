@@ -77,16 +77,12 @@ type Record interface {
 	// GetSourceData returns the source information associated with this record.
 	GetSourceData() *SourceData
 
+	// PointData returns the data specific to point sources. If the record is
+	// not a point source, it should return nil.
+	PointData() *PointSourceData
+
 	// Key returns a unique identifier for this record.
 	Key() string
-}
-
-// PointSource is an emissions record of a point source.
-type PointSource interface {
-	Record
-
-	// PointData returns the data specific to point sources.
-	PointData() *PointSourceData
 }
 
 // EconomicRecord is any record that contains economic information.
@@ -119,6 +115,10 @@ type PolygonRecord struct {
 	Emissions
 }
 
+// PointData exists to fulfill the Record interface but always returns
+// nil because this is not a point source.
+func (r *PolygonRecord) PointData() *PointSourceData { return nil }
+
 // nobusinessPolygonRecord is a nonpoint record that does not have any
 // economic information.
 type nobusinessPolygonRecord struct {
@@ -126,6 +126,10 @@ type nobusinessPolygonRecord struct {
 	ControlData
 	Emissions
 }
+
+// PointData exists to fulfill the Record interface but always returns
+// nil because this is not a point source.
+func (r *nobusinessPolygonRecord) PointData() *PointSourceData { return nil }
 
 // nocontrolPolygonRecord is a polygon record without any control information.
 type nocontrolPolygonRecord struct {

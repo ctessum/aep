@@ -36,15 +36,12 @@ import (
 // used for SCC codes partially matching the SCC code of the given record
 // if no exact match is found.
 func EmisAtTime(r Record, t time.Time, tp *TemporalProcessor, partialMatch bool) (map[Pollutant]*unit.Unit, error) {
-	switch r.(type) {
-	// Check if we should be using CEM allocation.
-	case PointSource:
-		rp := r.(PointSource)
-		pointData := rp.PointData()
+	if pointData := r.PointData(); pointData != nil {
+		// Check if we should be using CEM allocation.
 		id := [2]string{pointData.ORISFacilityCode, pointData.ORISBoilerID}
 		_, ok := tp.cemSum[id]
 		if tp.useCEM && ok {
-			return emisAtTimeCEM(rp, t, tp, partialMatch)
+			return emisAtTimeCEM(r, t, tp, partialMatch)
 		}
 	}
 
@@ -86,7 +83,7 @@ func EmisAtTime(r Record, t time.Time, tp *TemporalProcessor, partialMatch bool)
 // EmisAtTime instead. In that case, if partialMatch is true,
 // temporal profiles will be used for SCC codes partially matching
 // the SCC code of the given record if no exact match is found.
-func emisAtTimeCEM(r PointSource, t time.Time, tp *TemporalProcessor, partialMatch bool) (map[Pollutant]*unit.Unit, error) {
+func emisAtTimeCEM(r Record, t time.Time, tp *TemporalProcessor, partialMatch bool) (map[Pollutant]*unit.Unit, error) {
 	pointData := r.PointData()
 	id := [2]string{pointData.ORISFacilityCode, pointData.ORISBoilerID}
 	cemsum := tp.cemSum[id]
