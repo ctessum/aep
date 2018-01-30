@@ -38,8 +38,8 @@ func (r *SpatialAdjustRecord) Spatialize(sp *SpatialProcessor, gi int) (
 	gridSrg *sparse.SparseArray, coveredByGrid, inGrid bool, err error) {
 
 	gridSrg, coveredByGrid, inGrid, err = r.Record.Spatialize(sp, gi)
-	if err != nil {
-		return nil, false, false, err
+	if gridSrg == nil || err != nil {
+		return
 	}
 
 	adjustment, err := r.SpatialAdjuster.Adjustment()
