@@ -174,7 +174,7 @@ func yearStringsToYears(yearStrings []string) ([]int, error) {
 // corresponds to the input
 func scalingPol(pol aep.Pollutant) string {
 	switch pol.Name {
-	case "PM2_5", "PM25-PRI":
+	case "PM2_5", "PM25-PRI", "OC", "EC", "PMFINE", "SO4", "NO3":
 		return "PM25"
 	case "XYL", "UNR", "TOL", "TERP", "PAR", "OLE", "NVOL", "MEOH", "ISOP", "IOLE", "FORM", "ETOH", "ETHA", "ETH":
 		return "VOC"
