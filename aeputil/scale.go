@@ -142,6 +142,15 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 		if !ok {
 			return math.NaN(), fmt.Errorf("aeputil.ScaleNEIStateTrends: no tier 1 code for SCC %s", scc)
 		}
+		if stateFIPS == "72" || stateFIPS == "78" {
+			// No scaling for Puerto Rico or Virgin Islands.
+			return 1, nil
+		} else if stateFIPS == "88" {
+			// I believe (although haven't confirmed) that 88 is for shipping lanes.
+			// Replace it with California.
+			stateFIPS = "06"
+		}
+
 		key := item{stateFIPS: stateFIPS, sccTier1: tier1, pol: scalingPol(pol)}
 		row, ok := rows[key]
 		if !ok {
