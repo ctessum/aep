@@ -133,6 +133,9 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 	}
 
 	return func(rec aep.Record, pol aep.Pollutant) (float64, error) {
+		if rec.GetCountry() != aep.USA {
+			return 1, nil // We only scale US emissions.
+		}
 		stateFIPS := rec.GetFIPS()[0:2]
 		scc := rec.GetSCC()
 		tier1, ok := sccRef[scc]
@@ -174,10 +177,17 @@ func yearStringsToYears(yearStrings []string) ([]int, error) {
 // corresponds to the input
 func scalingPol(pol aep.Pollutant) string {
 	switch pol.Name {
-	case "PM2_5", "PM25-PRI", "OC", "EC", "PMFINE", "SO4", "NO3":
+	case "PM2_5", "PM25-PRI", "OC", "EC", "PMFINE", "SO4", "NO3", "PTI", "PSO4", "PSI", "POC", "PNO3", "PNH4",
+		"PMOTHR", "PMN", "PMG", "PM25", "PK", "PFE", "PEC", "PCL", "PCA", "DIESEL-PM25", "PAL":
 		return "PM25"
-	case "XYL", "UNR", "TOL", "TERP", "PAR", "OLE", "NVOL", "MEOH", "ISOP", "IOLE", "FORM", "ETOH", "ETHA", "ETH":
+	case "XYL", "UNR", "TOL", "TERP", "PAR", "OLE", "NVOL", "MEOH", "ISOP", "IOLE", "FORM",
+		"ETOH", "ETHA", "ETH", "VOC_INV", "NMOG", "NHTOG", "ETHANOL", "CB05_XYL", "CB05_TOL",
+		"CB05_PAR", "CB05_OLE", "CB05_MEOH", "CB05_ISOP", "CB05_IOLE", "CB05_FORM",
+		"CB05_ETOH", "CB05_ETHA", "CB05_ETH", "CB05_BENZENE", "CB05_ALDX", "CB05_ALD2",
+		"ALDX", "ALD2":
 		return "VOC"
+	case "NO2", "NO", "HONO":
+		return "NOX"
 	default:
 		return pol.Name
 	}
