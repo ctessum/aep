@@ -145,9 +145,9 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 		if stateFIPS == "72" || stateFIPS == "78" {
 			// No scaling for Puerto Rico or Virgin Islands.
 			return 1, nil
-		} else if stateFIPS == "88" {
-			// I believe (although haven't confirmed) that 88 is for shipping lanes.
-			// Replace it with California.
+		} else if stateFIPS == "88" || stateFIPS == "85" || stateFIPS == "98" {
+			// It's not clear what these state codes represent.
+			// Maybe shipping lanes? Replace them with California.
 			stateFIPS = "06"
 		}
 
