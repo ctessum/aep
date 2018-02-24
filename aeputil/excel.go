@@ -27,8 +27,8 @@ import (
 	"sync"
 
 	"github.com/ctessum/requestcache"
-	"github.com/gonum/matrix/mat64"
 	"github.com/tealeg/xlsx"
+	"gonum.org/v1/gonum/mat"
 )
 
 // excelCache holds previously opened Microsoft Excel files
@@ -63,7 +63,7 @@ func loadExcelFile(fileName string) (*xlsx.File, error) {
 // matrixFromExcel creates a matrix from data in a Microsoft Excel file with the
 // given fileName and sheet name within the file, based on the data starting
 // at [startRow, startCol] (inclusive) and ending at [endRow, endCol] (exclusive).
-func matrixFromExcel(fileName, sheet string, startRow, endRow, startCol, endCol int) (*mat64.Dense, error) {
+func matrixFromExcel(fileName, sheet string, startRow, endRow, startCol, endCol int) (*mat.Dense, error) {
 	f, err := loadExcelFile(fileName)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func matrixFromExcel(fileName, sheet string, startRow, endRow, startCol, endCol 
 		return nil, fmt.Errorf("bea: reading matrix from Excel; no sheet %s", sheet)
 	}
 
-	o := mat64.NewDense(endRow-startRow, endCol-startCol, nil)
+	o := mat.NewDense(endRow-startRow, endCol-startCol, nil)
 
 	for j := startRow; j < endRow; j++ {
 		for i := startCol; i < endCol; i++ {

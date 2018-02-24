@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/ctessum/aep"
-	"github.com/gonum/matrix/mat64"
+	"gonum.org/v1/gonum/mat"
 )
 
 // Scale applies scaling factors to the given emissions records.
@@ -80,7 +80,7 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 	if err != nil {
 		return nil, err
 	}
-	var baseData *mat64.Vector
+	var baseData mat.Vector
 	for i, year := range years {
 		if year == baseYear {
 			baseData = data.ColView(i)
@@ -89,22 +89,24 @@ func ScaleNEIStateTrends(summaryFile string, sccDescriptions io.Reader, baseYear
 	if baseData == nil {
 		return nil, fmt.Errorf("aeputil.ScaleNEIStateTrends: invalid base year %d", baseYear)
 	}
-	var scaleData *mat64.Vector
+	var yearData mat.Vector
 	for i, year := range years {
 		if year == scaleYear {
-			scaleData = data.ColView(i)
+			yearData = data.ColView(i)
 		}
 	}
-	if scaleData == nil {
+	if yearData == nil {
 		return nil, fmt.Errorf("aeputil.ScaleNEIStateTrends: invalid scale year %d", scaleYear)
 	}
 	// Calculate scaling factors.
-	scaleData.DivElemVec(scaleData, baseData)
-	r, _ := scaleData.Dims()
-	for i := 0; i < r; i++ { // Set NaN and Inf to 0.
-		v := scaleData.At(i, 0)
+	scaleData := mat.NewVecDense(baseData.Len(), nil)
+	for i := 0; i < baseData.Len(); i++ { // Set NaN and Inf to 0.
+		b, y := baseData.At(i, 0), yearData.At(i, 0)
+		v := y / b
 		if math.IsInf(v, 0) || math.IsNaN(v) {
 			scaleData.SetVec(i, 0)
+		} else {
+			scaleData.SetVec(i, v)
 		}
 	}
 

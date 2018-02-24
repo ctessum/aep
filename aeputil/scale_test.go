@@ -66,11 +66,11 @@ func TestScale(t *testing.T) {
 		aep.Pollutant{Name: "NH3"}:   unit.New(34.056105917699995, unit.Dimensions{4: 1}),
 	}
 	afterWant := map[aep.Pollutant]*unit.Unit{
-		aep.Pollutant{Name: "NOX"}:   unit.New(1.797061138444698e+07, unit.Dimensions{4: 1}),
-		aep.Pollutant{Name: "VOC"}:   unit.New(589712.1799472809, unit.Dimensions{4: 1}),
-		aep.Pollutant{Name: "PM2_5"}: unit.New(1.167524338454476e+06, unit.Dimensions{4: 1}),
-		aep.Pollutant{Name: "SO2"}:   unit.New(6.836759306135574e+06, unit.Dimensions{4: 1}),
-		aep.Pollutant{Name: "NH3"}:   unit.New(36.49376855692243, unit.Dimensions{4: 1}),
+		aep.Pollutant{Name: "NOX"}:   unit.New(1.9697839276290547e+07, unit.Dimensions{4: 1}),
+		aep.Pollutant{Name: "VOC"}:   unit.New(650426.9504917137, unit.Dimensions{4: 1}),
+		aep.Pollutant{Name: "PM2_5"}: unit.New(1.3253413523899838e+06, unit.Dimensions{4: 1}),
+		aep.Pollutant{Name: "SO2"}:   unit.New(1.5806320939220862e+07, unit.Dimensions{4: 1}),
+		aep.Pollutant{Name: "NH3"}:   unit.New(34.056105917699995, unit.Dimensions{4: 1}),
 	}
 	before := sum(emis)
 	if !reflect.DeepEqual(before, beforeWant) {
@@ -97,4 +97,19 @@ func sum(d map[string][]aep.Record) map[aep.Pollutant]*unit.Unit {
 		}
 	}
 	return o
+}
+
+func TestScale_allyears(t *testing.T) {
+	sccDesc, err := os.Open("testdata/SCCDownload-2017-0622-080147.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, year := range []int{1990, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
+		2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016} {
+		_, err := ScaleNEIStateTrends("testdata/state_tier1_90-16.xlsx", sccDesc, 2014, year)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
