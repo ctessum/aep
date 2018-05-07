@@ -24,7 +24,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/ctessum/aep"
-	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/proj"
 	"github.com/ctessum/unit"
 )
@@ -51,11 +50,7 @@ func TestSpatial(t *testing.T) {
 		t.Fatal(err)
 	}
 	grid := aep.NewGridRegular("test", 111, 84, 48000, 48000, -2736000.0, -2088000.0, sr)
-	g := make([]geom.Polygonal, len(grid.Cells))
-	for i, c := range grid.Cells {
-		g[i] = c.Polygonal
-	}
-	c.Spatial.GridCells = g
+	c.Spatial.GridDefinitions = []*aep.GridDef{grid}
 
 	records, _, err := c.Inventory.ReadEmissions()
 	if err != nil {

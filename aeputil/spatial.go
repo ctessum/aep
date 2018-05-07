@@ -26,7 +26,6 @@ import (
 	"bitbucket.org/ctessum/sparse"
 
 	"github.com/ctessum/aep"
-	"github.com/ctessum/geom"
 	"github.com/ctessum/geom/proj"
 	"github.com/ctessum/unit"
 )
@@ -68,7 +67,7 @@ type SpatialConfig struct {
 	MaxCacheEntries int
 
 	// GridCells specifies the geometry of the spatial grid.
-	GridCells []geom.Polygonal
+	GridDefinitions []*aep.GridDef
 
 	// GridName specifies a name for the grid which is used in the names
 	// of intermediate and output files.
@@ -135,7 +134,7 @@ func (c *SpatialConfig) SpatialProcessor() (*aep.SpatialProcessor, error) {
 // setupSpatialProcessor reads in the necessary information to initialize
 // a processor for spatializing emissions, and then does so.
 func (c *SpatialConfig) setupSpatialProcessor() (*aep.SpatialProcessor, error) {
-	if c.GridCells == nil {
+	if c.GridDefinitions == nil {
 		return nil, fmt.Errorf("aeputil: GridCells must be specified for spatial processor")
 	}
 	f, err := os.Open(os.ExpandEnv(c.SrgSpec))
@@ -173,19 +172,11 @@ func (c *SpatialConfig) setupSpatialProcessor() (*aep.SpatialProcessor, error) {
 		}
 	}
 
-	outSR, err := proj.Parse(os.ExpandEnv(c.OutputSR))
-	if err != nil {
-		return nil, err
-	}
 	inSR, err := proj.Parse(os.ExpandEnv(c.InputSR))
 	if err != nil {
 		return nil, err
 	}
-	grid, err := aep.NewGridIrregular(c.GridName, c.GridCells, outSR, outSR)
-	if err != nil {
-		return nil, err
-	}
-	sp := aep.NewSpatialProcessor(srgSpecs, []*aep.GridDef{grid}, gridRef, inSR, c.SCCExactMatch)
+	sp := aep.NewSpatialProcessor(srgSpecs, c.GridDefinitions, gridRef, inSR, c.SCCExactMatch)
 	sp.DiskCachePath = c.SpatialCache
 	sp.SimplifyTolerance = c.SimplifyTolerance
 	return sp, nil
